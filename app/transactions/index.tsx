@@ -5,7 +5,7 @@ import { TransactionForm } from './TransactionForm'
 
 export default function TransactionsScreen() {
     const logic = useTransactionLogic()
-    
+    //edit
     return (
         <View style={styles.container}>
         <TransactionList
