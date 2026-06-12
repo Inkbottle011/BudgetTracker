@@ -22,6 +22,8 @@ export interface Transaction {
     date: string
     created_at: string
     category?: Category
+    recurring?: string
+    recurring_end?: string
 }
 
 export interface Budget {

@@ -5,12 +5,10 @@ import { View, Text } from 'react-native'
 import { supabase } from './lib/supabase'
 import Dashboard from './app/index'
 import AuthScreen from './app/auth'
-import TransactionsScreen from './app/transactions'
+import TransactionsScreen from './app/transactions/index'
+import BudgetScreen from './app/budget/index'
 const Tab = createBottomTabNavigator()
 
-function BudgetScreen() {
-  return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><Text>Budget</Text></View>
-}
 
 function SettingsScreen() {
   return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><Text>Settings</Text></View>

@@ -34,6 +34,14 @@ export default function TransactionsScreen() {
         onConfirmDelete={() => logic.setConfirmDelete(true)}
         onCancelConfirm={() => logic.setConfirmDelete(false)}
         onDelete={logic.handleDelete}
+        editMode={logic.editMode}
+        onEnterEdit={() => logic.setEditMode(true)}
+        page={logic.page}
+        totalPages={logic.totalPages}
+        onPageChange={logic.setPage}
+        onExport={logic.exportToCSV}
+        duplicateMode={logic.duplicateMode}
+        onEnterDuplicate={() => logic.setDuplicateMode(true)}
         />
         <TransactionForm
         type={logic.type}
@@ -56,6 +64,11 @@ export default function TransactionsScreen() {
         onEditChange={logic.setEditingTransaction}
         onSaveEdit={logic.handleSaveEdit}
         onCancelEdit={() => logic.setEditingTransaction(null)}
+        recurring={logic.recurring}
+        recurringEnd={logic.recurringEnd}
+        onRecurringChange={logic.setRecurring}
+        onRecurringEndChange={logic.setRecurringEnd}
+        budgetCategories={logic.budgetCategories}
         />
         </View>
     )

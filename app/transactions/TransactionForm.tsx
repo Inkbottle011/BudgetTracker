@@ -25,6 +25,11 @@ interface Props {
     onEditChange: (t: EditingTransaction) => void
     onSaveEdit: () => void
     onCancelEdit: () => void
+    recurring: string
+    recurringEnd: string
+    onRecurringChange: (v: string) => void
+    onRecurringEndChange: (v: string) => void
+    budgetCategories: Record<string, string[]>
 }
 
 export function TransactionForm({
@@ -32,120 +37,153 @@ export function TransactionForm({
     errors, saving, success,
     onTypeChange, onCategoryChange, onNameChange,
     onAmountChange, onDetailsChange, onDateChange, onAdd,
-    editingTransaction, onEditChange, onSaveEdit, onCancelEdit,
+    editingTransaction, onEditChange, onSaveEdit, onCancelEdit, recurring, recurringEnd, onRecurringChange, onRecurringEndChange,budgetCategories,
 }: Props) {
     const isEditing = !!editingTransaction
     const activeType = isEditing ? editingTransaction!.type : type
     const activeColor = TYPE_COLORS[activeType]?.bg || '#2c3e50'
-
+    
     return (
         <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 24 }}>
-            {/* Header */}
-            <View style={styles.formHeader}>
-                <Text style={styles.sectionTitle}>{isEditing ? 'Edit Transaction' : 'Add Transaction'}</Text>
-                {isEditing && (
-                    <TouchableOpacity style={styles.cancelBtn} onPress={onCancelEdit}>
-                        <Text style={styles.cancelBtnText}>Cancel</Text>
-                    </TouchableOpacity>
-                )}
-            </View>
-
-            {!isEditing && success && (
-                <View style={styles.successBanner}>
-                    <Text style={styles.successText}>Transaction added!</Text>
-                </View>
-            )}
-
-            {/* Type */}
-            <Text style={styles.label}>Type</Text>
-            <View style={styles.typeRow}>
-                {TYPES.map(t => (
-                    <TouchableOpacity
-                        key={t}
-                        style={[styles.typeBtn, activeType === t && { backgroundColor: TYPE_COLORS[t].bg }]}
-                        onPress={() => isEditing
-                            ? onEditChange({ ...editingTransaction!, type: t, category: '' })
-                            : onTypeChange(t)
-                        }
-                    >
-                        <Text style={[styles.typeBtnText, activeType === t && { color: '#fff' }]}>{t}</Text>
-                    </TouchableOpacity>
-                ))}
-            </View>
-
-            {/* Category */}
-            <Text style={styles.label}>Category</Text>
-            <View style={styles.categoryRow}>
-                {DEFAULT_CATEGORIES[activeType]?.map(c => {
-                    const activeCategory = isEditing ? editingTransaction!.category : category
-                    return (
-                        <TouchableOpacity
-                            key={c}
-                            style={[styles.catBtn, activeCategory === c && styles.catBtnActive]}
-                            onPress={() => isEditing
-                                ? onEditChange({ ...editingTransaction!, category: c })
-                                : onCategoryChange(c)
-                            }
-                        >
-                            <Text style={[styles.catBtnText, activeCategory === c && styles.catBtnTextActive]}>{c}</Text>
-                        </TouchableOpacity>
-                    )
-                })}
-            </View>
-
-            {/* Name */}
-            <Text style={styles.label}>Name</Text>
-            <TextInput
-                style={styles.input}
-                placeholder="e.g. Grocery run, Netflix, Paycheck..."
-                value={isEditing ? editingTransaction!.name : name}
-                onChangeText={v => isEditing ? onEditChange({ ...editingTransaction!, name: v }) : onNameChange(v)}
-                placeholderTextColor="#aaa"
-            />
-
-            {/* Amount */}
-            <Text style={styles.label}>Amount</Text>
-            <TextInput
-                style={[styles.input, !isEditing && errors.amount ? styles.inputError : null]}
-                placeholder="0.00"
-                value={isEditing ? editingTransaction!.amount : amount}
-                onChangeText={v => isEditing ? onEditChange({ ...editingTransaction!, amount: v }) : onAmountChange(v)}
-                keyboardType="decimal-pad"
-                placeholderTextColor="#aaa"
-            />
-            {!isEditing && errors.amount && <Text style={styles.errorText}>{errors.amount}</Text>}
-
-            {/* Date */}
-            <Text style={styles.label}>Date</Text>
-            <TextInput
-                style={[styles.input, !isEditing && errors.date ? styles.inputError : null]}
-                placeholder="YYYY-MM-DD"
-                value={isEditing ? editingTransaction!.date : date}
-                onChangeText={v => isEditing ? onEditChange({ ...editingTransaction!, date: v }) : onDateChange(v)}
-                placeholderTextColor="#aaa"
-            />
-            {!isEditing && errors.date && <Text style={styles.errorText}>{errors.date}</Text>}
-
-            {/* Details */}
-            <Text style={styles.label}>Details (optional)</Text>
-            <TextInput
-                style={styles.input}
-                placeholder="Add a note..."
-                value={isEditing ? editingTransaction!.details : details}
-                onChangeText={v => isEditing ? onEditChange({ ...editingTransaction!, details: v }) : onDetailsChange(v)}
-                placeholderTextColor="#aaa"
-            />
-
-            {/* Submit */}
-            <TouchableOpacity
-                style={[styles.addBtn, { backgroundColor: activeColor }, saving && { opacity: 0.6 }]}
-                onPress={isEditing ? onSaveEdit : onAdd}
-                disabled={saving}
-            >
-                <Text style={styles.addBtnText}>
-                    {saving ? 'Saving...' : isEditing ? 'Save Changes' : 'Add Transaction'}
-                </Text>
+        {/* Header */}
+        <View style={styles.formHeader}>
+        <Text style={styles.sectionTitle}>{isEditing ? 'Edit Transaction' : 'Add Transaction'}</Text>
+        {isEditing && (
+            <TouchableOpacity style={styles.cancelBtn} onPress={onCancelEdit}>
+            <Text style={styles.cancelBtnText}>Cancel</Text>
             </TouchableOpacity>
+        )}
+        </View>
+        
+        {!isEditing && success && (
+            <View style={styles.successBanner}>
+            <Text style={styles.successText}>Transaction added!</Text>
+            </View>
+        )}
+        
+        {/* Type */}
+        <Text style={styles.label}>Type</Text>
+        <View style={styles.typeRow}>
+        {TYPES.map(t => (
+            <TouchableOpacity
+            key={t}
+            style={[styles.typeBtn, activeType === t && { backgroundColor: TYPE_COLORS[t].bg }]}
+            onPress={() => isEditing
+                ? onEditChange({ ...editingTransaction!, type: t, category: '' })
+                : onTypeChange(t)
+            }
+            >
+            <Text style={[styles.typeBtnText, activeType === t && { color: '#fff' }]}>{t}</Text>
+            </TouchableOpacity>
+        ))}
+        </View>
+        {/* Category */}
+        <Text style={styles.label}>Category</Text>
+        <View style={styles.categoryRow}>
+        {(budgetCategories[activeType]?.length > 0 ? budgetCategories[activeType] : DEFAULT_CATEGORIES[activeType])?.map(c => {
+            const activeCategory = isEditing ? editingTransaction!.category : category
+            return (
+                <TouchableOpacity
+                key={c}
+                style={[styles.catBtn, activeCategory === c && styles.catBtnActive]}
+                onPress={() => isEditing
+                    ? onEditChange({ ...editingTransaction!, category: c })
+                    : onCategoryChange(c)
+                }
+                >
+                <Text style={[styles.catBtnText, activeCategory === c && styles.catBtnTextActive]}>{c}</Text>
+                </TouchableOpacity>
+            )
+        })}
+        </View>
+        
+        {/* Name */}
+        <Text style={styles.label}>Name</Text>
+        <TextInput
+        style={styles.input}
+        placeholder="e.g. Grocery run, Netflix, Paycheck..."
+        value={isEditing ? editingTransaction!.name : name}
+        onChangeText={v => isEditing ? onEditChange({ ...editingTransaction!, name: v }) : onNameChange(v)}
+        placeholderTextColor="#aaa"
+        />
+        
+        {/* Amount */}
+        <Text style={styles.label}>Amount</Text>
+        <TextInput
+        style={[styles.input, !isEditing && errors.amount ? styles.inputError : null]}
+        placeholder="0.00"
+        value={isEditing ? editingTransaction!.amount : amount}
+        onChangeText={v => isEditing ? onEditChange({ ...editingTransaction!, amount: v }) : onAmountChange(v)}
+        keyboardType="decimal-pad"
+        placeholderTextColor="#aaa"
+        />
+        {!isEditing && errors.amount && <Text style={styles.errorText}>{errors.amount}</Text>}
+        
+        {/* Date */}
+        <Text style={styles.label}>Date</Text>
+        <TextInput
+        style={[styles.input, !isEditing && errors.date ? styles.inputError : null]}
+        placeholder="YYYY-MM-DD"
+        value={isEditing ? editingTransaction!.date : date}
+        onChangeText={v => isEditing ? onEditChange({ ...editingTransaction!, date: v }) : onDateChange(v)}
+        placeholderTextColor="#aaa"
+        />
+        {!isEditing && errors.date && <Text style={styles.errorText}>{errors.date}</Text>}
+        
+        {/* Details */}
+        <Text style={styles.label}>Details (optional)</Text>
+        <TextInput
+        style={styles.input}
+        placeholder="Add a note..."
+        value={isEditing ? editingTransaction!.details : details}
+        onChangeText={v => isEditing ? onEditChange({ ...editingTransaction!, details: v }) : onDetailsChange(v)}
+        placeholderTextColor="#aaa"
+        />
+        {/* Recurring */}
+        <Text style={styles.label}>Recurring</Text>
+        <View style={styles.typeRow}>
+        {['none', 'weekly', 'biweekly', 'monthly', 'yearly'].map(r => {
+            const activeRecurring = isEditing ? editingTransaction!.recurring : recurring
+            return (
+                <TouchableOpacity
+                key={r}
+                style={[styles.catBtn, activeRecurring === r && styles.catBtnActive]}
+                onPress={() => isEditing
+                    ? onEditChange({ ...editingTransaction!, recurring: r })
+                    : onRecurringChange(r)
+                }
+                >
+                <Text style={[styles.catBtnText, activeRecurring === r && styles.catBtnTextActive]}>
+                {r.charAt(0).toUpperCase() + r.slice(1)}
+                </Text>
+                </TouchableOpacity>
+            )
+        })}
+        </View>
+        
+        {(isEditing ? editingTransaction!.recurring !== 'none' : recurring !== 'none') && (
+            <>
+            <Text style={styles.label}>End Date (optional)</Text>
+            <TextInput
+            style={styles.input}
+            placeholder="YYYY-MM-DD"
+            value={isEditing ? editingTransaction!.recurring_end : recurringEnd}
+            onChangeText={v => isEditing
+                ? onEditChange({ ...editingTransaction!, recurring_end: v })
+                : onRecurringEndChange(v)
+            }
+            placeholderTextColor="#aaa"
+            />
+            </>
+        )}
+        {/* Submit */}
+        <TouchableOpacity
+        style={[styles.addBtn, { backgroundColor: activeColor }, saving && { opacity: 0.6 }]}
+        onPress={isEditing ? onSaveEdit : onAdd}
+        disabled={saving}
+        >
+        <Text style={styles.addBtnText}>{saving ? 'Saving...' : isEditing ? 'Save Changes' : 'Add Transaction'}</Text>
+        </TouchableOpacity>
         </ScrollView>
     )
 }
