@@ -33,12 +33,15 @@ export default function AuthScreen() {
             const { error } = await supabase.auth.signUp({ email, password })
             if (error) {
                 setErrors({ general: error.message })
-            } else {
-                setIsLogin(true)
-                setPassword('')
-                setErrors({ general: undefined })
-                // Show success message by setting a success state
-                setSuccess('Account created! Please sign in.')
+            }else {
+                const { error } = await supabase.auth.signUp({ email, password })
+                if (error) {
+                    setErrors({ general: error.message })
+                } else {
+                    setIsLogin(true)
+                    setPassword('')
+                    setSuccess('Account created! Check your email to confirm before signing in.')
+                }
             }
         }
         setLoading(false)

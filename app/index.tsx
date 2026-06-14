@@ -210,8 +210,11 @@ export default function Dashboard() {
             renderActualVsPlanned()
         )}
         
-        {/* Upcoming Transactions */}
+        {/* Side by side - Upcoming and Recent */}
+        <View style={styles.sideRow}>
+        <View style={styles.sideCol}>
         <Text style={styles.sectionTitle}>Upcoming (Next 30 Days)</Text>
+        <ScrollView>
         {upcoming.length === 0 ? (
             <Text style={styles.empty}>No upcoming recurring transactions.</Text>
         ) : (
@@ -227,9 +230,12 @@ export default function Dashboard() {
                 </View>
             ))
         )}
+        </ScrollView>
+        </View>
         
-        {/* Recent Transactions */}
+        <View style={styles.sideCol}>
         <Text style={styles.sectionTitle}>Recent Transactions</Text>
+        <ScrollView>
         {transactions.length === 0 ? (
             <Text style={styles.empty}>No transactions yet.</Text>
         ) : (
@@ -237,6 +243,9 @@ export default function Dashboard() {
                 <TransactionCard key={t.id} transaction={t} />
             ))
         )}
+        </ScrollView>
+        </View>
+        </View>
         </ScrollView>
     )
 }
@@ -277,4 +286,6 @@ const styles = StyleSheet.create({
     upcomingName: { fontSize: 14, fontWeight: '500', color: '#1a1a1a' },
     upcomingDate: { fontSize: 12, color: '#888', marginTop: 2 },
     upcomingAmount: { fontSize: 15, fontWeight: '600' },
+    sideRow: { flexDirection: 'row', gap: 16, marginTop: 8 },
+    sideCol: { flex: 1, maxHeight: 400 },
 })
