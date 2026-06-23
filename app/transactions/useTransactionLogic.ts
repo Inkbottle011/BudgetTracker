@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTransactionStore } from '../../store/useTransactionStore'
 import { EditingTransaction } from './types'
+import { useToastContext } from '../../context/ToastContext'
 
 export function useTransactionLogic() {
     const { transactions, setTransactions } = useTransactionStore()
+    const { showToast } = useToastContext()
     
     // Add form state
     const [type, setType] = useState('Expense')
@@ -42,21 +44,22 @@ export function useTransactionLogic() {
     const [recurring, setRecurring] = useState('none')
     const [recurringEnd, setRecurringEnd] = useState('')
     const [budgetCategories, setBudgetCategories] = useState<Record<string, string[]>>({
-    Income: [], Expense: [], Savings: [], Investment: []
-})
+        Income: [], Expense: [], Savings: [], Investment: []
+    })
     
-    useEffect(() => { setPage(0) }, [search, filterType, filterFrom, filterTo])    
+    useEffect(() => { setPage(0) }, [search, filterType, filterFrom, filterTo])
     useEffect(() => {
-    fetchTransactions()
-    fetchBudgetCategories()
-}, [])
+        fetchTransactions()
+        fetchBudgetCategories()
+    }, [])
+
     async function fetchTransactions() {
-    const { data } = await supabase
-        .from('transactions')
-        .select('*')
-        .order('date', { ascending: false })
-    if (data) setTransactions(data)
-}
+        const { data } = await supabase
+            .from('transactions')
+            .select('*')
+            .order('date', { ascending: false })
+        if (data) setTransactions(data)
+    }
     
     function validate() {
         const e: { amount?: string; date?: string } = {}
@@ -89,6 +92,9 @@ export function useTransactionLogic() {
             setSuccess(true)
             setTimeout(() => setSuccess(false), 2000)
             fetchTransactions()
+            showToast('Transaction added!')
+        } else {
+            showToast('Failed to add transaction', 'error')
         }
         setSaving(false)
     }
@@ -97,21 +103,24 @@ export function useTransactionLogic() {
         if (!editingTransaction) return
         setSaving(true)
         const { error } = await supabase
-        .from('transactions')
-        .update({
-            type: editingTransaction.type.toLowerCase(),
-            category_label: editingTransaction.category,
-            name: editingTransaction.name,
-            amount: parseFloat(editingTransaction.amount),
-            note: editingTransaction.details,
-            date: editingTransaction.date,
-            recurring: editingTransaction.recurring,
-            recurring_end: editingTransaction.recurring_end || null,
-        })
-        .eq('id', editingTransaction.id)
+            .from('transactions')
+            .update({
+                type: editingTransaction.type.toLowerCase(),
+                category_label: editingTransaction.category,
+                name: editingTransaction.name,
+                amount: parseFloat(editingTransaction.amount),
+                note: editingTransaction.details,
+                date: editingTransaction.date,
+                recurring: editingTransaction.recurring,
+                recurring_end: editingTransaction.recurring_end || null,
+            })
+            .eq('id', editingTransaction.id)
         if (!error) {
             setEditingTransaction(null)
             fetchTransactions()
+            showToast('Transaction updated!')
+        } else {
+            showToast('Failed to update transaction', 'error')
         }
         setSaving(false)
     }
@@ -144,7 +153,7 @@ export function useTransactionLogic() {
         setSelected(prev => {
             const next = new Set(prev)
             if (next.has(id)) next.delete(id)
-                else next.add(id)
+            else next.add(id)
             return next
         })
     }
@@ -159,16 +168,22 @@ export function useTransactionLogic() {
         if (selected.size === 0) return
         setDeleting(true)
         const { error } = await supabase
-        .from('transactions')
-        .delete()
-        .in('id', Array.from(selected))
-        if (!error) { await fetchTransactions(); exitSelectMode() }
+            .from('transactions')
+            .delete()
+            .in('id', Array.from(selected))
+        if (!error) {
+            await fetchTransactions()
+            exitSelectMode()
+            showToast(`${selected.size} transaction${selected.size > 1 ? 's' : ''} deleted`)
+        } else {
+            showToast('Failed to delete transactions', 'error')
+        }
         setDeleting(false)
     }
     
     function handleSort(col: string) {
         if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-            else { setSortCol(col); setSortDir('asc') }
+        else { setSortCol(col); setSortDir('asc') }
     }
     
     function runningBalance() {
@@ -202,28 +217,29 @@ export function useTransactionLogic() {
         a.download = `transactions_${new Date().toISOString().split('T')[0]}.csv`
         a.click()
         URL.revokeObjectURL(url)
+        showToast('CSV exported!')
     }
-    async function fetchBudgetCategories() {
-        
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) return
-    const { data } = await supabase
-        .from('budget_items')
-        .select('name, type')
-        .eq('user_id', session.user.id)
-        .order('created_at')
 
-    if (data && data.length > 0) {
-        const grouped: Record<string, string[]> = {
-            Income: [], Expense: [], Savings: [], Investment: []
+    async function fetchBudgetCategories() {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) return
+        const { data } = await supabase
+            .from('budget_items')
+            .select('name, type')
+            .eq('user_id', session.user.id)
+            .order('created_at')
+
+        if (data && data.length > 0) {
+            const grouped: Record<string, string[]> = {
+                Income: [], Expense: [], Savings: [], Investment: []
+            }
+            data.forEach(item => {
+                const key = item.type.charAt(0).toUpperCase() + item.type.slice(1)
+                if (grouped[key]) grouped[key].push(item.name)
+            })
+            setBudgetCategories(grouped)
         }
-        data.forEach(item => {
-            const key = item.type.charAt(0).toUpperCase() + item.type.slice(1)
-            if (grouped[key]) grouped[key].push(item.name)
-        })
-        setBudgetCategories(grouped)
     }
-}
     
     async function handleDuplicate(t: any) {
         const { data: { session } } = await supabase.auth.getSession()
@@ -238,62 +254,61 @@ export function useTransactionLogic() {
             category_label: t.category_label,
             date: new Date().toISOString().split('T')[0],
         })
-        if (!error) fetchTransactions()
+        if (!error) {
+            fetchTransactions()
+            showToast('Transaction duplicated!')
+        } else {
+            showToast('Failed to duplicate transaction', 'error')
         }
-    
+    }
     
     const totalRows = runningBalance()
-    .filter(t => {
-        if (!search && !filterType && !filterFrom && !filterTo) return true
-        const q = search.toLowerCase()
-        const matchSearch = !search || (
-            t.name?.toLowerCase().includes(q) ||
-            t.note?.toLowerCase().includes(q) ||
-            t.type?.toLowerCase().includes(q) ||
-            t.date?.includes(q) ||
-            t.category_label?.toLowerCase().includes(q)
-        )
-        const matchType = !filterType || t.type === filterType.toLowerCase()
-        const matchFrom = !filterFrom || t.date >= filterFrom
-        const matchTo = !filterTo || t.date <= filterTo
-        return matchSearch && matchType && matchFrom && matchTo
-    })
-    .sort((a, b) => {
-        let valA: any, valB: any
-        if (sortCol === 'date') { valA = a.date; valB = b.date }
-        else if (sortCol === 'amount') { valA = a.amount; valB = b.amount }
-        else if (sortCol === 'type') { valA = a.type; valB = b.type }
-        else return 0
-        if (valA < valB) return sortDir === 'asc' ? -1 : 1
-        if (valA > valB) return sortDir === 'asc' ? 1 : -1
-        return 0
-    })
+        .filter(t => {
+            if (!search && !filterType && !filterFrom && !filterTo) return true
+            const q = search.toLowerCase()
+            const matchSearch = !search || (
+                t.name?.toLowerCase().includes(q) ||
+                t.note?.toLowerCase().includes(q) ||
+                t.type?.toLowerCase().includes(q) ||
+                t.date?.includes(q) ||
+                t.category_label?.toLowerCase().includes(q)
+            )
+            const matchType = !filterType || t.type === filterType.toLowerCase()
+            const matchFrom = !filterFrom || t.date >= filterFrom
+            const matchTo = !filterTo || t.date <= filterTo
+            return matchSearch && matchType && matchFrom && matchTo
+        })
+        .sort((a, b) => {
+            let valA: any, valB: any
+            if (sortCol === 'date') { valA = a.date; valB = b.date }
+            else if (sortCol === 'amount') { valA = a.amount; valB = b.amount }
+            else if (sortCol === 'type') { valA = a.type; valB = b.type }
+            else return 0
+            if (valA < valB) return sortDir === 'asc' ? -1 : 1
+            if (valA > valB) return sortDir === 'asc' ? 1 : -1
+            return 0
+        })
     
     const rows = totalRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
     const totalPages = Math.ceil(totalRows.length / PAGE_SIZE)
     
     return {
-        // form
         type, setType, category, setCategory, amount, setAmount,
         details, setDetails, date, setDate, name, setName,
         errors, setErrors, saving, success,
         handleAdd,
-        // edit
         editingTransaction, setEditingTransaction,
         handleSaveEdit, handleEditSelect,
         editMode, setEditMode,
-        // select/delete
         selectMode, setSelectMode, selected,
         deleting, confirmDelete, setConfirmDelete,
         toggleSelect, exitSelectMode, handleDelete,
-        // search/filter/sort
         search, setSearch,
         filterType, setFilterType,
         filterFrom, setFilterFrom,
         filterTo, setFilterTo,
         showFilters, setShowFilters,
         sortCol, sortDir, handleSort,
-        // data
         rows,
         page, setPage, totalPages,
         exportToCSV, handleDuplicate, duplicateMode, setDuplicateMode,

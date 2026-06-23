@@ -10,13 +10,34 @@ export default function AuthScreen() {
     const [loading, setLoading] = useState(false)
     const [errors, setErrors] = useState<{ email?: string; password?: string; general?: string }>({})
     const [success, setSuccess] = useState<string | null>(null)
+    const [passwordStrength, setPasswordStrength] = useState(0)
+    
+    function getPasswordStrength(pwd: string): number {
+        let strength = 0
+        if (pwd.length >= 8) strength++
+        if (/[A-Z]/.test(pwd)) strength++
+        if (/[0-9]/.test(pwd)) strength++
+        if (/[^A-Za-z0-9]/.test(pwd)) strength++
+        return strength
+    }
     
     function validate() {
         const newErrors: { email?: string; password?: string } = {}
+        
         if (!email) newErrors.email = 'Email is required'
         else if (!/\S+@\S+\.\S+/.test(email)) newErrors.email = 'Enter a valid email address'
-        if (!password) newErrors.password = 'Password is required'
-        else if (password.length < 6) newErrors.password = 'Password must be at least 6 characters'
+        
+        if (!password) {
+            newErrors.password = 'Password is required'
+        } else if (!isLogin) {
+            if (password.length < 8) newErrors.password = 'Password must be at least 8 characters'
+            else if (!/[A-Z]/.test(password)) newErrors.password = 'Must contain an uppercase letter'
+            else if (!/[0-9]/.test(password)) newErrors.password = 'Must contain a number'
+            else if (!/[^A-Za-z0-9]/.test(password)) newErrors.password = 'Must contain a special character'
+        } else {
+            if (password.length < 6) newErrors.password = 'Password must be at least 6 characters'
+        }
+        
         setErrors(newErrors)
         return Object.keys(newErrors).length === 0
     }
@@ -33,15 +54,11 @@ export default function AuthScreen() {
             const { error } = await supabase.auth.signUp({ email, password })
             if (error) {
                 setErrors({ general: error.message })
-            }else {
-                const { error } = await supabase.auth.signUp({ email, password })
-                if (error) {
-                    setErrors({ general: error.message })
-                } else {
-                    setIsLogin(true)
-                    setPassword('')
-                    setSuccess('Account created! Check your email to confirm before signing in.')
-                }
+            } else {
+                setIsLogin(true)
+                setPassword('')
+                setPasswordStrength(0)
+                setSuccess('Account created! Check your email to confirm before signing in.')
             }
         }
         setLoading(false)
@@ -53,7 +70,11 @@ export default function AuthScreen() {
         setSuccess(null)
         setEmail('')
         setPassword('')
+        setPasswordStrength(0)
     }
+    
+    const strengthLabel = passwordStrength <= 1 ? 'Weak' : passwordStrength === 2 ? 'Fair' : passwordStrength === 3 ? 'Good' : 'Strong'
+    const strengthColor = passwordStrength <= 1 ? '#e74c3c' : passwordStrength === 2 ? '#e67e22' : passwordStrength === 3 ? '#f1c40f' : '#27ae60'
     
     return (
         <View style={styles.container}>
@@ -66,11 +87,13 @@ export default function AuthScreen() {
             <Text style={styles.generalErrorText}>{errors.general}</Text>
             </View>
         )}
+        
         {success && (
             <View style={styles.successBanner}>
             <Text style={styles.successText}>{success}</Text>
             </View>
         )}
+        
         <Text style={styles.label}>Email</Text>
         <TextInput
         style={[styles.input, errors.email ? styles.inputError : null]}
@@ -87,9 +110,13 @@ export default function AuthScreen() {
         <View style={[styles.passwordContainer, errors.password ? styles.inputError : null]}>
         <TextInput
         style={styles.passwordInput}
-        placeholder="Min. 6 characters"
+        placeholder={isLogin ? 'Your password' : 'Min. 8 chars, uppercase, number, symbol'}
         value={password}
-        onChangeText={(t) => { setPassword(t); setErrors(e => ({ ...e, password: undefined })) }}
+        onChangeText={(t) => {
+            setPassword(t)
+            setPasswordStrength(getPasswordStrength(t))
+            setErrors(e => ({ ...e, password: undefined }))
+        }}
         secureTextEntry={!showPassword}
         placeholderTextColor="#aaa"
         />
@@ -98,8 +125,21 @@ export default function AuthScreen() {
         </TouchableOpacity>
         </View>
         {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
+        
+        {!isLogin && password.length > 0 && (
+            <View style={styles.strengthContainer}>
+            <View style={styles.strengthBar}>
+            <View style={[styles.strengthFill, {
+                width: `${passwordStrength * 25}%`,
+                backgroundColor: strengthColor
+            }]} />
+            </View>
+            <Text style={[styles.strengthText, { color: strengthColor }]}>{strengthLabel}</Text>
+            </View>
+        )}
+        
         {!isLogin && (
-            <Text style={styles.hint}>Use at least 6 characters with a mix of letters and numbers</Text>
+            <Text style={styles.hint}>Use at least 8 characters with uppercase, number, and special character</Text>
         )}
         
         <TouchableOpacity
@@ -140,12 +180,16 @@ const styles = StyleSheet.create({
     hint: { color: '#aaa', fontSize: 12, marginBottom: 12, marginLeft: 2 },
     generalError: { backgroundColor: '#fdedec', borderRadius: 8, padding: 12, marginBottom: 16 },
     generalErrorText: { color: '#e74c3c', fontSize: 13, textAlign: 'center' },
+    successBanner: { backgroundColor: '#eafaf1', borderRadius: 8, padding: 12, marginBottom: 16 },
+    successText: { color: '#27ae60', fontSize: 13, textAlign: 'center', fontWeight: '600' },
+    strengthContainer: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8, marginTop: 2 },
+    strengthBar: { flex: 1, height: 4, backgroundColor: '#e0e0e0', borderRadius: 2, overflow: 'hidden' },
+    strengthFill: { height: 4, borderRadius: 2 },
+    strengthText: { fontSize: 12, fontWeight: '600', minWidth: 40 },
     button: { backgroundColor: '#2c3e50', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 8 },
     buttonDisabled: { opacity: 0.6 },
     buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
     toggleButton: { marginTop: 20, alignItems: 'center' },
     toggleText: { fontSize: 14, color: '#888' },
     toggleLink: { color: '#3498db', fontWeight: '600' },
-    successBanner: { backgroundColor: '#eafaf1', borderRadius: 8, padding: 12, marginBottom: 16 },
-    successText: { color: '#2ecc71', fontSize: 13, textAlign: 'center', fontWeight: '600' },
 })

@@ -38,6 +38,12 @@ interface Props {
 }
 
 const FILTER_TYPES = ['Income', 'Expense', 'Savings', 'Investment']
+const TYPE_BADGE_COLORS: Record<string, string> = {
+    income: '#2980b9',
+    expense: '#e74c3c',
+    savings: '#27ae60',
+    investment: '#8e44ad',
+}
 
 export function TransactionList({
     rows, selectMode, selected, confirmDelete, deleting,
@@ -48,6 +54,7 @@ export function TransactionList({
     onSort, onRowPress, onEnterSelect, onExitSelect, onConfirmDelete, onCancelConfirm, onDelete, onEnterEdit, onExport, duplicateMode, onEnterDuplicate,
 }: Props) {
     return (
+        
         <View style={styles.container}>
         {/* Header */}
         <View style={styles.listHeader}>
@@ -195,12 +202,21 @@ export function TransactionList({
                     </View>
                     </View>
                     <Text style={[styles.col, styles.colCat, styles.cellText]}>{t.category_label || '—'}</Text>
-                    <Text style={[styles.col, styles.colName, styles.cellText]}>{t.name || '—'}</Text>
+                    <View style={[styles.col, styles.colName, { flexDirection: 'row', alignItems: 'center', gap: 4, overflow: 'hidden' }]}>
+                    <Text style={styles.cellText} numberOfLines={1}>{t.name || '—'}</Text>
+                    {t.recurring && t.recurring !== 'none' ? (
+                        <View
+                        style={[styles.recurringBadge, { backgroundColor: TYPE_BADGE_COLORS[t.type] || '#888' }]}
+                        {...{ title: `Recurring: ${t.recurring}` } as any}
+                        >
+                        <Text style={styles.recurringBadgeText}>R</Text>
+                        </View>
+                    ) : null}
+                    </View>
                     <Text style={[styles.col, styles.colAmt, styles.cellText, { color: t.type === 'expense' ? '#e74c3c' : '#27ae60' }]}>
                     {t.type === 'expense' ? '-' : '+'}${Number(t.amount).toFixed(2)}
                     </Text>
                     <Text style={[styles.col, styles.colDet, styles.cellText]}>{t.note || '—'}</Text>
-                    <Text style={[styles.col, styles.colBal, styles.cellText]}>${Number(t.balance).toFixed(2)}</Text>
                     </Pressable>
                 )
             })
@@ -309,4 +325,6 @@ const styles = StyleSheet.create({
     pageBtnDisabled: { borderColor: '#ddd' },
     pageBtnText: { fontSize: 13, color: '#2980b9', fontWeight: '600' },
     pageInfo: { fontSize: 13, color: '#555' },
+    recurringBadge: { borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2, alignItems: 'center', justifyContent: 'center' },
+    recurringBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
 })

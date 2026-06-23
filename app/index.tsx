@@ -118,20 +118,24 @@ export default function Dashboard() {
                     const over = actual > planned && planned > 0
                     return (
                         <View key={item.id} style={[styles.avpRow, { backgroundColor: colors.light }]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                         <Text style={[styles.avpName, { color: colors.text }]}>{item.name}</Text>
+                        <View style={{ flexDirection: 'row' }}>
                         <Text style={styles.avpCol}>${planned.toLocaleString()}</Text>
                         <Text style={styles.avpCol}>${actual.toLocaleString()}</Text>
                         <Text style={[styles.avpCol, { color: diff >= 0 ? '#27ae60' : '#e74c3c', fontWeight: '600' }]}>
                         {diff >= 0 ? '+' : ''}${diff.toLocaleString()}
                         </Text>
-                        {planned > 0 && (
+                        </View>
+                        </View>
+                        {planned > 0 ? (
                             <View style={styles.progressBar}>
                             <View style={[styles.progressFill, {
                                 width: `${pct * 100}%`,
                                 backgroundColor: over ? '#e74c3c' : '#27ae60'
                             }]} />
                             </View>
-                        )}
+                        ) : null}
                         </View>
                     )
                 })}

@@ -3,22 +3,29 @@ import { NavigationContainer } from '@react-navigation/native'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Alert } from 'react-native'
 import { supabase } from './lib/supabase'
-import Dashboard from './app/index'
+import Dashboard from './app/dashboard/index'
 import AuthScreen from './app/auth'
 import TransactionsScreen from './app/transactions/index'
 import BudgetScreen from './app/budget/index'
 import SettingsScreen from './app/settings'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { Ionicons } from '@expo/vector-icons'
+import { Toast } from './components/Toast'
+import { ToastContext } from './context/ToastContext'
+import { useToast } from './hooks/useToast'
+import { useToastContext } from './context/ToastContext'
 
 const Tab = createBottomTabNavigator()
 
 function Header({ userEmail }: { userEmail: string }) {
   const [showProfile, setShowProfile] = useState(false)
+  const { showToast } = useToastContext()
   
   async function handleSignOut() {
     const { error } = await supabase.auth.signOut()
     if (error) Alert.alert('Error', error.message)
-    }
+      else showToast('Signed out successfully')
+  }
   
   return (
     <View style={styles.header}>
@@ -85,6 +92,7 @@ const styles = StyleSheet.create({
 export default function App() {
   const [session, setSession] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const { toast, showToast, hideToast } = useToast()
   
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -104,17 +112,39 @@ export default function App() {
   
   return (
     <ErrorBoundary>
+    <ToastContext.Provider value={{ showToast }}>
     <View style={{ flex: 1 }}>
     <Header userEmail={session.user.email} />
     <NavigationContainer>
-    <Tab.Navigator screenOptions={{ headerShown: false }}>
+    <Tab.Navigator
+    screenOptions={({ route }) => ({
+      headerShown: false,
+      tabBarIcon: ({ focused, color, size }) => {
+        let iconName: any
+        if (route.name === 'Dashboard') iconName = focused ? 'home' : 'home-outline'
+        else if (route.name === 'Transactions') iconName = focused ? 'list' : 'list-outline'
+        else if (route.name === 'Budget') iconName = focused ? 'bar-chart' : 'bar-chart-outline'
+        else if (route.name === 'Settings') iconName = focused ? 'settings' : 'settings-outline'
+        return <Ionicons name={iconName} size={size} color={color} />
+      },
+      tabBarActiveTintColor: '#2980b9',
+      tabBarInactiveTintColor: '#888',
+    })}
+    >
     <Tab.Screen name="Dashboard" component={Dashboard} />
     <Tab.Screen name="Transactions" component={TransactionsScreen} />
     <Tab.Screen name="Budget" component={BudgetScreen} />
     <Tab.Screen name="Settings" component={SettingsScreen} />
     </Tab.Navigator>
     </NavigationContainer>
+    <Toast
+    message={toast.message}
+    type={toast.type}
+    visible={toast.visible}
+    onHide={hideToast}
+    />
     </View>
+    </ToastContext.Provider>
     </ErrorBoundary>
   )
 }
