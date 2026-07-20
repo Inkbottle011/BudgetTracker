@@ -46,6 +46,7 @@ export function useTransactionLogic() {
     const [budgetCategories, setBudgetCategories] = useState<Record<string, string[]>>({
         Income: [], Expense: [], Savings: [], Investment: []
     })
+    const [showImport, setShowImport] = useState(false)
     
     useEffect(() => { setPage(0) }, [search, filterType, filterFrom, filterTo])
     useEffect(() => {
@@ -313,5 +314,6 @@ export function useTransactionLogic() {
         page, setPage, totalPages,
         exportToCSV, handleDuplicate, duplicateMode, setDuplicateMode,
         recurring, setRecurring, recurringEnd, setRecurringEnd, budgetCategories,
+        showImport, setShowImport,fetchTransactions,
     }
 }

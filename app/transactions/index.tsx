@@ -42,6 +42,10 @@ export default function TransactionsScreen() {
         onExport={logic.exportToCSV}
         duplicateMode={logic.duplicateMode}
         onEnterDuplicate={() => logic.setDuplicateMode(true)}
+        showImport={logic.showImport}
+        onImport={() => logic.setShowImport(true)}
+        onCloseImport={() => logic.setShowImport(false)}
+        onImported={() => { logic.setShowImport(false); logic.fetchTransactions() }}
         />
         <TransactionForm
         type={logic.type}

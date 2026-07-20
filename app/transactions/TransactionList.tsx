@@ -1,5 +1,6 @@
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Pressable } from 'react-native'
 import { TYPE_COLORS } from './types'
+import { ImportModal } from './importModel'
 
 interface Props {
     rows: any[]
@@ -35,6 +36,10 @@ interface Props {
     onExport: () => void    
     duplicateMode: boolean
     onEnterDuplicate: () => void
+    showImport: boolean
+    onImport: () => void
+    onCloseImport: () => void
+    onImported: () => void
 }
 
 const FILTER_TYPES = ['Income', 'Expense', 'Savings', 'Investment']
@@ -51,7 +56,9 @@ export function TransactionList({
     sortCol, sortDir, editMode,
     page, totalPages, onPageChange,
     onSearch, onToggleFilters, onFilterType, onFilterFrom, onFilterTo, onClearFilters,
-    onSort, onRowPress, onEnterSelect, onExitSelect, onConfirmDelete, onCancelConfirm, onDelete, onEnterEdit, onExport, duplicateMode, onEnterDuplicate,
+    onSort, onRowPress, onEnterSelect, onExitSelect, onConfirmDelete, onCancelConfirm, 
+    onDelete, onEnterEdit, onExport, duplicateMode, onEnterDuplicate,
+    showImport, onImport, onCloseImport, onImported,
 }: Props) {
     return (
         
@@ -109,6 +116,9 @@ export function TransactionList({
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionBtn} onPress={onExport}>
             <Text style={styles.actionBtnText}>Export CSV</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionBtn} onPress={onImport}>
+            <Text style={styles.actionBtnText}>Import CSV</Text>
             </TouchableOpacity>
             </>
         )}
@@ -217,6 +227,7 @@ export function TransactionList({
                     {t.type === 'expense' ? '-' : '+'}${Number(t.amount).toFixed(2)}
                     </Text>
                     <Text style={[styles.col, styles.colDet, styles.cellText]}>{t.note || '—'}</Text>
+                    <Text style={[styles.col, styles.colBal, styles.cellText]}>${Number(t.balance).toFixed(2)}</Text>
                     </Pressable>
                 )
             })
@@ -267,6 +278,11 @@ export function TransactionList({
             </TouchableOpacity>
             </View>
         )}
+        <ImportModal
+        visible={showImport}
+        onClose={onCloseImport}
+        onImported={onImported}
+        />
         </View>
         
     )
