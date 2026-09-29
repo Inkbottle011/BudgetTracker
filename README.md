@@ -64,8 +64,8 @@ Supabase ───────────────────────�
 **Prerequisites:** Node.js 18+ and a free [Supabase](https://supabase.com) project.
 
 ```bash
-git clone https://github.com/Inkbottle011/budget-tracker.git
-cd budget-tracker
+git clone https://github.com/Inkbottle011/BudgetTracker.git
+cd BudgetTracker
 npm install
 ```
 
