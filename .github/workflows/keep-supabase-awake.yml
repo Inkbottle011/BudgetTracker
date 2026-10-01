@@ -26,14 +26,20 @@ jobs:
             echo "Missing SUPABASE_URL or SUPABASE_ANON_KEY secret. See the setup note at the top of this file."
             exit 1
           fi
-          # Row-level security means this returns no rows, but the query still reaches the database
+          # The public key isn't allowed to read this table (that's intended), but the database
+          # still has to handle the request to refuse it, which counts as activity
           status=$(curl -s -o response.txt -w "%{http_code}" \
             "$SUPABASE_URL/rest/v1/budget_items?select=id&limit=1" \
             -H "apikey: $SUPABASE_ANON_KEY" \
             -H "Authorization: Bearer $SUPABASE_ANON_KEY")
           echo "Supabase responded with HTTP $status"
           cat response.txt; echo
-          if [ "$status" -ge 400 ]; then
+          if [ "$status" -lt 400 ]; then
+            echo "Database reached."
+          elif grep -Eq '"code":"[0-9A-Z]{5}"' response.txt; then
+            # A Postgres error code (like 42501, permission denied) means the database itself answered
+            echo "Database reached (it declined the read, which is expected)."
+          else
             echo "Ping failed. The project may already be paused - restore it from the Supabase dashboard."
             exit 1
           fi
