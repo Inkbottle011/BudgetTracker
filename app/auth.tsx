@@ -1,14 +1,16 @@
 import { useState } from 'react'
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native'
+import * as Linking from 'expo-linking'
 import { supabase } from '../lib/supabase'
 
-export default function AuthScreen() {
+export default function AuthScreen({ initialError }: { initialError?: string | null }) {
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [showPassword, setShowPassword] = useState(false)
     const [isLogin, setIsLogin] = useState(true)
+    const [isForgot, setIsForgot] = useState(false)
     const [loading, setLoading] = useState(false)
-    const [errors, setErrors] = useState<{ email?: string; password?: string; general?: string }>({})
+    const [errors, setErrors] = useState<{ email?: string; password?: string; general?: string }>(initialError ? { general: initialError } : {})
     const [success, setSuccess] = useState<string | null>(null)
     const [passwordStrength, setPasswordStrength] = useState(0)
     
@@ -27,7 +29,9 @@ export default function AuthScreen() {
         if (!email) newErrors.email = 'Email is required'
         else if (!/\S+@\S+\.\S+/.test(email)) newErrors.email = 'Enter a valid email address'
         
-        if (!password) {
+        if (isForgot) {
+            // Only the email is needed to request a reset link
+        } else if (!password) {
             newErrors.password = 'Password is required'
         } else if (!isLogin) {
             if (password.length < 8) newErrors.password = 'Password must be at least 8 characters'
@@ -47,7 +51,18 @@ export default function AuthScreen() {
         setLoading(true)
         setErrors({})
         
-        if (isLogin) {
+        if (isForgot) {
+            const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                // Where the link in the email sends the user back to (web origin or the app's deep link)
+                redirectTo: Linking.createURL('/'),
+            })
+            if (error) {
+                setErrors({ general: error.message })
+            } else {
+                // Same message whether or not the account exists, so emails can't be probed
+                setSuccess(`If an account exists for ${email}, we've sent a link to reset your password. Check your inbox.`)
+            }
+        } else if (isLogin) {
             const { error } = await supabase.auth.signInWithPassword({ email, password })
             if (error) setErrors({ general: 'Incorrect email or password. Please try again.' })
             } else {
@@ -62,6 +77,15 @@ export default function AuthScreen() {
             }
         }
         setLoading(false)
+    }
+    
+    function openForgot(show: boolean) {
+        setIsForgot(show)
+        setIsLogin(true)
+        setErrors({})
+        setSuccess(null)
+        setPassword('')
+        setPasswordStrength(0)
     }
     
     function switchMode() {
@@ -80,7 +104,9 @@ export default function AuthScreen() {
         <View style={styles.container}>
         <View style={styles.card}>
         <Text style={styles.title}>Budget Tracker</Text>
-        <Text style={styles.subtitle}>{isLogin ? 'Sign in to continue' : 'Create your account'}</Text>
+        <Text style={styles.subtitle}>
+        {isForgot ? "Enter your email and we'll send you a reset link" : isLogin ? 'Sign in to continue' : 'Create your account'}
+        </Text>
         
         {errors.general && (
             <View style={styles.generalError}>
@@ -106,6 +132,7 @@ export default function AuthScreen() {
         />
         {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
         
+        {!isForgot && (<>
         <Text style={styles.label}>Password</Text>
         <View style={[styles.passwordContainer, errors.password ? styles.inputError : null]}>
         <TextInput
@@ -142,6 +169,13 @@ export default function AuthScreen() {
             <Text style={styles.hint}>Use at least 8 characters with uppercase, number, and special character</Text>
         )}
         
+        {isLogin && (
+            <TouchableOpacity onPress={() => openForgot(true)} style={styles.forgotButton}>
+            <Text style={styles.forgotText}>Forgot password?</Text>
+            </TouchableOpacity>
+        )}
+        </>)}
+        
         <TouchableOpacity
         style={[styles.button, loading && styles.buttonDisabled]}
         onPress={handleAuth}
@@ -149,16 +183,22 @@ export default function AuthScreen() {
         >
         {loading
             ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.buttonText}>{isLogin ? 'Sign In' : 'Create Account'}</Text>
+            : <Text style={styles.buttonText}>{isForgot ? 'Send Reset Link' : isLogin ? 'Sign In' : 'Create Account'}</Text>
         }
         </TouchableOpacity>
         
-        <TouchableOpacity onPress={switchMode} style={styles.toggleButton}>
-        <Text style={styles.toggleText}>
-        {isLogin ? "Don't have an account? " : 'Already have an account? '}
-        <Text style={styles.toggleLink}>{isLogin ? 'Sign Up' : 'Sign In'}</Text>
-        </Text>
-        </TouchableOpacity>
+        {isForgot ? (
+            <TouchableOpacity onPress={() => openForgot(false)} style={styles.toggleButton}>
+            <Text style={styles.toggleLink}>Back to Sign In</Text>
+            </TouchableOpacity>
+        ) : (
+            <TouchableOpacity onPress={switchMode} style={styles.toggleButton}>
+            <Text style={styles.toggleText}>
+            {isLogin ? "Don't have an account? " : 'Already have an account? '}
+            <Text style={styles.toggleLink}>{isLogin ? 'Sign Up' : 'Sign In'}</Text>
+            </Text>
+            </TouchableOpacity>
+        )}
         </View>
         </View>
     )
@@ -189,6 +229,8 @@ const styles = StyleSheet.create({
     button: { backgroundColor: '#2c3e50', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 8 },
     buttonDisabled: { opacity: 0.6 },
     buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+    forgotButton: { alignSelf: 'flex-end', marginBottom: 8, marginTop: 4 },
+    forgotText: { fontSize: 13, color: '#3498db', fontWeight: '600' },
     toggleButton: { marginTop: 20, alignItems: 'center' },
     toggleText: { fontSize: 14, color: '#888' },
     toggleLink: { color: '#3498db', fontWeight: '600' },
