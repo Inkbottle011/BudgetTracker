@@ -10,6 +10,8 @@ import ResetPasswordScreen from './app/reset-password'
 import TransactionsScreen from './app/transactions/index'
 import BudgetScreen from './app/budget/index'
 import SettingsScreen from './app/settings'
+import SubscriptionsScreen from './app/subscriptions/index'
+import { syncSubscriptionCharges } from './lib/subscriptions'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { Ionicons } from '@expo/vector-icons'
 import { Toast } from './components/Toast'
@@ -96,6 +98,7 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [isRecovering, setIsRecovering] = useState(false)
   const [linkError, setLinkError] = useState<string | null>(null)
+  const [chargesSynced, setChargesSynced] = useState(false)
   const { toast, showToast, hideToast } = useToast()
   
   useEffect(() => {
@@ -141,9 +144,23 @@ export default function App() {
     }
   }, [])
   
+  // Once signed in, add any subscription charges that came due while the app was closed
+  // (or while Supabase was paused) before the tabs load their data
+  const userId = session?.user?.id
+  useEffect(() => {
+    if (!userId) return
+    let done = false
+    const finish = () => { if (!done) { done = true; setChargesSynced(true) } }
+    setChargesSynced(false)
+    syncSubscriptionCharges().finally(finish)
+    const timer = setTimeout(finish, 8000) // don't hold the app up if the database is slow
+    return () => { done = true; clearTimeout(timer) }
+  }, [userId])
+  
   if (loading) return null
   if (session && isRecovering) return <ResetPasswordScreen onDone={() => setIsRecovering(false)} />
   if (!session) return <AuthScreen key={linkError ?? "auth"} initialError={linkError} />
+  if (!chargesSynced) return null
   
   return (
     <ErrorBoundary>
@@ -158,6 +175,7 @@ export default function App() {
         let iconName: any
         if (route.name === 'Dashboard') iconName = focused ? 'home' : 'home-outline'
         else if (route.name === 'Transactions') iconName = focused ? 'list' : 'list-outline'
+        else if (route.name === 'Subscriptions') iconName = focused ? 'repeat' : 'repeat-outline'
         else if (route.name === 'Budget') iconName = focused ? 'bar-chart' : 'bar-chart-outline'
         else if (route.name === 'Settings') iconName = focused ? 'settings' : 'settings-outline'
         return <Ionicons name={iconName} size={size} color={color} />
@@ -168,6 +186,7 @@ export default function App() {
     >
     <Tab.Screen name="Dashboard" component={Dashboard} />
     <Tab.Screen name="Transactions" component={TransactionsScreen} />
+    <Tab.Screen name="Subscriptions" component={SubscriptionsScreen} />
     <Tab.Screen name="Budget" component={BudgetScreen} />
     <Tab.Screen name="Settings" component={SettingsScreen} />
     </Tab.Navigator>

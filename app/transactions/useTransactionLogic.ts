@@ -41,8 +41,6 @@ export function useTransactionLogic() {
     const [page, setPage] = useState(0)
     const PAGE_SIZE = 20
     const [duplicateMode, setDuplicateMode] = useState(false)
-    const [recurring, setRecurring] = useState('none')
-    const [recurringEnd, setRecurringEnd] = useState('')
     const [budgetCategories, setBudgetCategories] = useState<Record<string, string[]>>({
         Income: [], Expense: [], Savings: [], Investment: []
     })
@@ -85,11 +83,9 @@ export function useTransactionLogic() {
             note: details,
             category_label: category,
             date,
-            recurring: recurring,
-            recurring_end: recurringEnd || null,
         })
         if (!error) {
-            setAmount(''); setDetails(''); setCategory(''); setName(''); setRecurring('none'); setRecurringEnd('')
+            setAmount(''); setDetails(''); setCategory(''); setName('')
             setSuccess(true)
             setTimeout(() => setSuccess(false), 2000)
             fetchTransactions()
@@ -112,8 +108,6 @@ export function useTransactionLogic() {
                 amount: parseFloat(editingTransaction.amount),
                 note: editingTransaction.details,
                 date: editingTransaction.date,
-                recurring: editingTransaction.recurring,
-                recurring_end: editingTransaction.recurring_end || null,
             })
             .eq('id', editingTransaction.id)
         if (!error) {
@@ -142,8 +136,6 @@ export function useTransactionLogic() {
                 amount: String(t.amount),
                 details: t.note || '',
                 date: t.date,
-                recurring: t.recurring || 'none',
-                recurring_end: t.recurring_end || '',
             })
             setEditMode(false)
             return
@@ -313,7 +305,7 @@ export function useTransactionLogic() {
         rows,
         page, setPage, totalPages,
         exportToCSV, handleDuplicate, duplicateMode, setDuplicateMode,
-        recurring, setRecurring, recurringEnd, setRecurringEnd, budgetCategories,
+        budgetCategories,
         showImport, setShowImport,fetchTransactions,
     }
 }

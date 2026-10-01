@@ -68,10 +68,6 @@ export default function TransactionsScreen() {
         onEditChange={logic.setEditingTransaction}
         onSaveEdit={logic.handleSaveEdit}
         onCancelEdit={() => logic.setEditingTransaction(null)}
-        recurring={logic.recurring}
-        recurringEnd={logic.recurringEnd}
-        onRecurringChange={logic.setRecurring}
-        onRecurringEndChange={logic.setRecurringEnd}
         budgetCategories={logic.budgetCategories}
         />
         </View>

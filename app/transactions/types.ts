@@ -22,6 +22,4 @@ export interface EditingTransaction {
     amount: string
     details: string
     date: string
-    recurring: string
-    recurring_end: string
 }

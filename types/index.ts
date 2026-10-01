@@ -22,8 +22,9 @@ export interface Transaction {
     date: string
     created_at: string
     category?: Category
-    recurring?: string
-    recurring_end?: string
+    recurring?: string        // old repeat system, no longer used
+    recurring_end?: string    // old repeat system, no longer used
+    subscription_id?: string | null
 }
 
 export interface Budget {
