@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { NavigationContainer } from '@react-navigation/native'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
-import { View, Text, TouchableOpacity, StyleSheet, Modal, Alert } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Alert, Platform } from 'react-native'
+import * as Linking from 'expo-linking'
 import { supabase } from './lib/supabase'
 import Dashboard from './app/dashboard/index'
 import AuthScreen from './app/auth'
+import ResetPasswordScreen from './app/reset-password'
 import TransactionsScreen from './app/transactions/index'
 import BudgetScreen from './app/budget/index'
 import SettingsScreen from './app/settings'
@@ -92,6 +94,8 @@ const styles = StyleSheet.create({
 export default function App() {
   const [session, setSession] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [isRecovering, setIsRecovering] = useState(false)
+  const [linkError, setLinkError] = useState<string | null>(null)
   const { toast, showToast, hideToast } = useToast()
   
   useEffect(() => {
@@ -100,15 +104,46 @@ export default function App() {
       setLoading(false)
     })
     
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // Fired when the user opens the reset link from their email
+      if (event === 'PASSWORD_RECOVERY') setIsRecovering(true)
       setSession(session)
     })
     
-    return () => subscription.unsubscribe()
+    // Links from Supabase emails (password reset, email confirmation) come back with ?code=...
+    async function handleAuthLink(url: string | null) {
+      if (!url) return
+      const { queryParams } = Linking.parse(url)
+      const code = typeof queryParams?.code === 'string' ? queryParams.code : null
+      const errorDescription = typeof queryParams?.error_description === 'string' ? queryParams.error_description : null
+      
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code)
+        if (error) setLinkError('That link is invalid or has expired. Please request a new one.')
+      } else if (errorDescription) {
+        setLinkError(errorDescription)
+      } else {
+        return
+      }
+      
+      // Clear the code from the browser address bar so a refresh doesn't reuse it
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.history.replaceState({}, document.title, window.location.pathname)
+      }
+    }
+    
+    Linking.getInitialURL().then(handleAuthLink)
+    const linkSub = Linking.addEventListener('url', ({ url }) => handleAuthLink(url))
+    
+    return () => {
+      subscription.unsubscribe()
+      linkSub.remove()
+    }
   }, [])
   
   if (loading) return null
-  if (!session) return <AuthScreen />
+  if (session && isRecovering) return <ResetPasswordScreen onDone={() => setIsRecovering(false)} />
+  if (!session) return <AuthScreen key={linkError ?? "auth"} initialError={linkError} />
   
   return (
     <ErrorBoundary>
