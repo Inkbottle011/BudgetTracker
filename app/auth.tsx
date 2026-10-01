@@ -3,6 +3,15 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator 
 import * as Linking from 'expo-linking'
 import { supabase } from '../lib/supabase'
 
+// Only blame the password when Supabase actually says the credentials are wrong.
+// Anything else (server errors, network problems) shows the real reason.
+function signInErrorMessage(error: { code?: string; status?: number; message: string }): string {
+    if (error.code === 'invalid_credentials') return 'Incorrect email or password. Please try again.'
+    if (error.code === 'email_not_confirmed') return 'Please confirm your email first. Check your inbox for the confirmation link.'
+    if (!error.status) return "Couldn't reach the server. Check your internet connection and try again."
+    return `Sign-in failed: ${error.message}`
+}
+
 export default function AuthScreen({ initialError }: { initialError?: string | null }) {
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
@@ -64,7 +73,7 @@ export default function AuthScreen({ initialError }: { initialError?: string | n
             }
         } else if (isLogin) {
             const { error } = await supabase.auth.signInWithPassword({ email, password })
-            if (error) setErrors({ general: 'Incorrect email or password. Please try again.' })
+            if (error) setErrors({ general: signInErrorMessage(error) })
             } else {
             const { error } = await supabase.auth.signUp({ email, password })
             if (error) {
