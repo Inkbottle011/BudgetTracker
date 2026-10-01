@@ -1,0 +1,39 @@
+# Supabase pauses free projects after about a week with no activity.
+# This runs a tiny database query twice a week so the project stays awake.
+#
+# Setup (one time): in GitHub go to Settings -> Secrets and variables -> Actions
+# and add two repository secrets with the same values as your .env file:
+#   SUPABASE_URL       e.g. https://your-project.supabase.co
+#   SUPABASE_ANON_KEY  your project's anon (public) key
+
+name: Keep Supabase awake
+
+on:
+  schedule:
+    - cron: '17 14 * * 1,4' # Mondays and Thursdays, 14:17 UTC
+  workflow_dispatch: # lets you run it by hand from the Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Query the database
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "Missing SUPABASE_URL or SUPABASE_ANON_KEY secret. See the setup note at the top of this file."
+            exit 1
+          fi
+          # Row-level security means this returns no rows, but the query still reaches the database
+          status=$(curl -s -o response.txt -w "%{http_code}" \
+            "$SUPABASE_URL/rest/v1/budget_items?select=id&limit=1" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY")
+          echo "Supabase responded with HTTP $status"
+          cat response.txt; echo
+          if [ "$status" -ge 400 ]; then
+            echo "Ping failed. The project may already be paused - restore it from the Supabase dashboard."
+            exit 1
+          fi
