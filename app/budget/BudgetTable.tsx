@@ -70,6 +70,7 @@ export function BudgetTable({
                         <TouchableOpacity
                         key={month}
                         style={styles.cell}
+                        accessibilityLabel={`${item.name}, ${MONTHS[month - 1]}`}
                         onPress={() => {
                             if (editingCell) return
                             onCellPress(item.id, month, amount)
@@ -78,6 +79,7 @@ export function BudgetTable({
                         {isEditing ? (
                             <View style={styles.cellEditContainer}>
                             <TextInput
+                            accessibilityLabel={`${item.name}, ${MONTHS[month - 1]} amount`}
                             style={styles.cellInput}
                             value={editingValue}
                             onChangeText={onCellChange}
@@ -89,6 +91,7 @@ export function BudgetTable({
                             <TouchableOpacity
                             style={styles.cellActionBtn}
                             onPress={() => onCellSave(item.id, month, editingValue, false)}
+                            accessibilityLabel="Save this month only"
                             // @ts-ignore
                             title="Save this month only"
                             >
@@ -97,6 +100,7 @@ export function BudgetTable({
                             <TouchableOpacity
                             style={[styles.cellActionBtn, { backgroundColor: colors.header }]}
                             onPress={() => onCellSave(item.id, month, editingValue, true)}
+                            accessibilityLabel="Fill this month and all months to the right"
                             // @ts-ignore
                             title="Fill this month and all months to the right"
                             >
@@ -105,6 +109,7 @@ export function BudgetTable({
                             <TouchableOpacity
                             style={styles.cellActionBtn}
                             onPress={() => onCellCancel()}
+                            accessibilityLabel="Cancel"
                             // @ts-ignore
                             title="Cancel"
                             >
@@ -123,7 +128,7 @@ export function BudgetTable({
                 <Text style={[styles.rowTotal, { color: colors.text }]}>
                 ${getRowTotal(item.id).toLocaleString()}
                 </Text>
-                <TouchableOpacity style={styles.colAction} onPress={() => onDeleteItem(item.id)}>
+                <TouchableOpacity style={styles.colAction} onPress={() => onDeleteItem(item.id)} accessibilityLabel={`Delete ${item.name}`}>
                 <Text style={styles.deleteIcon}>✕</Text>
                 </TouchableOpacity>
                 </View>
@@ -177,11 +182,11 @@ export function BudgetTable({
         <View style={styles.container}>
         {/* Year Selector */}
         <View style={styles.yearBar}>
-        <TouchableOpacity onPress={() => onYearChange(year - 1)} style={styles.yearBtn}>
+        <TouchableOpacity onPress={() => onYearChange(year - 1)} style={styles.yearBtn} accessibilityLabel="Previous year">
         <Text style={styles.yearBtnText}>←</Text>
         </TouchableOpacity>
         <Text style={styles.yearText}>{year}</Text>
-        <TouchableOpacity onPress={() => onYearChange(year + 1)} style={styles.yearBtn}>
+        <TouchableOpacity onPress={() => onYearChange(year + 1)} style={styles.yearBtn} accessibilityLabel="Next year">
         <Text style={styles.yearBtnText}>→</Text>
         </TouchableOpacity>
         </View>

@@ -4,6 +4,7 @@ import { useTransactionStore } from '../../store/useTransactionStore'
 import { EditingTransaction } from './types'
 import { useToastContext } from '../../context/ToastContext'
 import { parseAmount, parseDate, todayString } from '../../lib/entry'
+import { withRunningBalance, filterTransactions, sortTransactions, toCSV } from './listLogic'
 
 export function useTransactionLogic() {
     const { transactions, setTransactions } = useTransactionStore()
@@ -196,35 +197,12 @@ export function useTransactionLogic() {
         else { setSortCol(col); setSortDir('asc') }
     }
     
-    function runningBalance() {
-        const sorted = [...transactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-        let balance = 0
-        return sorted.map(t => {
-            if (t.type === 'expense') balance -= t.amount
-            else balance += t.amount
-            return { ...t, balance }
-        }).reverse()
-    }
-    
     function exportToCSV() {
-        const headers = ['Date', 'Type', 'Category', 'Name', 'Amount', 'Details', 'Balance']
-        const csvRows = [
-            headers.join(','),
-            ...totalRows.map(t => [
-                t.date,
-                t.type,
-                t.category_label || '',
-                t.name || '',
-                t.amount,
-                t.note || '',
-                t.balance,
-            ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
-        ]
-        const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' })
+        const blob = new Blob([toCSV(totalRows)], { type: 'text/csv' })
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = `transactions_${new Date().toISOString().split('T')[0]}.csv`
+        a.download = `transactions_${todayString()}.csv`
         a.click()
         URL.revokeObjectURL(url)
         showToast('CSV exported!')
@@ -272,32 +250,10 @@ export function useTransactionLogic() {
         }
     }
     
-    const totalRows = runningBalance()
-        .filter(t => {
-            if (!search && !filterType && !filterFrom && !filterTo) return true
-            const q = search.toLowerCase()
-            const matchSearch = !search || (
-                t.name?.toLowerCase().includes(q) ||
-                t.note?.toLowerCase().includes(q) ||
-                t.type?.toLowerCase().includes(q) ||
-                t.date?.includes(q) ||
-                t.category_label?.toLowerCase().includes(q)
-            )
-            const matchType = !filterType || t.type === filterType.toLowerCase()
-            const matchFrom = !filterFrom || t.date >= filterFrom
-            const matchTo = !filterTo || t.date <= filterTo
-            return matchSearch && matchType && matchFrom && matchTo
-        })
-        .sort((a, b) => {
-            let valA: any, valB: any
-            if (sortCol === 'date') { valA = a.date; valB = b.date }
-            else if (sortCol === 'amount') { valA = a.amount; valB = b.amount }
-            else if (sortCol === 'type') { valA = a.type; valB = b.type }
-            else return 0
-            if (valA < valB) return sortDir === 'asc' ? -1 : 1
-            if (valA > valB) return sortDir === 'asc' ? 1 : -1
-            return 0
-        })
+    const totalRows = sortTransactions(
+        filterTransactions(withRunningBalance(transactions), { search, type: filterType, from: filterFrom, to: filterTo }),
+        sortCol, sortDir,
+    )
     
     const rows = totalRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
     const totalPages = Math.ceil(totalRows.length / PAGE_SIZE)

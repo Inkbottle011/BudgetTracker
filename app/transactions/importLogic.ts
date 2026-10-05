@@ -160,7 +160,7 @@ export function convertRows(
         }
 
         const transaction: NewTransaction = {
-            date, amount: Math.round(amount * 100) / 100, type,
+            date, amount: Math.round((amount + Number.EPSILON) * 100) / 100, type,
             name: description, note: '', category_label: category, category_id: null,
         }
 
