@@ -69,6 +69,8 @@ export default function TransactionsScreen() {
         onSaveEdit={logic.handleSaveEdit}
         onCancelEdit={() => logic.setEditingTransaction(null)}
         budgetCategories={logic.budgetCategories}
+        pastTransactions={logic.transactions}
+        onPickSuggestion={logic.applySuggestion}
         />
         </View>
     )
