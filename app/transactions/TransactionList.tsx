@@ -214,12 +214,12 @@ export function TransactionList({
                     <Text style={[styles.col, styles.colCat, styles.cellText]}>{t.category_label || '—'}</Text>
                     <View style={[styles.col, styles.colName, { flexDirection: 'row', alignItems: 'center', gap: 4, overflow: 'hidden' }]}>
                     <Text style={styles.cellText} numberOfLines={1}>{t.name || '—'}</Text>
-                    {t.recurring && t.recurring !== 'none' ? (
+                    {t.subscription_id ? (
                         <View
                         style={[styles.recurringBadge, { backgroundColor: TYPE_BADGE_COLORS[t.type] || '#888' }]}
-                        {...{ title: `Recurring: ${t.recurring}` } as any}
+                        {...{ title: 'Added by a subscription' } as any}
                         >
-                        <Text style={styles.recurringBadgeText}>R</Text>
+                        <Text style={styles.recurringBadgeText}>S</Text>
                         </View>
                     ) : null}
                     </View>

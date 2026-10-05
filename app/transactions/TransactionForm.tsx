@@ -25,10 +25,6 @@ interface Props {
     onEditChange: (t: EditingTransaction) => void
     onSaveEdit: () => void
     onCancelEdit: () => void
-    recurring: string
-    recurringEnd: string
-    onRecurringChange: (v: string) => void
-    onRecurringEndChange: (v: string) => void
     budgetCategories: Record<string, string[]>
 }
 
@@ -37,7 +33,7 @@ export function TransactionForm({
     errors, saving, success,
     onTypeChange, onCategoryChange, onNameChange,
     onAmountChange, onDetailsChange, onDateChange, onAdd,
-    editingTransaction, onEditChange, onSaveEdit, onCancelEdit, recurring, recurringEnd, onRecurringChange, onRecurringEndChange,budgetCategories,
+    editingTransaction, onEditChange, onSaveEdit, onCancelEdit, budgetCategories,
 }: Props) {
     const isEditing = !!editingTransaction
     const activeType = isEditing ? editingTransaction!.type : type
@@ -139,42 +135,8 @@ export function TransactionForm({
         onChangeText={v => isEditing ? onEditChange({ ...editingTransaction!, details: v }) : onDetailsChange(v)}
         placeholderTextColor="#aaa"
         />
-        {/* Recurring */}
-        <Text style={styles.label}>Recurring</Text>
-        <View style={styles.typeRow}>
-        {['none', 'weekly', 'biweekly', 'monthly', 'yearly'].map(r => {
-            const activeRecurring = isEditing ? editingTransaction!.recurring : recurring
-            return (
-                <TouchableOpacity
-                key={r}
-                style={[styles.catBtn, activeRecurring === r && styles.catBtnActive]}
-                onPress={() => isEditing
-                    ? onEditChange({ ...editingTransaction!, recurring: r })
-                    : onRecurringChange(r)
-                }
-                >
-                <Text style={[styles.catBtnText, activeRecurring === r && styles.catBtnTextActive]}>
-                {r.charAt(0).toUpperCase() + r.slice(1)}
-                </Text>
-                </TouchableOpacity>
-            )
-        })}
-        </View>
-        
-        {(isEditing ? editingTransaction!.recurring !== 'none' : recurring !== 'none') && (
-            <>
-            <Text style={styles.label}>End Date (optional)</Text>
-            <TextInput
-            style={styles.input}
-            placeholder="YYYY-MM-DD"
-            value={isEditing ? editingTransaction!.recurring_end : recurringEnd}
-            onChangeText={v => isEditing
-                ? onEditChange({ ...editingTransaction!, recurring_end: v })
-                : onRecurringEndChange(v)
-            }
-            placeholderTextColor="#aaa"
-            />
-            </>
+        {!isEditing && (
+            <Text style={styles.hint}>Repeats every week, month or year? Add it in the Subscriptions tab instead.</Text>
         )}
         {/* Submit */}
         <TouchableOpacity
@@ -208,6 +170,7 @@ const styles = StyleSheet.create({
     input: { backgroundColor: '#f8f9fa', borderRadius: 8, padding: 10, fontSize: 13, borderWidth: 1, borderColor: '#e8e8e8', color: '#1a1a1a', marginBottom: 2 },
     inputError: { borderColor: '#e74c3c' },
     errorText: { color: '#e74c3c', fontSize: 11, marginBottom: 6 },
+    hint: { fontSize: 12, color: '#7f8c8d', marginTop: 12 },
     addBtn: { borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 16 },
     addBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 })

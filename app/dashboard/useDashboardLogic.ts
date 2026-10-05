@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useCallback } from 'react'
+import { useFocusEffect } from '@react-navigation/native'
 import { supabase } from '../../lib/supabase'
 import { useTransactionStore } from '../../store/useTransactionStore'
+import { Subscription, fetchSubscriptions, upcomingCharges } from '../../lib/subscriptions'
 
 export const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
@@ -15,6 +17,7 @@ export function useDashboardLogic() {
     const { transactions, setTransactions } = useTransactionStore()
     const [budgetItems, setBudgetItems] = useState<any[]>([])
     const [budgetAmounts, setBudgetAmounts] = useState<any[]>([])
+    const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
     
     const currentYear = new Date().getFullYear()
     const currentMonth = new Date().getMonth() + 1
@@ -25,7 +28,8 @@ export function useDashboardLogic() {
     const [selectedYear, setSelectedYear] = useState(currentYear)
     const [chartType, setChartType] = useState<'bar' | 'pie'>('bar')
     
-    useEffect(() => { fetchAll() }, [selectedYear])
+    // Refresh whenever the tab is opened, so changes made on other tabs show up
+    useFocusEffect(useCallback(() => { fetchAll() }, [selectedYear]))
     
     async function fetchAll() {
         const { data: { session } } = await supabase.auth.getSession()
@@ -36,6 +40,8 @@ export function useDashboardLogic() {
         .select('*')
         .order('date', { ascending: false })
         if (txData) setTransactions(txData)
+        
+        fetchSubscriptions().then(setSubscriptions).catch(() => {})
             
         const { data: items } = await supabase
         .from('budget_items')
@@ -70,22 +76,8 @@ export function useDashboardLogic() {
     const periodTransactions = transactions.filter(filterForPeriod)
     const period = view === 'year' ? String(selectedYear) : `${MONTHS[selectedMonth - 1]} ${selectedYear}`
     
-    // Upcoming
-    const today = new Date()
-    const in30 = new Date(today)
-    in30.setDate(in30.getDate() + 30)
-    const upcoming = transactions
-    .filter(t => t.recurring && t.recurring !== 'none')
-    .map(t => {
-        const next = new Date(t.date)
-        if (t.recurring === 'weekly') next.setDate(next.getDate() + 7)
-            else if (t.recurring === 'biweekly') next.setDate(next.getDate() + 14)
-                else if (t.recurring === 'monthly') next.setMonth(next.getMonth() + 1)
-                    else if (t.recurring === 'yearly') next.setFullYear(next.getFullYear() + 1)
-                        return { ...t, nextDate: next.toISOString().split('T')[0] }
-    })
-    .filter(t => new Date(t.nextDate) >= today && new Date(t.nextDate) <= in30)
-    .sort((a, b) => a.nextDate.localeCompare(b.nextDate))
+    // Upcoming: subscription charges in the next 30 days
+    const upcoming = upcomingCharges(subscriptions, 30)
     
     function getPlanned(itemId: string): number {
         if (view === 'month') {
