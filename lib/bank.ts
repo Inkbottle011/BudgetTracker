@@ -66,9 +66,16 @@ export function updatedAgo(iso: string, now = new Date()): string {
  * Where importing should start for a newly linked bank: the day after your latest transaction,
  * so nothing you already have is imported twice. With nothing recent, the last 30 days.
  */
+/** How far back a newly linked bank is asked to share transactions: January 1 of this year. */
+export function earliestStartDate(today: string): string {
+    return `${today.slice(0, 4)}-01-01`
+}
+
+/** The day after your latest transaction (so nothing overlaps), but no earlier than January 1. */
 export function suggestedStartDate(transactions: { date: string }[], today: string): string {
+    const earliest = earliestStartDate(today)
     const latest = transactions.map(t => String(t.date).slice(0, 10)).sort().at(-1)
-    if (!latest || latest < addDays(today, -90)) return addDays(today, -30)
+    if (!latest || latest < earliest) return earliest
     const next = addDays(latest, 1)
     return next > today ? today : next
 }
@@ -109,4 +116,57 @@ export async function fetchLinkedBanks(): Promise<LinkedBank[]> {
         ...b,
         accounts: (accounts ?? []).filter((a: any) => a.connection_id === b.id),
     }))
+}
+
+// ---------------------------------------------------------------- possible duplicates
+
+/** A bank transaction held back because it looks like one you already have. */
+export interface PossibleDuplicate {
+    id: string
+    date: string
+    amount: number
+    type: string
+    name: string | null
+    existing_transaction_id: string | null
+    /** Yours, or null if you've deleted it since */
+    mine: { id: string; date: string; amount: number; name: string | null; note: string | null } | null
+}
+
+export type DuplicateChoice = 'keep_mine' | 'use_bank' | 'keep_both'
+
+export async function fetchPossibleDuplicates(): Promise<PossibleDuplicate[]> {
+    const { data, error } = await supabase.from('bank_possible_duplicates')
+        .select('id, date, amount, type, name, existing_transaction_id')
+        .order('date', { ascending: false })
+    if (error) throw new Error(error.message)
+    const reviews = data ?? []
+    const ids = reviews.map((r: any) => r.existing_transaction_id).filter(Boolean)
+    let mine: any[] = []
+    if (ids.length) {
+        const { data: rows } = await supabase.from('transactions').select('id, date, amount, name, note').in('id', ids)
+        mine = rows ?? []
+    }
+    return reviews.map((r: any) => ({
+        ...r,
+        amount: Number(r.amount),
+        mine: mine.find(m => m.id === r.existing_transaction_id) ?? null,
+    }))
+}
+
+export async function resolvePossibleDuplicate(id: string, choice: DuplicateChoice) {
+    const { error } = await supabase.rpc('resolve_possible_duplicate', { p_id: id, p_choice: choice })
+    if (error) throw new Error(error.message)
+}
+
+/** "Oct 1" */
+export function shortDate(date: string): string {
+    return new Date(`${String(date).slice(0, 10)}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+/** Added to the message after linking or syncing, when some transactions need a look. */
+export function reviewNote(n: number | undefined): string {
+    if (!n) return ''
+    return n === 1
+        ? ' 1 might already be in the app: check it under Possible duplicates.'
+        : ` ${n} might already be in the app: check them under Possible duplicates.`
 }

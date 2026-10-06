@@ -125,6 +125,53 @@ describe('syncConnection', () => {
         expect(ops('bank_connections', 'update').at(-1)!.args[0]).toMatchObject({ status: 'active', last_error: null, last_synced_at: expect.any(String) })
     })
 
+    it('holds back likely duplicates for you to review instead of adding them', async () => {
+        await databaseWithConnection()
+        // You typed in $12.50 "Snacks" on Oct 1; the bank says "Corner Store" on Oct 2
+        fake.table('transactions', call => {
+            const upsert = call.ops.find(o => o.method === 'upsert')
+            if (upsert) return { data: upsert.args[0].map((_: any, i: number) => ({ id: `new-${i}` })), error: null }
+            if (call.ops.some(o => o.method === 'is' && o.args[0] === 'external_id')) {
+                return { data: [{ id: 'mine-1', date: '2026-10-01', amount: 12.5, name: 'Snacks', note: '', type: 'expense' }], error: null }
+            }
+            return { data: [], error: null }
+        })
+        fake.table('bank_possible_duplicates', call => {
+            const upsert = call.ops.find(o => o.method === 'upsert')
+            return { data: upsert ? upsert.args[0].map((_: any, i: number) => ({ id: `rev-${i}` })) : [], error: null }
+        })
+        const result = await syncConnection(deps(), 'conn-1')
+        expect(ops('transactions', 'upsert')[0].args[0].map((r: any) => r.external_id)).toEqual(['t3'])
+        const held = ops('bank_possible_duplicates', 'upsert')[0]
+        expect(held.args[0]).toEqual([{
+            user_id: 'user-1', provider: 'teller', external_id: 't1', bank_account_id: 'db-acc-1', date: '2026-10-02',
+            amount: 12.5, type: 'expense', name: 'Corner Store', category_label: '', existing_transaction_id: 'mine-1',
+        }])
+        expect(held.args[1]).toEqual({ onConflict: 'user_id,provider,external_id', ignoreDuplicates: true })
+        expect(result).toMatchObject({ added: 1, toReview: 1 })
+    })
+
+    it('looks for your matching transactions a few days either side of the sync window', async () => {
+        await databaseWithConnection()
+        await syncConnection(deps(), 'conn-1')
+        const mine = fake.calls('transactions').find(c => c.ops.some(o => o.method === 'is' && o.args[0] === 'external_id'))!
+        expect(mine.ops.find(o => o.method === 'gte')!.args).toEqual(['date', '2026-08-29'])
+    })
+
+    it('never re-adds bank transactions already imported or waiting for review', async () => {
+        await databaseWithConnection()
+        fake.table('transactions', call => {
+            const upsert = call.ops.find(o => o.method === 'upsert')
+            if (upsert) return { data: upsert.args[0].map((_: any, i: number) => ({ id: `new-${i}` })), error: null }
+            if (call.ops.some(o => o.method === 'not' && o.args[0] === 'external_id')) return { data: [{ external_id: 't1' }], error: null }
+            return { data: [], error: null }
+        })
+        fake.table('bank_possible_duplicates', { data: [{ external_id: 't3' }] })
+        const result = await syncConnection(deps(), 'conn-1')
+        expect(ops('transactions', 'upsert')).toHaveLength(0)
+        expect(result).toMatchObject({ added: 0, toReview: 0 })
+    })
+
     it('re-checks the last week on each sync to catch late-posting transactions', async () => {
         await databaseWithConnection('active', '2026-10-05T08:00:00Z')
         const provider = fakeProvider()
@@ -201,7 +248,7 @@ describe('startLink', () => {
 describe('syncUser', () => {
     it('syncs every connection of the user and totals the results', async () => {
         await databaseWithConnection()
-        expect(await syncUser(deps(), 'user-1')).toMatchObject({ added: 2, connections: 1 })
+        expect(await syncUser(deps(), 'user-1')).toMatchObject({ added: 2, toReview: 0, connections: 1 })
     })
 })
 

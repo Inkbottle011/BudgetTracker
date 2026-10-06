@@ -2,7 +2,11 @@ import { useCallback, useState } from 'react'
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { supabase } from '../lib/supabase'
-import { fetchLinkedBanks, callBank, describeStatus, suggestedStartDate, accountLabel, LinkedBank } from '../lib/bank'
+import {
+    fetchLinkedBanks, callBank, describeStatus, suggestedStartDate, earliestStartDate, accountLabel, LinkedBank,
+    fetchPossibleDuplicates, resolvePossibleDuplicate, reviewNote, PossibleDuplicate, DuplicateChoice,
+} from '../lib/bank'
+import { PossibleDuplicates } from './PossibleDuplicates'
 import { bankLinkingAvailable, openBankConnect } from '../lib/bankConnect'
 import { parseDate, todayString } from '../lib/entry'
 import { useToastContext } from '../context/ToastContext'
@@ -17,12 +21,26 @@ export function LinkedBanksSection({ twoFactorOn }: { twoFactorOn: boolean }) {
     const [linking, setLinking] = useState(false)
     const [startDate, setStartDate] = useState('')
     const [confirmUnlink, setConfirmUnlink] = useState<string | null>(null)
+    const [duplicates, setDuplicates] = useState<PossibleDuplicate[]>([])
 
     async function load() {
-        if (!twoFactorOn) { setBanks([]); return }
+        if (!twoFactorOn) { setBanks([]); setDuplicates([]); return }
         setLoading(true)
         try { setBanks(await fetchLinkedBanks()) } catch (e: any) { showToast(e?.message ?? "Couldn't load linked banks", 'error') }
+        // Possible duplicates are a nice-to-have here: never block the bank list on them
+        try { setDuplicates(await fetchPossibleDuplicates()) } catch { setDuplicates([]) }
         setLoading(false)
+    }
+
+    async function resolve(item: PossibleDuplicate, choice: DuplicateChoice) {
+        setBusy(item.id)
+        try {
+            await resolvePossibleDuplicate(item.id, choice)
+            setDuplicates(await fetchPossibleDuplicates())
+        } catch (e: any) {
+            showToast(e?.message ?? "Couldn't save that choice", 'error')
+        }
+        setBusy(null)
     }
     useFocusEffect(useCallback(() => { load() }, [twoFactorOn]))
 
@@ -35,6 +53,8 @@ export function LinkedBanksSection({ twoFactorOn }: { twoFactorOn: boolean }) {
     async function continueToBank() {
         const syncFrom = parseDate(startDate)
         if (!syncFrom) { showToast('Pick a start date like 2026-10-01', 'error'); return }
+        const earliest = earliestStartDate(todayString())
+        if (syncFrom < earliest) { showToast(`Banks share history back to ${earliest}. Pick that date or later.`, 'error'); return }
         setBusy('link')
         try {
             const signIn = await openBankConnect()
@@ -45,7 +65,7 @@ export function LinkedBanksSection({ twoFactorOn }: { twoFactorOn: boolean }) {
                     : { accessToken: signIn.accessToken, enrollmentId: signIn.enrollmentId, institutionName: name, syncFrom })
                 showToast(result?.status === 'pending'
                     ? `${name} linked. Its transactions are still loading; they'll appear at the next sync, or tap Sync now in a few minutes.`
-                    : `${name} linked. Added ${result?.added ?? 0} transactions.`)
+                    : `${name} linked. Added ${result?.added ?? 0} transactions.${reviewNote(result?.toReview)}`)
                 setLinking(false)
                 await load()
             }
@@ -60,7 +80,8 @@ export function LinkedBanksSection({ twoFactorOn }: { twoFactorOn: boolean }) {
         try {
             const result = await callBank('sync')
             const n = result?.added ?? 0
-            showToast(n === 0 ? 'Up to date: no new transactions' : `Added ${n} new transaction${n === 1 ? '' : 's'}`)
+            const added = n === 0 ? 'Up to date: no new transactions' : `Added ${n} new transaction${n === 1 ? '' : 's'}`
+            showToast(`${added}${result?.toReview ? '.' : ''}${reviewNote(result?.toReview)}`)
             await load()
         } catch (e: any) {
             showToast(e?.message, 'error')
@@ -128,6 +149,8 @@ export function LinkedBanksSection({ twoFactorOn }: { twoFactorOn: boolean }) {
                         </View>
                     ))}
 
+                    <PossibleDuplicates items={duplicates} busyId={busy} onResolve={resolve} />
+
                     {!bankLinkingAvailable() ? (
                         <Text style={styles.notice}>Link banks from the website version of the app.</Text>
                     ) : linking ? (
@@ -141,7 +164,11 @@ export function LinkedBanksSection({ twoFactorOn }: { twoFactorOn: boolean }) {
                                 placeholder="YYYY-MM-DD"
                                 placeholderTextColor="#aaa"
                             />
-                            <Text style={styles.small}>Starts the day after your latest transaction, so nothing is added twice.</Text>
+                            <Text style={styles.small}>
+                                Starts the day after your latest transaction. Banks share history back to Jan 1. If you go back further than
+                                your latest transaction, ones you already have are matched and skipped, and any we're unsure about are shown
+                                here for you to check.
+                            </Text>
                             <View style={styles.row}>
                                 <TouchableOpacity style={styles.primary} onPress={continueToBank} disabled={!!busy}>
                                     {busy === 'link' ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.primaryText}>Continue to your bank</Text>}

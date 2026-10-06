@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native'
 import SettingsScreen from '../settings'
 import { ToastContext } from '../../context/ToastContext'
-import { fake, auth, functions } from '../../test/fakeSupabase'
+import { fake, auth, functions, supabase } from '../../test/fakeSupabase'
 import { openBankConnect, bankLinkingAvailable } from '../../lib/bankConnect'
 
 jest.mock('../../lib/supabase', () => require('../../test/fakeSupabase').module)
@@ -40,6 +40,8 @@ beforeEach(() => {
     fake.table('bank_connections', { data: [] })
     fake.table('bank_accounts', { data: [] })
     fake.table('transactions', { data: [{ date: '2026-10-03' }] })
+    fake.table('bank_possible_duplicates', { data: [] })
+    ;(supabase.rpc as jest.Mock).mockClear()
     jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] })
     jest.setSystemTime(new Date('2026-10-06T12:00:00Z'))
 })
@@ -140,6 +142,28 @@ describe('linked banks', () => {
         await waitFor(() => expect(showToast).toHaveBeenCalledWith('Chase linked. Added 12 transactions.'))
     })
 
+    it('lets you go back as far as January 1, but no further', async () => {
+        twoFactor(true)
+        await renderSettings()
+        await fireEvent.press(await screen.findByText('+ Link a bank'))
+        expect(screen.getByText(/Banks share history back to Jan 1/)).toBeTruthy()
+        await fireEvent.changeText(screen.getByLabelText('Import transactions from'), '2025-12-31')
+        await fireEvent.press(screen.getByText('Continue to your bank'))
+        expect(showToast).toHaveBeenCalledWith('Banks share history back to 2026-01-01. Pick that date or later.', 'error')
+        expect(openBankConnect).not.toHaveBeenCalled()
+    })
+
+    it('says how many transactions need a look after linking', async () => {
+        twoFactor(true)
+        ;(openBankConnect as jest.Mock).mockResolvedValue({ publicToken: 'public-abc', institutionName: 'Chase' })
+        invoke.mockResolvedValueOnce({ data: { connectionId: 'conn-1', added: 40, toReview: 3, status: 'active' }, error: null })
+        await renderSettings()
+        await fireEvent.press(await screen.findByText('+ Link a bank'))
+        await fireEvent.press(screen.getByText('Continue to your bank'))
+        await waitFor(() => expect(showToast).toHaveBeenCalledWith(
+            'Chase linked. Added 40 transactions. 3 might already be in the app: check them under Possible duplicates.'))
+    })
+
     it('says when the bank is still loading its transactions', async () => {
         twoFactor(true)
         ;(openBankConnect as jest.Mock).mockResolvedValue({ publicToken: 'public-abc', institutionName: 'Chase' })
@@ -188,6 +212,67 @@ describe('linked banks', () => {
         expect(screen.getByText('Unlink Chase? Transactions already imported stay.')).toBeTruthy()
         await fireEvent.press(screen.getByText('Yes, unlink'))
         expect(invoke).toHaveBeenCalledWith('bank', { body: { action: 'unlink', connectionId: 'conn-1' } })
+    })
+
+    describe('possible duplicates', () => {
+        const review = {
+            id: 'rev-1', date: '2026-10-02', amount: 84.23, type: 'expense', name: 'WHOLE FOODS #10234', existing_transaction_id: 'mine-1',
+        }
+        function withReview(mine: object[] = [{ id: 'mine-1', date: '2026-10-01', amount: 84.23, name: 'Groceries', note: '' }]) {
+            twoFactor(true)
+            fake.table('bank_connections', { data: [connection] })
+            fake.table('bank_possible_duplicates', { data: [review] })
+            fake.table('transactions', call => ({
+                data: call.ops.some(o => o.method === 'in') ? mine : [{ date: '2026-10-03' }], error: null,
+            }))
+        }
+
+        it('shows yours and the bank\'s side by side', async () => {
+            withReview()
+            await renderSettings()
+            expect(await screen.findByText('Possible duplicates (1)')).toBeTruthy()
+            expect(screen.getByText('$84.23')).toBeTruthy()
+            expect(screen.getByText('Yours: Oct 1 · Groceries')).toBeTruthy()
+            expect(screen.getByText("Bank's: Oct 2 · WHOLE FOODS #10234")).toBeTruthy()
+        })
+
+        it.each([
+            ['Keep mine', 'keep_mine'],
+            ["Use bank's", 'use_bank'],
+            ['Keep both', 'keep_both'],
+        ])('"%s" resolves it', async (button, choice) => {
+            withReview()
+            await renderSettings()
+            await screen.findByText('Possible duplicates (1)')
+            fake.table('bank_possible_duplicates', { data: [] })
+            await fireEvent.press(screen.getByText(button))
+            expect(supabase.rpc).toHaveBeenCalledWith('resolve_possible_duplicate', { p_id: 'rev-1', p_choice: choice })
+            await waitFor(() => expect(screen.queryByText('Possible duplicates (1)')).toBeNull())
+        })
+
+        it('says when you deleted yours since', async () => {
+            withReview([])
+            await renderSettings()
+            expect(await screen.findByText('Yours: deleted since')).toBeTruthy()
+        })
+
+        it('shows why resolving failed', async () => {
+            withReview()
+            ;(supabase.rpc as jest.Mock).mockResolvedValueOnce({ data: null, error: { message: 'Possible duplicate not found' } })
+            await renderSettings()
+            await fireEvent.press(await screen.findByText('Keep both'))
+            await waitFor(() => expect(showToast).toHaveBeenCalledWith('Possible duplicate not found', 'error'))
+        })
+
+        it('mentions them after syncing', async () => {
+            twoFactor(true)
+            fake.table('bank_connections', { data: [connection] })
+            invoke.mockResolvedValueOnce({ data: { added: 4, toReview: 1, connections: 1 }, error: null })
+            await renderSettings()
+            await fireEvent.press(await screen.findByText('Sync now'))
+            await waitFor(() => expect(showToast).toHaveBeenCalledWith(
+                'Added 4 new transactions. 1 might already be in the app: check it under Possible duplicates.'))
+        })
     })
 
     it('says when linking is only available on the website', async () => {

@@ -1,6 +1,6 @@
 // Linking, syncing and unlinking banks. Runs only on the server (service role); provider-neutral.
 import { encryptToken, decryptToken } from './crypto.ts'
-import { convertBankTransactions } from './convert.ts'
+import { convertBankTransactions, MATCH_DAYS, type PossibleDuplicate } from './convert.ts'
 import { BankProvider, ProviderError } from './types.ts'
 
 export interface BankDeps {
@@ -106,19 +106,28 @@ export async function syncConnection(deps: BankDeps, connectionId: string) {
         const { data: history } = await deps.db.from('transactions').select('name, note, category_label, type')
             .eq('user_id', conn.user_id).not('category_label', 'is', null).neq('category_label', '')
             .order('date', { ascending: false }).limit(3000)
-        const { data: existing } = await deps.db.from('transactions').select('date, amount, name, note')
-            .eq('user_id', conn.user_id).is('external_id', null).gte('date', since).lte('date', today)
+        // Yours (typed in or from a CSV), a few days either side since the bank's date can differ
+        const { data: existing } = await deps.db.from('transactions').select('id, date, amount, name, note, type')
+            .eq('user_id', conn.user_id).is('external_id', null).gte('date', daysBefore(since, MATCH_DAYS)).lte('date', today)
+        // Bank transactions already saved or waiting for review, so re-checking never adds them twice
+        const { data: imported } = await deps.db.from('transactions').select('external_id')
+            .eq('user_id', conn.user_id).eq('provider', conn.provider).not('external_id', 'is', null).gte('date', since)
+        const { data: waiting } = await deps.db.from('bank_possible_duplicates').select('external_id')
+            .eq('user_id', conn.user_id).eq('provider', conn.provider)
+        const alreadyImported = new Set<string>([...(imported ?? []), ...(waiting ?? [])].map((r: any) => r.external_id))
 
         const rows = []
-        const skipped = { pending: 0, beforeStart: 0, duplicate: 0, cardPayment: 0 }
+        const reviews: PossibleDuplicate[] = []
+        const skipped = { pending: 0, beforeStart: 0, duplicate: 0, cardPayment: 0, alreadyImported: 0 }
         for (const acc of (accounts ?? []).filter((a: any) => a.connection_id === conn.id)) {
             const txs = await deps.provider.listTransactions(token, acc.provider_account_id, since)
             await saveBalance(deps, token, acc)
             const r = convertBankTransactions(txs, { id: acc.id, type: acc.type, providerAccountId: acc.provider_account_id }, {
                 userId: conn.user_id, provider: conn.provider, syncFrom: conn.sync_from,
-                history: history ?? [], existing: existing ?? [], hasLinkedCreditCard,
+                history: history ?? [], existing: existing ?? [], hasLinkedCreditCard, alreadyImported,
             })
             rows.push(...r.rows)
+            reviews.push(...r.reviews)
             for (const k of Object.keys(skipped) as (keyof typeof skipped)[]) skipped[k] += r.skipped[k]
         }
 
@@ -130,18 +139,29 @@ export async function syncConnection(deps: BankDeps, connectionId: string) {
             added = (data ?? []).length
         }
 
+        let toReview = 0
+        if (reviews.length) {
+            const { data, error } = await deps.db.from('bank_possible_duplicates').upsert(reviews.map(({ row, existing_transaction_id }) => ({
+                user_id: row.user_id, provider: row.provider, external_id: row.external_id, bank_account_id: row.bank_account_id,
+                date: row.date, amount: row.amount, type: row.type, name: row.name, category_label: row.category_label,
+                existing_transaction_id,
+            })), { onConflict: 'user_id,provider,external_id', ignoreDuplicates: true }).select('id')
+            if (error) throw new Error(`Couldn't save possible duplicates: ${error.message}`)
+            toReview = (data ?? []).length
+        }
+
         await deps.db.from('bank_connections')
             .update({ status: 'active', last_error: null, last_synced_at: new Date().toISOString() }).eq('id', conn.id)
-        return { added, skipped, status: 'active' as const }
+        return { added, toReview, skipped, status: 'active' as const }
     } catch (e) {
         // Just linked and the bank's data is still loading: not a problem, try again later
         if (e instanceof ProviderError && e.kind === 'not_ready') {
             await deps.db.from('bank_connections').update({ status: 'active', last_error: null }).eq('id', conn.id)
-            return { added: 0, skipped: null, status: 'pending' as const }
+            return { added: 0, toReview: 0, skipped: null, status: 'pending' as const }
         }
         const status = e instanceof ProviderError && e.kind === 'needs_relink' ? 'needs_relink' : 'error'
         await deps.db.from('bank_connections').update({ status, last_error: safeMessage(e, token) }).eq('id', conn.id)
-        return { added: 0, skipped: null, status }
+        return { added: 0, toReview: 0, skipped: null, status }
     }
 }
 
@@ -161,13 +181,14 @@ async function saveBalance(deps: BankDeps, token: string, acc: any) {
 export async function syncUser(deps: BankDeps, userId: string) {
     const { data, error } = await deps.db.from('bank_connections').select('id, user_id').eq('user_id', userId)
     if (error) throw new Error(error.message)
-    let added = 0, connections = 0
+    let added = 0, toReview = 0, connections = 0
     for (const c of (data ?? []).filter((c: any) => c.user_id === userId)) {
         const r = await syncConnection(deps, c.id)
         added += r.added
+        toReview += r.toReview
         connections++
     }
-    return { added, connections }
+    return { added, toReview, connections }
 }
 
 /** For the daily schedule: every connection that still works. */

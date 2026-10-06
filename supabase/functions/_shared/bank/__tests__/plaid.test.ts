@@ -96,6 +96,20 @@ describe('Plaid specifics', () => {
         })
     })
 
+    it('asks the bank for history back to January 1 of this year', async () => {
+        const { provider, calls } = make()
+        await provider.createLinkSession!('user-1')
+        // Jan 1 to Oct 6, 2026 is 278 days
+        expect(calls[0].body.transactions).toEqual({ days_requested: 279 })
+    })
+
+    it('still asks for Plaid\'s usual 90 days early in the year', async () => {
+        const fake = fakePlaid()
+        const p = createPlaidProvider({ fetch: fake.fetchImpl, clientId: 'client-1', secret: 'secret-1', env: 'sandbox', today: () => '2026-01-15' })
+        await p.createLinkSession!('user-1')
+        expect(fake.calls[0].body.transactions).toEqual({ days_requested: 90 })
+    })
+
     it('exchanges the one-time token from Link for a lasting access token', async () => {
         const { provider } = make()
         expect(await provider.exchangeLinkResult!({ publicToken: 'public-good' })).toEqual({ accessToken: FAKE_BANK.goodToken, enrollmentId: 'item_1' })
