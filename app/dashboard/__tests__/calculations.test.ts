@@ -48,8 +48,8 @@ describe('overview', () => {
     it('totals the given year, including Jan 1', () => {
         expect(overview(list, 2026)).toMatchObject({ income: 500, expenses: 200, savings: 50 })
     })
-    it('balance is all-time income minus expenses', () => {
-        expect(overview(list, 2026).balance).toBe(1300)
+    it('balance is all-time income minus expenses and what you put into savings', () => {
+        expect(overview(list, 2026).balance).toBe(1250)
     })
 })
 
@@ -227,5 +227,22 @@ describe('transfers between your own accounts', () => {
     it('never count as income, spending or savings', () => {
         const list = [tx('2026-03-01', 'income', 1000), tx('2026-03-02', 'expense', 100), tx('2026-03-03', 'transfer', 500), tx('2026-03-03', 'transfer', 500)]
         expect(overview(list, 2026)).toMatchObject({ income: 1000, expenses: 100, savings: 0, balance: 900 })
+    })
+})
+
+describe('money into and out of savings', () => {
+    const list = [
+        tx('2026-03-01', 'income', 1000),
+        tx('2026-03-02', 'savings', 500, 'Emergency Fund'),
+        tx('2026-03-20', 'withdrawal', 200, 'Emergency Fund'),
+    ]
+    it('putting money into savings lowers your balance; taking it back out raises it again', () => {
+        expect(overview(list, 2026)).toMatchObject({ savings: 300, balance: 700 })
+    })
+    it('a withdrawal reduces what was saved in its category', () => {
+        expect(actualAmount(list, 'Emergency Fund', 'savings')).toBe(300)
+    })
+    it('withdrawals are never spending or income', () => {
+        expect(overview(list, 2026)).toMatchObject({ income: 1000, expenses: 0 })
     })
 })

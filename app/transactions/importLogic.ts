@@ -6,7 +6,7 @@ import {
 export type ImportField = 'date' | 'amount' | 'debit' | 'credit' | 'description' | 'type' | 'category' | 'skip'
 export type SpendingSign = 'negative' | 'positive'
 
-const VALID_TYPES = ['income', 'expense', 'savings', 'investment', 'reimbursement', 'transfer']
+const VALID_TYPES = ['income', 'expense', 'savings', 'investment', 'reimbursement', 'withdrawal', 'transfer']
 
 
 /** Best guess at what a single column header means. */

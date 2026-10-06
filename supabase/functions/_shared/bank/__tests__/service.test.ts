@@ -271,6 +271,80 @@ describe('syncConnection', () => {
             expect(ops('transactions', 'upsert')[0].args[0].map((r: any) => [r.external_id, r.type])).toEqual([['chk', 'transfer'], ['card', 'transfer']])
         })
 
+        const accountsWithSavings = (extra: any[] = []) => fake.table('bank_accounts', call => call.ops.some(o => o.method === 'update') ? { data: null, error: null } : { data: [
+            { id: 'db-acc-1', connection_id: 'conn-1', user_id: 'user-1', provider_account_id: 'acc_checking', type: 'depository', subtype: 'checking' },
+            { id: 'db-acc-2', connection_id: 'conn-1', user_id: 'user-1', provider_account_id: 'acc_card', type: 'credit', subtype: 'credit card' },
+            { id: 'sofi-savings', connection_id: 'conn-2', user_id: 'user-1', provider_account_id: 'x', type: 'depository', subtype: 'savings' },
+            { id: 'car-vault', connection_id: 'conn-2', user_id: 'user-1', provider_account_id: 'y', type: 'depository', subtype: 'savings' },
+            ...extra,
+        ], error: null })
+
+        it('money taken out of savings into checking is a Withdrawal; the savings side is a transfer', async () => {
+            await database([{ id: 'sv-out', bank_account_id: 'sofi-savings', date: '2026-10-05', amount: 500, type: 'expense', name: 'To Checking - 0026' }], true)
+            accountsWithSavings()
+            await syncConnection(deps(bankWithTransfer()), 'conn-1')
+            expect(ops('transactions', 'upsert')[0].args[0].find((r: any) => r.external_id === 'in1').type).toBe('withdrawal')
+            const update = ops('transactions', 'update')[0]
+            expect(update.args[0]).toEqual({ type: 'transfer', category_label: '' })
+            expect(update.call.ops.find(o => o.method === 'in')!.args).toEqual(['id', ['sv-out']])
+        })
+
+        it('money put from checking into savings counts as Savings; the savings side is a transfer', async () => {
+            await database([{ id: 'sv-in', bank_account_id: 'sofi-savings', date: '2026-10-05', amount: 300, type: 'income', name: 'From Checking - 0026' }], true)
+            accountsWithSavings()
+            const provider = fakeProvider({
+                listTransactions: jest.fn(async (_t: string, accountId: string) => accountId === 'acc_checking'
+                    ? [{ externalId: 'dep', providerAccountId: 'acc_checking', date: '2026-10-05', amount: -300, description: 'To Savings - 5213', pending: false }]
+                    : []),
+            })
+            await syncConnection(deps(provider), 'conn-1')
+            expect(ops('transactions', 'upsert')[0].args[0].find((r: any) => r.external_id === 'dep').type).toBe('savings')
+            expect(ops('transactions', 'update')[0].args[0]).toEqual({ type: 'transfer', category_label: '' })
+        })
+
+        it('moves between savings accounts or vaults are transfers on both sides', async () => {
+            await database([
+                { id: 'a', bank_account_id: 'sofi-savings', date: '2026-08-01', amount: 100, type: 'expense', name: 'To Car Vault' },
+                { id: 'b', bank_account_id: 'car-vault', date: '2026-08-01', amount: 100, type: 'income', name: 'From savings balance' },
+            ], false)
+            accountsWithSavings()
+            await syncConnection(deps(bankWithTransfer()), 'conn-1')
+            const updates = ops('transactions', 'update')
+            expect(updates.map(u => u.args[0])).toEqual([{ type: 'transfer', category_label: '' }])
+            expect(updates[0].call.ops.find(o => o.method === 'in')!.args[1].sort()).toEqual(['a', 'b'])
+        })
+
+        it('the one-time check also re-sorts transfers marked by the earlier version into Savings and Withdrawals', async () => {
+            // Both sides were marked 'transfer' before savings were told apart; the bank says which way the money went
+            await database([
+                { id: 'chk-in', external_id: 'in1', bank_account_id: 'db-acc-1', date: '2026-10-05', amount: 500, type: 'transfer', name: 'From Savings - 5213' },
+                { id: 'sv-out', external_id: 'svo', bank_account_id: 'sofi-savings-here', date: '2026-10-05', amount: 500, type: 'transfer', name: 'To Checking - 0026' },
+            ], false)
+            accountsWithSavings([{ id: 'sofi-savings-here', connection_id: 'conn-1', user_id: 'user-1', provider_account_id: 'acc_sav', type: 'depository', subtype: 'savings' }])
+            const provider = fakeProvider({
+                listTransactions: jest.fn(async (_t: string, accountId: string) => accountId === 'acc_checking'
+                    ? [{ externalId: 'in1', providerAccountId: 'acc_checking', date: '2026-10-05', amount: 500, description: 'From Savings - 5213', pending: false }]
+                    : accountId === 'acc_sav'
+                        ? [{ externalId: 'svo', providerAccountId: 'acc_sav', date: '2026-10-05', amount: -500, description: 'To Checking - 0026', pending: false }]
+                        : []),
+            })
+            // both are already saved, so neither is added again
+            fake.table('transactions', call => {
+                const upsert = call.ops.find(o => o.method === 'upsert')
+                if (upsert) return { data: upsert.args[0].map((_: any, i: number) => ({ id: `new-${i}` })), error: null }
+                if (call.ops.some(o => o.method === 'update')) return { data: null, error: null }
+                if (call.ops.some(o => o.method === 'not' && o.args[0] === 'provider')) return { data: [
+                    { id: 'chk-in', external_id: 'in1', bank_account_id: 'db-acc-1', date: '2026-10-05', amount: 500, type: 'transfer', name: 'From Savings - 5213' },
+                    { id: 'sv-out', external_id: 'svo', bank_account_id: 'sofi-savings-here', date: '2026-10-05', amount: 500, type: 'transfer', name: 'To Checking - 0026' },
+                ], error: null }
+                if (call.ops.some(o => o.method === 'not' && o.args[0] === 'external_id')) return { data: [{ external_id: 'in1', provider: 'teller' }, { external_id: 'svo', provider: 'teller' }], error: null }
+                return { data: [], error: null }
+            })
+            await syncConnection(deps(provider), 'conn-1')
+            const updates = ops('transactions', 'update')
+            expect(updates.map(u => [u.args[0], u.call.ops.find(o => o.method === 'in')!.args[1]])).toEqual([[{ type: 'withdrawal' }, ['chk-in']]])
+        })
+
         it('after that, leaves transactions you already have alone (so changing one back sticks)', async () => {
             const saved = [
                 { id: 'a', bank_account_id: 'db-acc-1', date: '2026-09-10', amount: 300, type: 'expense', name: 'To Savings - 5213' },

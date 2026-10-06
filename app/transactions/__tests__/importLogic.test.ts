@@ -182,6 +182,13 @@ Date,Type,Category,Name,Amount
         expect(convertRows(rows, mapping, 'negative', [], []).ready[0].transaction).toMatchObject({ type: 'reimbursement', amount: 30 })
     })
 
+    it('keeps savings withdrawals as withdrawals when re-importing an exported file', () => {
+        const { rows, mapping } = parse(`
+Date,Type,Category,Name,Amount
+2026-10-02,withdrawal,Emergency Fund,From Savings - 5213,500`)
+        expect(convertRows(rows, mapping, 'negative', [], []).ready[0].transaction).toMatchObject({ type: 'withdrawal', amount: 500 })
+    })
+
     it('keeps transfers as transfers when re-importing an exported file', () => {
         const { rows, mapping } = parse(`
 Date,Type,Category,Name,Amount
