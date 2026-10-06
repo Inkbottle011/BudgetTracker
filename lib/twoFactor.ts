@@ -23,6 +23,21 @@ export async function twoFactorStatus(): Promise<{ on: boolean; factorId: string
 }
 
 /** Starts setup: returns the QR code to scan and the key to type in by hand. */
+/**
+ * Supabase returns the QR code as "data:image/svg+xml;utf-8,<svg ...>" with the SVG unencoded.
+ * Browsers read the first "#" (in colors like #000000) as the start of a URL fragment and drop
+ * the rest, so the image comes out blank. Encoding the SVG fixes it.
+ */
+export function qrImageUri(qr: string): string {
+    const svgPrefix = /^data:image\/svg\+xml(;[^,]*)?,/i
+    if (qr.trim().startsWith('<')) return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(qr.trim())}`
+    const m = qr.match(svgPrefix)
+    if (!m) return qr                                   // e.g. a base64 PNG: already fine
+    const body = qr.slice(m[0].length)
+    if (/;base64/i.test(m[0]) || !/[<>#"\s]/.test(body)) return qr   // already encoded
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(body)}`
+}
+
 export async function startTwoFactorSetup(): Promise<{ factorId: string; qrCode: string; secret: string }> {
     // A setup that was started but never confirmed would block a new one
     const { all } = await factors()
@@ -31,7 +46,7 @@ export async function startTwoFactorSetup(): Promise<{ factorId: string; qrCode:
     const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'Authenticator' } as any)
     if (error || !data) throw new Error(error?.message ?? "Couldn't start two-factor setup")
     const d = data as any
-    return { factorId: d.id, qrCode: d.totp.qr_code, secret: d.totp.secret }
+    return { factorId: d.id, qrCode: qrImageUri(d.totp.qr_code), secret: d.totp.secret }
 }
 
 /** Checks a code for a factor; used to finish setup and to sign in. */
