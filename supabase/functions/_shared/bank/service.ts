@@ -38,22 +38,42 @@ async function loadConnection(deps: BankDeps, connectionId: string, userId?: str
     return conn
 }
 
+/** Starts a bank sign-in window session, for providers that need one (Plaid). */
+export async function startLink(deps: BankDeps, userId: string): Promise<{ linkToken?: string }> {
+    return deps.provider.createLinkSession ? deps.provider.createLinkSession(userId) : {}
+}
+
 export async function linkBank(deps: BankDeps, input: {
-    userId: string; accessToken: string; enrollmentId: string; institutionName: string | null; syncFrom: string
+    userId: string
+    institutionName: string | null
+    syncFrom: string
+    /** Plaid: the one-time token from its sign-in window, exchanged here for a lasting one */
+    publicToken?: string
+    /** Teller: the sign-in window gives the lasting token and enrollment id directly */
+    accessToken?: string
+    enrollmentId?: string
 }) {
+    let accessToken = input.accessToken ?? ''
+    let enrollmentId = input.enrollmentId ?? ''
+    if (input.publicToken) {
+        if (!deps.provider.exchangeLinkResult) throw new Error('This bank provider does not use a one-time token')
+        ;({ accessToken, enrollmentId } = await deps.provider.exchangeLinkResult({ publicToken: input.publicToken }))
+    }
+    if (!accessToken || !enrollmentId) throw new Error('Missing bank details. Please try linking again.')
+
     // Proves the token works before anything is stored
-    const accounts = await deps.provider.listAccounts(input.accessToken)
+    const accounts = await deps.provider.listAccounts(accessToken)
 
     const { data: existing } = await deps.db.from('bank_connections').select('id, user_id')
-        .eq('provider', deps.provider.name).eq('provider_enrollment_id', input.enrollmentId)
+        .eq('provider', deps.provider.name).eq('provider_enrollment_id', enrollmentId)
     if ((existing ?? []).some((c: any) => c.user_id !== input.userId)) throw new Error('This bank login is linked to another account')
 
     const { data: conn, error } = await deps.db.from('bank_connections').upsert({
         user_id: input.userId,
         provider: deps.provider.name,
-        provider_enrollment_id: input.enrollmentId,
+        provider_enrollment_id: enrollmentId,
         institution_name: input.institutionName ?? accounts[0]?.institutionName ?? null,
-        encrypted_token: await encryptToken(input.accessToken, deps.key),
+        encrypted_token: await encryptToken(accessToken, deps.key),
         sync_from: input.syncFrom,
         status: 'active',
         last_error: null,
@@ -114,6 +134,11 @@ export async function syncConnection(deps: BankDeps, connectionId: string) {
             .update({ status: 'active', last_error: null, last_synced_at: new Date().toISOString() }).eq('id', conn.id)
         return { added, skipped, status: 'active' as const }
     } catch (e) {
+        // Just linked and the bank's data is still loading: not a problem, try again later
+        if (e instanceof ProviderError && e.kind === 'not_ready') {
+            await deps.db.from('bank_connections').update({ status: 'active', last_error: null }).eq('id', conn.id)
+            return { added: 0, skipped: null, status: 'pending' as const }
+        }
         const status = e instanceof ProviderError && e.kind === 'needs_relink' ? 'needs_relink' : 'error'
         await deps.db.from('bank_connections').update({ status, last_error: safeMessage(e, token) }).eq('id', conn.id)
         return { added: 0, skipped: null, status }

@@ -22,6 +22,7 @@ function env(over: Partial<HandlerEnv> = {}) {
         syncUser: jest.fn(async () => ({ added: 2, connections: 1 })),
         syncAll: jest.fn(async () => ({ added: 5, connections: 2 })),
         unlinkBank: jest.fn(async () => undefined),
+        startLink: jest.fn(async () => ({ linkToken: 'link-sandbox-123' })),
     }
     const e: HandlerEnv = {
         cronSecret: 'cron-secret',
@@ -66,7 +67,23 @@ describe('bank server function', () => {
         }, ALICE_2FA), e))
         expect(res).toEqual({ status: 200, body: { connectionId: 'conn-1', added: 3, status: 'active' } })
         expect(service.linkBank).toHaveBeenCalledWith(expect.anything(), {
-            userId: 'alice', accessToken: 'token_abc', enrollmentId: 'enr_1', institutionName: 'Chase', syncFrom: '2026-09-01',
+            userId: 'alice', publicToken: undefined, accessToken: 'token_abc', enrollmentId: 'enr_1', institutionName: 'Chase', syncFrom: '2026-09-01',
+        })
+    })
+
+    it('starts a bank sign-in session for the signed-in user', async () => {
+        const { e, service } = env()
+        expect(await json(await handleBankRequest(request({ action: 'link-session' }, ALICE_2FA), e)))
+            .toEqual({ status: 200, body: { linkToken: 'link-sandbox-123' } })
+        expect(service.startLink).toHaveBeenCalledWith(expect.anything(), 'alice')
+    })
+
+    it('links with the one-time token from Plaid\'s sign-in window', async () => {
+        const { e, service } = env()
+        const res = await handleBankRequest(request({ action: 'link', publicToken: 'public-abc', institutionName: 'Chase', syncFrom: '2026-09-01' }, ALICE_2FA), e)
+        expect(res.status).toBe(200)
+        expect(service.linkBank).toHaveBeenCalledWith(expect.anything(), {
+            userId: 'alice', publicToken: 'public-abc', accessToken: undefined, enrollmentId: undefined, institutionName: 'Chase', syncFrom: '2026-09-01',
         })
     })
 

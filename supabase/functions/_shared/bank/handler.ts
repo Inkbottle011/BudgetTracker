@@ -9,7 +9,7 @@ export interface HandlerEnv {
     /** Checks a session token with Supabase Auth; null if it isn't valid. */
     getUser: (jwt: string) => Promise<{ id: string; hasTwoFactor: boolean } | null>
     makeDeps: () => BankDeps
-    service?: Pick<typeof realService, 'linkBank' | 'syncUser' | 'syncAll' | 'unlinkBank'>
+    service?: Pick<typeof realService, 'linkBank' | 'syncUser' | 'syncAll' | 'unlinkBank' | 'startLink'>
 }
 
 const CORS = {
@@ -43,7 +43,7 @@ export async function handleBankRequest(req: Request, env: HandlerEnv): Promise<
     let body: any
     try { body = await req.json() } catch { return reply(400, { error: 'Send a JSON body.' }) }
     const action = body?.action
-    const secretsToHide: string[] = typeof body?.accessToken === 'string' && body.accessToken ? [body.accessToken] : []
+    const secretsToHide: string[] = [body?.accessToken, body?.publicToken].filter((s: unknown) => typeof s === 'string' && s) as string[]
 
     const fail = (e: unknown) => {
         let msg = e instanceof Error ? e.message : String(e)
@@ -69,14 +69,19 @@ export async function handleBankRequest(req: Request, env: HandlerEnv): Promise<
 
     try {
         switch (action) {
+            case 'link-session':
+                return reply(200, await service.startLink(env.makeDeps(), user.id))
             case 'link': {
-                if (!isText(body.accessToken) || !isText(body.enrollmentId) || !isDate(body.syncFrom)) {
+                const viaPublicToken = isText(body.publicToken)                               // Plaid
+                const viaAccessToken = isText(body.accessToken) && isText(body.enrollmentId)  // Teller
+                if ((!viaPublicToken && !viaAccessToken) || !isDate(body.syncFrom)) {
                     return reply(400, { error: 'Missing bank details. Please try linking again.' })
                 }
                 return reply(200, await service.linkBank(env.makeDeps(), {
                     userId: user.id,   // always the signed-in user, never what the request claims
-                    accessToken: body.accessToken,
-                    enrollmentId: body.enrollmentId,
+                    publicToken: viaPublicToken ? body.publicToken : undefined,
+                    accessToken: viaAccessToken ? body.accessToken : undefined,
+                    enrollmentId: viaAccessToken ? body.enrollmentId : undefined,
                     institutionName: isText(body.institutionName) ? body.institutionName : null,
                     syncFrom: body.syncFrom,
                 }))

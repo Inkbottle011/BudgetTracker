@@ -89,7 +89,7 @@ export class BankError extends Error {
 }
 
 /** Calls the bank server function, turning its errors into readable messages. */
-export async function callBank(action: 'link' | 'sync' | 'unlink', extra: Record<string, unknown> = {}): Promise<any> {
+export async function callBank(action: 'link' | 'link-session' | 'sync' | 'unlink', extra: Record<string, unknown> = {}): Promise<any> {
     const { data, error } = await supabase.functions.invoke('bank', { body: { action, ...extra } })
     if (!error) return data
     let body: any = null

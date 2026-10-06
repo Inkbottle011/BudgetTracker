@@ -1,5 +1,5 @@
 /** @jest-environment node */
-import { linkBank, syncConnection, unlinkBank, syncUser } from '../service.ts'
+import { linkBank, syncConnection, unlinkBank, syncUser, startLink } from '../service.ts'
 import { encryptToken, decryptToken } from '../crypto.ts'
 import { ProviderError, type BankProvider } from '../types.ts'
 import { fake, supabase as db } from '../../../../../test/fakeSupabase'
@@ -86,6 +86,25 @@ describe('linkBank', () => {
         expect(result).toMatchObject({ connectionId: 'conn-1', added: 2 })
     })
 
+    it('exchanges the one-time token from the sign-in window when the provider uses one (Plaid)', async () => {
+        await databaseWithConnection()
+        const provider = fakeProvider({ exchangeLinkResult: jest.fn(async () => ({ accessToken: 'token_good', enrollmentId: 'item_1' })) } as any)
+        await linkBank(deps(provider), { userId: 'user-1', publicToken: 'public-abc', institutionName: 'Chase', syncFrom: '2026-09-01' })
+        expect(provider.exchangeLinkResult).toHaveBeenCalledWith({ publicToken: 'public-abc' })
+        const saved = ops('bank_connections', 'upsert')[0].args[0]
+        expect(saved.provider_enrollment_id).toBe('item_1')
+        expect(await decryptToken(saved.encrypted_token, KEY)).toBe('token_good')
+    })
+
+    it('reports that transactions are still loading right after linking, without marking the bank broken', async () => {
+        await databaseWithConnection()
+        const provider = fakeProvider({ listTransactions: jest.fn(async () => { throw new ProviderError('not_ready', 'still loading') }) })
+        const result = await linkBank(deps(provider), { userId: 'user-1', accessToken: 'token_good', enrollmentId: 'enr_1', institutionName: 'Chase', syncFrom: '2026-09-01' })
+        expect(result).toMatchObject({ connectionId: 'conn-1', added: 0, status: 'pending' })
+        const lastUpdate = ops('bank_connections', 'update').at(-1)!.args[0]
+        expect(lastUpdate).toEqual({ status: 'active', last_error: null })
+    })
+
     it('stores nothing if the bank rejects the token', async () => {
         await databaseWithConnection()
         const provider = fakeProvider({ listAccounts: jest.fn(async () => { throw new ProviderError('needs_relink', 'disconnected') }) })
@@ -165,6 +184,17 @@ describe('balances', () => {
         const provider = fakeProvider()
         delete (provider as any).getBalance
         expect(await syncConnection(deps(provider), 'conn-1')).toMatchObject({ status: 'active' })
+    })
+})
+
+describe('startLink', () => {
+    it('asks the provider for a sign-in session for this user', async () => {
+        const provider = fakeProvider({ createLinkSession: jest.fn(async (id: string) => ({ linkToken: `link-${id}` })) } as any)
+        expect(await startLink(deps(provider), 'user-1')).toEqual({ linkToken: 'link-user-1' })
+    })
+
+    it('returns nothing for providers whose sign-in window needs no session (Teller)', async () => {
+        expect(await startLink(deps(), 'user-1')).toEqual({})
     })
 })
 

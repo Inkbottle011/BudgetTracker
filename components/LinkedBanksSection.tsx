@@ -3,12 +3,12 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator 
 import { useFocusEffect } from '@react-navigation/native'
 import { supabase } from '../lib/supabase'
 import { fetchLinkedBanks, callBank, describeStatus, suggestedStartDate, accountLabel, LinkedBank } from '../lib/bank'
-import { bankLinkingAvailable, openTellerConnect } from '../lib/tellerConnect'
+import { bankLinkingAvailable, openBankConnect } from '../lib/bankConnect'
 import { parseDate, todayString } from '../lib/entry'
 import { useToastContext } from '../context/ToastContext'
 import { settingsCardStyles } from './TwoFactorSection'
 
-/** Settings: link banks through Teller, see their status, sync now, unlink. */
+/** Settings: link banks (Plaid by default), see their status, sync now, unlink. */
 export function LinkedBanksSection({ twoFactorOn }: { twoFactorOn: boolean }) {
     const { showToast } = useToastContext()
     const [banks, setBanks] = useState<LinkedBank[]>([])
@@ -37,16 +37,15 @@ export function LinkedBanksSection({ twoFactorOn }: { twoFactorOn: boolean }) {
         if (!syncFrom) { showToast('Pick a start date like 2026-10-01', 'error'); return }
         setBusy('link')
         try {
-            const enrollment = await openTellerConnect()
-            if (enrollment) {
-                const name = enrollment.enrollment.institution?.name ?? 'Bank'
-                const result = await callBank('link', {
-                    accessToken: enrollment.accessToken,
-                    enrollmentId: enrollment.enrollment.id,
-                    institutionName: name,
-                    syncFrom,
-                })
-                showToast(`${name} linked. Added ${result?.added ?? 0} transactions.`)
+            const signIn = await openBankConnect()
+            if (signIn) {
+                const name = signIn.institutionName ?? 'Bank'
+                const result = await callBank('link', signIn.publicToken
+                    ? { publicToken: signIn.publicToken, institutionName: name, syncFrom }
+                    : { accessToken: signIn.accessToken, enrollmentId: signIn.enrollmentId, institutionName: name, syncFrom })
+                showToast(result?.status === 'pending'
+                    ? `${name} linked. Its transactions are still loading; they'll appear at the next sync, or tap Sync now in a few minutes.`
+                    : `${name} linked. Added ${result?.added ?? 0} transactions.`)
                 setLinking(false)
                 await load()
             }

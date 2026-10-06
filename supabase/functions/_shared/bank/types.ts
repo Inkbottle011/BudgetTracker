@@ -32,14 +32,19 @@ export interface BankProvider {
     disconnect(token: string): Promise<void>
     /** Optional: providers without balances can leave this out. */
     getBalance?(token: string, providerAccountId: string, accountType: string): Promise<BankBalance>
+    /** Optional: providers whose sign-in window needs a server-made session first (Plaid). */
+    createLinkSession?(userId: string): Promise<{ linkToken: string }>
+    /** Optional: turns what the sign-in window returned into a lasting token (Plaid's public token exchange). */
+    exchangeLinkResult?(result: { publicToken: string }): Promise<{ accessToken: string; enrollmentId: string }>
 }
 
 /**
  * needs_relink: the bank or person revoked access; they must link again.
  * temporary: the provider or bank is having trouble; try again later.
+ * not_ready: just linked and the bank's data is still loading; try again in a few minutes.
  */
 export class ProviderError extends Error {
-    constructor(public kind: 'needs_relink' | 'temporary' | 'other', message: string) {
+    constructor(public kind: 'needs_relink' | 'temporary' | 'not_ready' | 'other', message: string) {
         super(message)
         this.name = 'ProviderError'
     }

@@ -2,12 +2,12 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react-nativ
 import SettingsScreen from '../settings'
 import { ToastContext } from '../../context/ToastContext'
 import { fake, auth, functions } from '../../test/fakeSupabase'
-import { openTellerConnect, bankLinkingAvailable } from '../../lib/tellerConnect'
+import { openBankConnect, bankLinkingAvailable } from '../../lib/bankConnect'
 
 jest.mock('../../lib/supabase', () => require('../../test/fakeSupabase').module)
-jest.mock('../../lib/tellerConnect', () => ({
+jest.mock('../../lib/bankConnect', () => ({
     bankLinkingAvailable: jest.fn(() => true),
-    openTellerConnect: jest.fn(),
+    openBankConnect: jest.fn(),
 }))
 // Like the real one: runs when the screen is shown and again whenever the callback changes
 jest.mock('@react-navigation/native', () => ({
@@ -34,7 +34,7 @@ beforeEach(() => {
     showToast.mockClear()
     invoke.mockReset()
     invoke.mockResolvedValue({ data: {}, error: null })
-    ;(openTellerConnect as jest.Mock).mockReset()
+    ;(openBankConnect as jest.Mock).mockReset()
     ;(bankLinkingAvailable as jest.Mock).mockReturnValue(true)
     twoFactor(false)
     fake.table('bank_connections', { data: [] })
@@ -125,9 +125,9 @@ describe('linked banks', () => {
         expect(screen.getByText('Synced 3 hours ago')).toBeTruthy()
     })
 
-    it('links a bank: pick a start date, sign in with Teller, then the server stores and syncs it', async () => {
+    it('links a bank: pick a start date, sign in with Plaid, then the server stores and syncs it', async () => {
         twoFactor(true)
-        ;(openTellerConnect as jest.Mock).mockResolvedValue({ accessToken: 'token_abc', enrollment: { id: 'enr_1', institution: { name: 'Chase' } } })
+        ;(openBankConnect as jest.Mock).mockResolvedValue({ publicToken: 'public-abc', institutionName: 'Chase' })
         invoke.mockResolvedValueOnce({ data: { connectionId: 'conn-1', added: 12, status: 'active' }, error: null })
         await renderSettings()
         await fireEvent.press(await screen.findByText('+ Link a bank'))
@@ -135,14 +135,25 @@ describe('linked banks', () => {
         expect(screen.getByLabelText('Import transactions from').props.value).toBe('2026-10-04')
         await fireEvent.press(screen.getByText('Continue to your bank'))
         expect(invoke).toHaveBeenCalledWith('bank', { body: {
-            action: 'link', accessToken: 'token_abc', enrollmentId: 'enr_1', institutionName: 'Chase', syncFrom: '2026-10-04',
+            action: 'link', publicToken: 'public-abc', institutionName: 'Chase', syncFrom: '2026-10-04',
         } })
         await waitFor(() => expect(showToast).toHaveBeenCalledWith('Chase linked. Added 12 transactions.'))
     })
 
+    it('says when the bank is still loading its transactions', async () => {
+        twoFactor(true)
+        ;(openBankConnect as jest.Mock).mockResolvedValue({ publicToken: 'public-abc', institutionName: 'Chase' })
+        invoke.mockResolvedValueOnce({ data: { connectionId: 'conn-1', added: 0, status: 'pending' }, error: null })
+        await renderSettings()
+        await fireEvent.press(await screen.findByText('+ Link a bank'))
+        await fireEvent.press(screen.getByText('Continue to your bank'))
+        await waitFor(() => expect(showToast).toHaveBeenCalledWith(
+            "Chase linked. Its transactions are still loading; they'll appear at the next sync, or tap Sync now in a few minutes."))
+    })
+
     it('does nothing if you close the bank sign-in', async () => {
         twoFactor(true)
-        ;(openTellerConnect as jest.Mock).mockResolvedValue(null)
+        ;(openBankConnect as jest.Mock).mockResolvedValue(null)
         await renderSettings()
         await fireEvent.press(await screen.findByText('+ Link a bank'))
         await fireEvent.press(screen.getByText('Continue to your bank'))
@@ -151,12 +162,12 @@ describe('linked banks', () => {
 
     it('shows why linking failed', async () => {
         twoFactor(true)
-        ;(openTellerConnect as jest.Mock).mockResolvedValue({ accessToken: 't', enrollment: { id: 'e', institution: { name: 'Chase' } } })
-        invoke.mockResolvedValueOnce({ data: null, error: { message: 'x', context: { json: async () => ({ error: 'Teller certificate missing' }) } } })
+        ;(openBankConnect as jest.Mock).mockResolvedValue({ publicToken: 'p', institutionName: 'Chase' })
+        invoke.mockResolvedValueOnce({ data: null, error: { message: 'x', context: { json: async () => ({ error: 'PLAID_SECRET missing' }) } } })
         await renderSettings()
         await fireEvent.press(await screen.findByText('+ Link a bank'))
         await fireEvent.press(screen.getByText('Continue to your bank'))
-        await waitFor(() => expect(showToast).toHaveBeenCalledWith('Teller certificate missing', 'error'))
+        await waitFor(() => expect(showToast).toHaveBeenCalledWith('PLAID_SECRET missing', 'error'))
     })
 
     it('syncs now', async () => {

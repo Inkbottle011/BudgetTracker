@@ -20,8 +20,8 @@ A cross-platform personal finance app for planning a yearly budget, tracking tra
 - Fast entry: name suggestions from past transactions fill in amount, type and category; date picker with Today / Yesterday; amounts like "$1,234.50" accepted; Enter to save
 
 **Linked banks and security**
-- Link bank accounts through Teller; new transactions are added every morning through the same rules as the CSV import (no duplicates, card payments left out, categories from your history)
-- Read-only access; bank tokens are encrypted and never readable by the app; provider-neutral design so Teller can be swapped later
+- Link bank accounts through Plaid (Teller also supported); new transactions are added every morning through the same rules as the CSV import (no duplicates, card payments left out, categories from your history)
+- Read-only access; bank tokens are encrypted and never readable by the app; provider-neutral design, so providers can be swapped
 - Two-factor sign-in with an authenticator app, required for bank linking
 - Setup: [docs/linking-banks.md](docs/linking-banks.md)
 

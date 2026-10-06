@@ -31,9 +31,12 @@ export function providerContract(name: string, make: () => BankProvider) {
     describe(`${name} provider (shared contract)`, () => {
         it('lists accounts in the standard shape', async () => {
             const accounts = await make().listAccounts(FAKE_BANK.goodToken)
+            // Some providers give the bank's name here; others (Plaid) only in their sign-in window
+            const bank = accounts[0].institutionName
+            expect([null, 'Chase']).toContain(bank)
             expect(accounts).toEqual([
-                { providerAccountId: 'acc_checking', name: 'Everyday Checking', type: 'depository', subtype: 'checking', lastFour: '1234', institutionName: 'Chase' },
-                { providerAccountId: 'acc_card', name: 'Sapphire', type: 'credit', subtype: 'credit_card', lastFour: '9876', institutionName: 'Chase' },
+                { providerAccountId: 'acc_checking', name: 'Everyday Checking', type: 'depository', subtype: 'checking', lastFour: '1234', institutionName: bank },
+                { providerAccountId: 'acc_card', name: 'Sapphire', type: 'credit', subtype: 'credit_card', lastFour: '9876', institutionName: bank },
             ])
         })
 
