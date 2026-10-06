@@ -32,6 +32,11 @@ create table if not exists public.subscriptions (
 create index if not exists subscriptions_user_id_idx on public.subscriptions (user_id);
 
 -- 2. Only owners can see or change their subscriptions --------------------
+-- Newer Supabase projects don't give the app access to new tables automatically,
+-- so grant it; the row-level security policy below still limits each user to their own rows.
+grant select, insert, update, delete on public.subscriptions to authenticated;
+grant all on public.subscriptions to service_role;
+
 alter table public.subscriptions enable row level security;
 
 drop policy if exists "Users manage their own subscriptions" on public.subscriptions;

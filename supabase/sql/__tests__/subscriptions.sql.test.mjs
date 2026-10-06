@@ -40,8 +40,9 @@ async function freshDb() {
           using (user_id = auth.uid()) with check (user_id = auth.uid());
 
         grant usage on schema public to anon, authenticated;
+        -- Like newer Supabase projects: existing tables are granted, but NEW tables are not
+        -- reachable by signed-in users until the setup SQL grants access explicitly
         grant all on all tables in schema public to authenticated;
-        alter default privileges in schema public grant all on tables to authenticated;
         -- Supabase lets anon execute new functions by default; the setup must revoke it
         alter default privileges in schema public grant execute on functions to anon;
     `)
@@ -71,6 +72,12 @@ describe('01_setup.sql', () => {
     beforeEach(async () => {
         db = await freshDb()
         await db.exec(sql('01_setup.sql'))
+    })
+
+    it('lets signed-in users use the table even when Supabase does not grant access automatically', async () => {
+        await as(ALICE)
+        await addSubscription({ name: 'Netflix', amount: 15.99, frequency: 'monthly', start_date: '2026-09-15' })
+        assert.deepEqual((await rows(`select name from subscriptions`)).map(r => r.name), ['Netflix'])
     })
 
     it('can be run more than once', async () => {
