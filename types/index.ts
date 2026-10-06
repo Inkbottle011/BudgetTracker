@@ -18,6 +18,8 @@ export interface Transaction {
     type: TransactionType
     note?: string
     name?: string
+    /** The bank's or file's wording, kept when you rename a transaction */
+    original_name?: string | null
     category_label?: string
     date: string
     created_at: string

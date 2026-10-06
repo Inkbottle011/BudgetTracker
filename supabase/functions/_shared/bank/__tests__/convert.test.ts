@@ -122,6 +122,24 @@ describe('convertBankTransactions', () => {
         })
     })
 
+    it('uses your name for places you renamed, keeping the bank\'s wording', () => {
+        const r = convertBankTransactions([tx('t1', '2026-10-01', -12.31, 'TACOS TEXAS'), tx('t2', '2026-10-01', -3, 'Wawa')], checking,
+            ctx({ renames: new Map([['tacos texas', 'Tacos Texas']]) }))
+        expect(r.rows.map(x => [x.name, x.original_name])).toEqual([['Tacos Texas', 'TACOS TEXAS'], ['Wawa', null]])
+    })
+
+    it('without any renames, rows have no original_name at all (works before the rename setup is run)', () => {
+        const r = convertBankTransactions([tx('t1', '2026-10-01', -3, 'Wawa')], checking, ctx())
+        expect('original_name' in r.rows[0]).toBe(false)
+    })
+
+    it('matches a renamed transaction you already have by its original wording', () => {
+        const existing = [{ id: 'a', date: '2026-10-01', amount: 12.31, name: 'Tacos Texas', original_name: 'TACOS TEXAS', type: 'expense' }]
+        const r = convertBankTransactions([tx('t1', '2026-10-01', -12.31, 'TACOS TEXAS')], checking, ctx({ existing }))
+        expect(r.rows).toEqual([])
+        expect(r.skipped.duplicate).toBe(1)
+    })
+
     it('saves payments arriving on a credit card as transfers, which never count toward totals', () => {
         const r = convertBankTransactions([tx('t1', '2026-10-01', 500, 'Payment Thank You-Mobile', { providerAccountId: 'acc_card' })], card, ctx())
         expect(r.rows).toEqual([expect.objectContaining({ external_id: 't1', type: 'transfer', amount: 500, category_label: '' })])

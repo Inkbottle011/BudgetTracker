@@ -3,6 +3,7 @@ import { useTransactionLogic } from './useTransactionLogic'
 import { TransactionList } from './TransactionList'
 import { TransactionForm } from './TransactionForm'
 import { OwedPanel } from './OwedPanel'
+import { UncategorizedPanel } from './UncategorizedPanel'
 
 export default function TransactionsScreen() {
     const logic = useTransactionLogic()
@@ -11,6 +12,7 @@ export default function TransactionsScreen() {
         <View style={styles.container}>
         <View style={styles.listColumn}>
         <OwedPanel transactions={logic.transactions} onChanged={logic.fetchTransactions} />
+        <UncategorizedPanel transactions={logic.transactions} budgetCategories={logic.budgetCategories} onChanged={logic.fetchTransactions} />
         <TransactionList
         rows={logic.rows}
         selectMode={logic.selectMode}
