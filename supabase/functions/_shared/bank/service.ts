@@ -1,6 +1,6 @@
 // Linking, syncing and unlinking banks. Runs only on the server (service role); provider-neutral.
 import { encryptToken, decryptToken } from './crypto.ts'
-import { convertBankTransactions, MATCH_DAYS, MONEY_IN_TYPES, type PossibleDuplicate, type TransactionRow } from './convert.ts'
+import { convertBankTransactions, SAME_PLACE_DAYS, MONEY_IN_TYPES, type PossibleDuplicate, type TransactionRow } from './convert.ts'
 import { findTransferPairs, TRANSFER_DAYS, type TransferCandidate } from './transfers.ts'
 import { isCardPayment } from '../entry.ts'
 import { BankProvider, ProviderError } from './types.ts'
@@ -99,7 +99,10 @@ export async function syncConnection(deps: BankDeps, connectionId: string) {
         token = await decryptToken(conn.encrypted_token, deps.key)
         const today = todayOf(deps)
         const lastSynced = conn.last_synced_at ? daysBefore(String(conn.last_synced_at), RECHECK_DAYS) : conn.sync_from
-        const since = lastSynced > conn.sync_from ? lastSynced : conn.sync_from
+        // The one-time transfer check re-reads everything from the start date, so card payments that
+        // older versions dropped come back (as transfers) and can pair with the payment from checking
+        const fullCheck = !conn.transfers_checked
+        const since = fullCheck || lastSynced < conn.sync_from ? conn.sync_from : lastSynced
 
         const { data: accounts } = await deps.db.from('bank_accounts').select('*').eq('connection_id', conn.id)
         const { data: allAccounts } = await deps.db.from('bank_accounts').select('id, type').eq('user_id', conn.user_id)
@@ -111,13 +114,13 @@ export async function syncConnection(deps: BankDeps, connectionId: string) {
             .order('date', { ascending: false }).limit(3000)
         // Yours (typed in or from a CSV), a few days either side since the bank's date can differ
         const { data: existing } = await deps.db.from('transactions').select('id, date, amount, name, note, type')
-            .eq('user_id', conn.user_id).is('external_id', null).gte('date', daysBefore(since, MATCH_DAYS)).lte('date', today)
+            .eq('user_id', conn.user_id).is('external_id', null).gte('date', daysBefore(since, SAME_PLACE_DAYS)).lte('date', today)
         // Bank transactions already saved or waiting for review, so re-checking never adds them twice
-        const { data: imported } = await deps.db.from('transactions').select('external_id')
-            .eq('user_id', conn.user_id).eq('provider', conn.provider).not('external_id', 'is', null).gte('date', since)
+        const imported = await loadAll(() => deps.db.from('transactions').select('external_id')
+            .eq('user_id', conn.user_id).eq('provider', conn.provider).not('external_id', 'is', null).gte('date', since).order('date'))
         const { data: waiting } = await deps.db.from('bank_possible_duplicates').select('external_id')
             .eq('user_id', conn.user_id).eq('provider', conn.provider)
-        const alreadyImported = new Set<string>([...(imported ?? []), ...(waiting ?? [])].map((r: any) => r.external_id))
+        const alreadyImported = new Set<string>([...imported, ...(waiting ?? [])].map((r: any) => r.external_id))
 
         const rows: TransactionRow[] = []
         const moneyIn = new Set<string>()
@@ -138,7 +141,6 @@ export async function syncConnection(deps: BankDeps, connectionId: string) {
 
         // Money moving between your own accounts is saved as 'transfer' so it isn't counted twice.
         // The first time (transfers_checked false) this also fixes transfers imported before.
-        const fullCheck = !conn.transfers_checked
         const transfers = await markTransfers(deps, conn, rows, moneyIn, accountType,
             daysBefore(fullCheck ? conn.sync_from : since, TRANSFER_DAYS), fullCheck)
 

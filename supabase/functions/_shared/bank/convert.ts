@@ -33,6 +33,8 @@ export interface PossibleDuplicate {
 
 /** How many days apart the bank's date and yours can be (purchase date vs. posting date). */
 export const MATCH_DAYS = 3
+/** Same amount at the same place can be further apart: card purchases sometimes post days later. */
+export const SAME_PLACE_DAYS = 7
 
 export const MONEY_IN_TYPES = new Set(['income', 'reimbursement'])
 
@@ -133,16 +135,17 @@ export function convertBankTransactions(
     for (const row of candidates) {
         if (matched.has(row)) continue
         const isIn = moneyIn.has(row.external_id)
-        const near = mine
-            .filter(m => !m.used && Math.abs(m.value - row.amount) < 0.005 && daysApart(m.date, row.date) <= MATCH_DAYS
+        const sameAmount = mine
+            .filter(m => !m.used && Math.abs(m.value - row.amount) < 0.005 && daysApart(m.date, row.date) <= SAME_PLACE_DAYS
                 && m.moneyIn === isIn)
             .sort((a, b) => daysApart(a.date, row.date) - daysApart(b.date, row.date))
-        const same = near.find(m => samePlace(m.name || m.note, row.name))
+        const same = sameAmount.find(m => samePlace(m.name || m.note, row.name))
         if (same) { same.used = true; skipped.duplicate++; continue }
-        if (near.length) {
+        const near = sameAmount.find(m => daysApart(m.date, row.date) <= MATCH_DAYS)
+        if (near) {
             // Same amount around the same day but a different name: probably yours, but you decide
-            near[0].used = true
-            reviews.push({ row, existing_transaction_id: near[0].id ?? null })
+            near.used = true
+            reviews.push({ row, existing_transaction_id: near.id ?? null })
             continue
         }
         rows.push(row)

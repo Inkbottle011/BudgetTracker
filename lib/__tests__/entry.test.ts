@@ -122,6 +122,8 @@ describe('merchantKey', () => {
         ['TST* JOES PIZZA 00123', 'joes pizza'],
         ['POS DEBIT CARD PURCHASE WHOLE FOODS 10234', 'whole foods'],
         ['NETFLIX.COM', 'netflix com'],
+        ["McDonald's", 'mcdonalds'],
+        ['MCDONALDS', 'mcdonalds'],
         ['', ''],
     ])('%p -> %p', (input, expected) => {
         expect(merchantKey(input)).toBe(expected)

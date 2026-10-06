@@ -43,7 +43,7 @@ async function databaseWithConnection(status = 'active', lastSynced: string | nu
     fake.table('bank_connections', call => {
         if (call.ops.some(o => ['update', 'delete', 'upsert'].includes(o.method))) return { data: { id: 'conn-1' }, error: null }
         return {
-            data: [{ id: 'conn-1', user_id: 'user-1', provider: 'teller', encrypted_token: token, status, sync_from: '2026-09-01', last_synced_at: lastSynced }],
+            data: [{ id: 'conn-1', user_id: 'user-1', provider: 'teller', encrypted_token: token, status, sync_from: '2026-09-01', last_synced_at: lastSynced, transfers_checked: true }],
             error: null,
         }
     })
@@ -155,7 +155,8 @@ describe('syncConnection', () => {
         await databaseWithConnection()
         await syncConnection(deps(), 'conn-1')
         const mine = fake.calls('transactions').find(c => c.ops.some(o => o.method === 'is' && o.args[0] === 'external_id'))!
-        expect(mine.ops.find(o => o.method === 'gte')!.args).toEqual(['date', '2026-08-29'])
+        // a week either side: the same purchase at the same place can post days later
+        expect(mine.ops.find(o => o.method === 'gte')!.args).toEqual(['date', '2026-08-25'])
     })
 
     it('never re-adds bank transactions already imported or waiting for review', async () => {
@@ -182,12 +183,12 @@ describe('syncConnection', () => {
                     : [{ externalId: 'out1', providerAccountId: 'acc_card', date: '2026-10-05', amount: -42, description: 'Lunch', pending: false }]),
             })
         }
-        async function database(saved: any[], transfersChecked: boolean) {
+        async function database(saved: any[], transfersChecked: boolean, lastSynced: string | null = null) {
             await databaseWithConnection()
             fake.table('bank_connections', call => {
                 if (call.ops.some(o => ['update', 'delete', 'upsert'].includes(o.method))) return { data: { id: 'conn-1' }, error: null }
                 return { data: [{ id: 'conn-1', user_id: 'user-1', provider: 'teller', encrypted_token: (globalThis as any).__tok, status: 'active',
-                    sync_from: '2026-09-01', last_synced_at: null, transfers_checked: transfersChecked }], error: null }
+                    sync_from: '2026-09-01', last_synced_at: lastSynced, transfers_checked: transfersChecked }], error: null }
             })
             fake.table('transactions', call => {
                 const upsert = call.ops.find(o => o.method === 'upsert')
@@ -214,6 +215,19 @@ describe('syncConnection', () => {
             expect(update.args[0]).toEqual({ type: 'transfer', category_label: '' })
             expect(update.call.ops.find(o => o.method === 'in')!.args).toEqual(['id', ['saved-out']])
             expect(result).toMatchObject({ transfers: 2 })
+        })
+
+        it('the one-time check re-reads the bank from your start date, to pair card payments imported before', async () => {
+            await database([], false, '2026-10-05T08:00:00Z')
+            const provider = bankWithTransfer()
+            await syncConnection(deps(provider), 'conn-1')
+            expect((provider.listTransactions as jest.Mock).mock.calls[0][2]).toBe('2026-09-01')
+            // ...and only the usual last week after that
+            fake.reset()
+            await database([], true, '2026-10-05T08:00:00Z')
+            const later = bankWithTransfer()
+            await syncConnection(deps(later), 'conn-1')
+            expect((later.listTransactions as jest.Mock).mock.calls[0][2]).toBe('2026-09-28')
         })
 
         it('fixes transfers already imported, once', async () => {

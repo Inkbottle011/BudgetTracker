@@ -125,7 +125,7 @@ const NOISE_PREFIXES = [
  *   "SQ *BLUE BOTTLE #1234 OAKLAND CA" and "Blue Bottle" both become "blue bottle".
  */
 export function merchantKey(name: unknown): string {
-    let s = String(name ?? '').toLowerCase().trim()
+    let s = String(name ?? '').toLowerCase().replace(/['\u2019`]/g, '').trim()   // McDonald's = McDonalds
     for (const re of NOISE_PREFIXES) s = s.replace(re, '')
     s = s
         .replace(/\b\d{1,2}\/\d{1,2}(\/\d{2,4})?\b/g, ' ') // dates

@@ -55,6 +55,19 @@ describe('convertBankTransactions', () => {
             expect(r.skipped.duplicate).toBe(1)
         })
 
+        it('skips the same place and amount up to a week apart (cards can post days later)', () => {
+            const existing = [
+                { id: 'a', date: '2026-07-27', amount: 78.76, name: 'Fandango', type: 'expense' },
+                { id: 'b', date: '2026-06-02', amount: 4.34, name: 'McDonalds', type: 'expense' },
+            ]
+            const r = convertBankTransactions([
+                tx('t1', '2026-07-31', -78.76, 'Fandango'),
+                tx('t2', '2026-06-07', -4.34, "McDonald's"),
+            ], checking, ctx({ existing, syncFrom: '2026-06-01' }))
+            expect(r.rows).toEqual([])
+            expect(r.skipped.duplicate).toBe(2)
+        })
+
         it('asks you about the same amount within 3 days when the names don\'t match', () => {
             const existing = [{ id: 'mine-1', date: '2026-10-01', amount: 84.23, name: 'Groceries', type: 'expense' }]
             const r = convertBankTransactions([tx('t1', '2026-10-02', -84.23, 'WHOLE FOODS #10234')], checking, ctx({ existing }))
