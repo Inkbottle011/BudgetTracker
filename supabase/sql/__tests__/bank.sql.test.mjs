@@ -116,6 +116,16 @@ describe('transactions from banks', () => {
         await h.insert('transactions', { ...row, provider: 'simplefin' })
     })
 
+    it('the server function can save transactions even if the project never granted it access', async () => {
+        // Like a real project where service_role had no rights on the app's own transactions table
+        await h.as('job')
+        await h.db.exec('revoke all on public.transactions from service_role')
+        await h.db.exec(sql('bank/01_setup.sql'))
+        const { account } = await serverLinks(ALICE)   // now acting as service_role
+        await h.insert('transactions', { user_id: ALICE, type: 'expense', amount: 5, date: '2026-10-01', provider: 'plaid', external_id: 'txn_1', bank_account_id: account })
+        assert.deepEqual(await h.rows(`select external_id from transactions`), [{ external_id: 'txn_1' }])
+    })
+
     it('transactions typed in by hand are unaffected', async () => {
         await asUser(ALICE)
         await h.insert('transactions', { user_id: ALICE, type: 'expense', amount: 5, date: '2026-10-01' })

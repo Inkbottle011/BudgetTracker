@@ -79,6 +79,10 @@ grant select (id, user_id, provider, institution_name, status, last_error, sync_
   on public.bank_connections to authenticated;
 grant select on public.bank_accounts to authenticated;
 grant all on public.bank_connections, public.bank_accounts to service_role;
+-- The server function saves bank transactions into your transactions table. Newer Supabase
+-- projects don't give service_role access to tables automatically, so grant it here.
+grant select, insert, update, delete on public.transactions to service_role;
+grant usage, select on all sequences in schema public to service_role;
 
 alter table public.bank_connections enable row level security;
 alter table public.bank_accounts enable row level security;
