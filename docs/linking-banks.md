@@ -36,7 +36,9 @@ Start in **sandbox**, then switch to **production** (your Trial plan) for real b
    secret**, and (later) the **Production secret**.
 
 ### 2. Database
-In Supabase, open **SQL Editor -> New query**, paste `supabase/sql/bank/01_setup.sql` and **Run**.
+Automatic once the GitHub secrets for **Deploy backend** are set (see `.github/workflows/deploy-backend.yml`):
+merging into master applies the setup files and deploys the function. Without them: in Supabase, open
+**SQL Editor -> New query**, paste `supabase/sql/bank/01_setup.sql` and **Run**.
 (Safe to run again after updates; it only adds what's missing.)
 
 ### 3. Function secrets
