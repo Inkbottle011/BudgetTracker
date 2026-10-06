@@ -302,6 +302,28 @@ describe('syncConnection', () => {
             expect(ops('transactions', 'update')[0].args[0]).toEqual({ type: 'transfer', category_label: '' })
         })
 
+        it('SoFi vaults ("cash management" accounts) count as savings: checking -> vault is Savings, vault -> checking a Withdrawal', async () => {
+            await database([
+                { id: 'v-in', bank_account_id: 'pc-vault', date: '2026-10-05', amount: 100, type: 'income', name: 'From checking balance' },
+                { id: 'v-out', bank_account_id: 'rent-vault', date: '2026-10-05', amount: 700, type: 'expense', name: 'To checking balance' },
+            ], true)
+            accountsWithSavings([
+                { id: 'pc-vault', connection_id: 'conn-2', user_id: 'user-1', provider_account_id: 'z', type: 'depository', subtype: 'cash management' },
+                { id: 'rent-vault', connection_id: 'conn-2', user_id: 'user-1', provider_account_id: 'w', type: 'depository', subtype: 'cash management' },
+            ])
+            const provider = fakeProvider({
+                listTransactions: jest.fn(async (_t: string, accountId: string) => accountId === 'acc_checking' ? [
+                    { externalId: 'to-vault', providerAccountId: 'acc_checking', date: '2026-10-05', amount: -100, description: 'To PC Fund Vault', pending: false },
+                    { externalId: 'from-vault', providerAccountId: 'acc_checking', date: '2026-10-05', amount: 700, description: 'From Rent Willington Vault', pending: false },
+                ] : []),
+            })
+            await syncConnection(deps(provider), 'conn-1')
+            const rows = ops('transactions', 'upsert')[0].args[0]
+            expect(rows.map((r: any) => [r.external_id, r.type])).toEqual([['to-vault', 'savings'], ['from-vault', 'withdrawal']])
+            const updated = ops('transactions', 'update').flatMap(u => u.call.ops.find(o => o.method === 'in')!.args[1])
+            expect(updated.sort()).toEqual(['v-in', 'v-out'])
+        })
+
         it('moves between savings accounts or vaults are transfers on both sides', async () => {
             await database([
                 { id: 'a', bank_account_id: 'sofi-savings', date: '2026-08-01', amount: 100, type: 'expense', name: 'To Car Vault' },

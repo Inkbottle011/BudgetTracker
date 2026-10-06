@@ -196,9 +196,12 @@ async function loadAll(query: () => any, pageSize = 1000) {
 
 interface AccountInfo { type: string; subtype: string | null }
 
-/** Savings-type bank accounts (SoFi vaults count): money in is saved, money out is withdrawn. */
+/**
+ * Savings-type bank accounts: money in is saved, money out is withdrawn. Includes "cash management"
+ * accounts, which is how banks like SoFi label vaults.
+ */
 function isSavingsAccount(a: AccountInfo | undefined) {
-    return !!a && a.type === 'depository' && /savings|money\s*market|\bcd\b/i.test(a.subtype ?? '')
+    return !!a && a.type === 'depository' && /savings|money\s*market|cash\s*management|\bcd\b/i.test(a.subtype ?? '')
 }
 
 /**
