@@ -9,10 +9,12 @@
 --   * bank_accounts: the accounts inside each linked bank
 --   * transactions.provider / external_id / bank_account_id: where a transaction came from,
 --     so the same bank transaction is never saved twice
+--   * a 'transfer' transaction type: money moving between your own accounts (savings -> checking,
+--     paying a card). Shown in your list but never counted as income or spending.
 --   * bank_possible_duplicates: bank transactions that look like ones you already have
 --     (same amount, a few days apart, different name), held back until you decide
 -- Reading bank details also requires having passed two-factor sign-in.
--- Nothing existing is changed or deleted.
+-- Nothing existing is changed or deleted, except widening a limit on transaction types if you have one.
 
 -- 1. Linked banks ------------------------------------------------------------
 create table if not exists public.bank_connections (
@@ -31,6 +33,9 @@ create table if not exists public.bank_connections (
 );
 
 create index if not exists bank_connections_user_id_idx on public.bank_connections (user_id);
+
+-- Whether transfers already imported from this bank have been found and marked (done once, on the next sync)
+alter table public.bank_connections add column if not exists transfers_checked boolean not null default false;
 
 -- 2. Accounts inside each linked bank ------------------------------------------
 create table if not exists public.bank_accounts (
@@ -70,6 +75,30 @@ begin
   end if;
 end $$;
 
+-- Allow the 'transfer' type. If the transactions table limits which types are allowed, replace that
+-- limit with one that also allows 'transfer' (and 'reimbursement'). If there's no limit, nothing changes.
+do $$
+declare
+  c record;
+  had_limit boolean := false;
+begin
+  for c in
+    select conname
+    from pg_constraint
+    where conrelid = 'public.transactions'::regclass
+      and contype = 'c'
+      and pg_get_constraintdef(oid) ~* '\mtype\M'
+      and pg_get_constraintdef(oid) !~* 'transfer'
+  loop
+    execute format('alter table public.transactions drop constraint %I', c.conname);
+    had_limit := true;
+  end loop;
+  if had_limit then
+    alter table public.transactions add constraint transactions_type_check
+      check (type in ('income', 'expense', 'savings', 'investment', 'reimbursement', 'transfer'));
+  end if;
+end $$;
+
 -- 4. Who can do what ---------------------------------------------------------------
 -- The app (signed-in users) may only READ, and only the columns below: no token.
 -- Creating, updating and deleting connections happens in the server function.
@@ -79,6 +108,10 @@ grant select (id, user_id, provider, institution_name, status, last_error, sync_
   on public.bank_connections to authenticated;
 grant select on public.bank_accounts to authenticated;
 grant all on public.bank_connections, public.bank_accounts to service_role;
+-- The server function saves bank transactions into your transactions table. Newer Supabase
+-- projects don't give service_role access to tables automatically, so grant it here.
+grant select, insert, update, delete on public.transactions to service_role;
+grant usage, select on all sequences in schema public to service_role;
 
 alter table public.bank_connections enable row level security;
 alter table public.bank_accounts enable row level security;

@@ -222,3 +222,10 @@ describe('reimbursements', () => {
         expect(health).toMatchObject({ actual: 30, score: 100 })
     })
 })
+
+describe('transfers between your own accounts', () => {
+    it('never count as income, spending or savings', () => {
+        const list = [tx('2026-03-01', 'income', 1000), tx('2026-03-02', 'expense', 100), tx('2026-03-03', 'transfer', 500), tx('2026-03-03', 'transfer', 500)]
+        expect(overview(list, 2026)).toMatchObject({ income: 1000, expenses: 100, savings: 0, balance: 900 })
+    })
+})

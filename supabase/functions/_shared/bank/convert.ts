@@ -1,6 +1,6 @@
 // Turns a provider's transactions into rows for the transactions table, applying the same rules
 // as the CSV import: skip what you already have, leave out card payments, guess categories.
-import { buildCategoryGuesser, duplicateKey, merchantKey, isCardPayment, isCardBillPayment, isRefund, PastTransaction } from '../entry.ts'
+import { buildCategoryGuesser, duplicateKey, merchantKey, isCardPayment, isRefund, PastTransaction } from '../entry.ts'
 import type { BankTransaction } from './types.ts'
 
 export interface ConvertContext {
@@ -12,8 +12,8 @@ export interface ConvertContext {
     existing: ExistingTransaction[]
     /** Bank transaction ids already saved, or waiting for you to review: never added again */
     alreadyImported?: Set<string>
-    /** Whether any credit card is linked; if so, card bill payments from checking are left out */
-    hasLinkedCreditCard: boolean
+    /** Whether any credit card is linked (kept for callers; card payments are now paired by the sync) */
+    hasLinkedCreditCard?: boolean
 }
 
 export interface ExistingTransaction {
@@ -33,8 +33,10 @@ export interface PossibleDuplicate {
 
 /** How many days apart the bank's date and yours can be (purchase date vs. posting date). */
 export const MATCH_DAYS = 3
+/** Same amount at the same place can be further apart: card purchases sometimes post days later. */
+export const SAME_PLACE_DAYS = 7
 
-const MONEY_IN_TYPES = new Set(['income', 'reimbursement'])
+export const MONEY_IN_TYPES = new Set(['income', 'reimbursement'])
 
 function daysApart(a: string, b: string) {
     return Math.abs(Date.parse(`${a.slice(0, 10)}T00:00:00Z`) - Date.parse(`${b.slice(0, 10)}T00:00:00Z`)) / 86_400_000
@@ -78,6 +80,7 @@ export function convertBankTransactions(
 
     // 1. Decide what each bank transaction is
     const candidates: TransactionRow[] = []
+    const moneyIn = new Set<string>()   // external ids of money coming in (a transfer's type doesn't say)
     for (const t of transactions) {
         if (t.pending) { skipped.pending++; continue }
         if (t.date < ctx.syncFrom) { skipped.beforeStart++; continue }
@@ -85,18 +88,20 @@ export function convertBankTransactions(
 
         const amount = sign * t.amount
         const moneyOut = amount < 0
-        if (!moneyOut && isCardPayment(t.description)) { skipped.cardPayment++; continue }
-        if (moneyOut && account.type !== 'credit' && ctx.hasLinkedCreditCard && isCardBillPayment(t.description)) {
-            skipped.cardPayment++; continue
-        }
-
         const value = Math.round((Math.abs(amount) + Number.EPSILON) * 100) / 100
         let type = moneyOut ? 'expense' : 'income'
         let category = ''
         const g = guess(t.description)
+        // A payment arriving on a card is money moving between your own accounts: the purchases on the
+        // card are the spending. Saved as a transfer (never counted); the sync then pairs it with the
+        // payment leaving checking. A payment from checking with no linked card on the other end stays
+        // spending, since it's the only record of what was bought on that card.
+        if (!moneyOut && isCardPayment(t.description)) {
+            skipped.cardPayment++
+            type = 'transfer'
         // Money coming back on a card (that isn't paying it off), or a refund into checking,
         // reduces spending in the purchase's category instead of counting as income
-        if (!moneyOut && (account.type === 'credit' || isRefund(t.description))) {
+        } else if (!moneyOut && (account.type === 'credit' || isRefund(t.description))) {
             type = 'reimbursement'
             if (g?.type === 'expense') category = g.category
         } else if (g && (g.type === type || (type === 'expense' && (g.type === 'savings' || g.type === 'investment')))) {
@@ -104,6 +109,7 @@ export function convertBankTransactions(
             category = g.category
         }
 
+        if (!moneyOut) moneyIn.add(t.externalId)
         candidates.push({
             user_id: ctx.userId, provider: ctx.provider, external_id: t.externalId, bank_account_id: account.id,
             date: t.date, amount: value, type, name: t.description, note: '', category_label: category, category_id: null,
@@ -119,8 +125,8 @@ export function convertBankTransactions(
     const matched = new Set<TransactionRow>()
     for (const row of candidates) {
         const key = duplicateKey(row)
-        const moneyIn = MONEY_IN_TYPES.has(row.type)
-        const hit = mine.find(m => !m.used && m.moneyIn === moneyIn && duplicateKey({ ...m, amount: m.value }) === key)
+        const isIn = moneyIn.has(row.external_id)
+        const hit = mine.find(m => !m.used && m.moneyIn === isIn && duplicateKey({ ...m, amount: m.value }) === key)
         if (hit) { hit.used = true; matched.add(row); skipped.duplicate++ }
     }
 
@@ -128,20 +134,21 @@ export function convertBankTransactions(
     const reviews: PossibleDuplicate[] = []
     for (const row of candidates) {
         if (matched.has(row)) continue
-        const moneyIn = MONEY_IN_TYPES.has(row.type)
-        const near = mine
-            .filter(m => !m.used && Math.abs(m.value - row.amount) < 0.005 && daysApart(m.date, row.date) <= MATCH_DAYS
-                && m.moneyIn === moneyIn)
+        const isIn = moneyIn.has(row.external_id)
+        const sameAmount = mine
+            .filter(m => !m.used && Math.abs(m.value - row.amount) < 0.005 && daysApart(m.date, row.date) <= SAME_PLACE_DAYS
+                && m.moneyIn === isIn)
             .sort((a, b) => daysApart(a.date, row.date) - daysApart(b.date, row.date))
-        const same = near.find(m => samePlace(m.name || m.note, row.name))
+        const same = sameAmount.find(m => samePlace(m.name || m.note, row.name))
         if (same) { same.used = true; skipped.duplicate++; continue }
-        if (near.length) {
+        const near = sameAmount.find(m => daysApart(m.date, row.date) <= MATCH_DAYS)
+        if (near) {
             // Same amount around the same day but a different name: probably yours, but you decide
-            near[0].used = true
-            reviews.push({ row, existing_transaction_id: near[0].id ?? null })
+            near.used = true
+            reviews.push({ row, existing_transaction_id: near.id ?? null })
             continue
         }
         rows.push(row)
     }
-    return { rows, reviews, skipped }
+    return { rows, reviews, skipped, moneyIn }
 }

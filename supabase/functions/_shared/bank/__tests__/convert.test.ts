@@ -55,6 +55,19 @@ describe('convertBankTransactions', () => {
             expect(r.skipped.duplicate).toBe(1)
         })
 
+        it('skips the same place and amount up to a week apart (cards can post days later)', () => {
+            const existing = [
+                { id: 'a', date: '2026-07-27', amount: 78.76, name: 'Fandango', type: 'expense' },
+                { id: 'b', date: '2026-06-02', amount: 4.34, name: 'McDonalds', type: 'expense' },
+            ]
+            const r = convertBankTransactions([
+                tx('t1', '2026-07-31', -78.76, 'Fandango'),
+                tx('t2', '2026-06-07', -4.34, "McDonald's"),
+            ], checking, ctx({ existing, syncFrom: '2026-06-01' }))
+            expect(r.rows).toEqual([])
+            expect(r.skipped.duplicate).toBe(2)
+        })
+
         it('asks you about the same amount within 3 days when the names don\'t match', () => {
             const existing = [{ id: 'mine-1', date: '2026-10-01', amount: 84.23, name: 'Groceries', type: 'expense' }]
             const r = convertBankTransactions([tx('t1', '2026-10-02', -84.23, 'WHOLE FOODS #10234')], checking, ctx({ existing }))
@@ -109,17 +122,17 @@ describe('convertBankTransactions', () => {
         })
     })
 
-    it('leaves out payments arriving on a credit card', () => {
+    it('saves payments arriving on a credit card as transfers, which never count toward totals', () => {
         const r = convertBankTransactions([tx('t1', '2026-10-01', 500, 'Payment Thank You-Mobile', { providerAccountId: 'acc_card' })], card, ctx())
-        expect(r.rows).toEqual([])
+        expect(r.rows).toEqual([expect.objectContaining({ external_id: 't1', type: 'transfer', amount: 500, category_label: '' })])
         expect(r.skipped.cardPayment).toBe(1)
     })
 
-    it('leaves out card bill payments from checking when the card is linked too, so purchases are not counted twice', () => {
+    it('keeps card bill payments from checking as spending: the sync only pairs them with a payment on a linked card', () => {
+        // e.g. a Chase card that isn't linked: the payment is the only record of that spending
         const bill = tx('t1', '2026-10-01', -500, 'CHASE CREDIT CRD AUTOPAY')
-        expect(convertBankTransactions([bill], checking, ctx({ hasLinkedCreditCard: true })).rows).toEqual([])
-        // Without the card linked, the payment is the only record of that spending, so keep it
-        expect(convertBankTransactions([bill], checking, ctx({ hasLinkedCreditCard: false })).rows).toHaveLength(1)
+        expect(convertBankTransactions([bill], checking, ctx({ hasLinkedCreditCard: true })).rows)
+            .toEqual([expect.objectContaining({ external_id: 't1', type: 'expense' })])
     })
 
     it('fixes the sign for card providers that show purchases as positive numbers', () => {
@@ -129,7 +142,8 @@ describe('convertBankTransactions', () => {
             tx('pay', '2026-10-03', -500, 'Payment Thank You-Mobile', { providerAccountId: 'acc_card' }),
         ]
         const r = convertBankTransactions(flipped, card, ctx())
-        expect(r.rows.map(x => [x.name, x.type])).toEqual([['Amazon', 'expense'], ['Netflix.com', 'expense']])
+        expect(r.rows.map(x => [x.name, x.type])).toEqual([['Amazon', 'expense'], ['Netflix.com', 'expense'], ['Payment Thank You-Mobile', 'transfer']])
+        expect(r.moneyIn).toEqual(new Set(['pay']))
     })
 
     it('records money coming back on a card as a reimbursement in the purchase\'s category, not income', () => {

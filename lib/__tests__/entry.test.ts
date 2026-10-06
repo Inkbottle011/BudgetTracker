@@ -122,6 +122,8 @@ describe('merchantKey', () => {
         ['TST* JOES PIZZA 00123', 'joes pizza'],
         ['POS DEBIT CARD PURCHASE WHOLE FOODS 10234', 'whole foods'],
         ['NETFLIX.COM', 'netflix com'],
+        ["McDonald's", 'mcdonalds'],
+        ['MCDONALDS', 'mcdonalds'],
         ['', ''],
     ])('%p -> %p', (input, expected) => {
         expect(merchantKey(input)).toBe(expected)
@@ -209,6 +211,7 @@ import { isCardPayment, isCardBillPayment } from '../entry'
 describe('isCardPayment (money arriving on a card statement)', () => {
     it.each([
         'Payment Thank You-Mobile', 'AUTOPAY PAYMENT - THANK YOU', 'CAPITAL ONE AUTOPAY', 'ONLINE PAYMENT', 'Payment Received', 'EPAYMENT',
+        'CAPITAL ONE MOBILE PYMT', 'ONLINE PYMT', 'AUTOPAY PYMT',
     ])('%p is a card payment', d => expect(isCardPayment(d)).toBe(true))
     it.each(['Payroll', 'Refund from Store', 'Venmo cashout'])('%p is not', d => expect(isCardPayment(d)).toBe(false))
 })

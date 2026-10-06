@@ -125,7 +125,7 @@ const NOISE_PREFIXES = [
  *   "SQ *BLUE BOTTLE #1234 OAKLAND CA" and "Blue Bottle" both become "blue bottle".
  */
 export function merchantKey(name: unknown): string {
-    let s = String(name ?? '').toLowerCase().trim()
+    let s = String(name ?? '').toLowerCase().replace(/['\u2019`]/g, '').trim()   // McDonald's = McDonalds
     for (const re of NOISE_PREFIXES) s = s.replace(re, '')
     s = s
         .replace(/\b\d{1,2}\/\d{1,2}(\/\d{2,4})?\b/g, ' ') // dates
@@ -204,7 +204,7 @@ export function duplicateKey(t: { date: string; amount: number; name?: string | 
 
 // Paying off a credit card shows up as money coming in on the card's statement,
 // but it isn't income, just money moving between your own accounts.
-const CARD_PAYMENT = /payment\s*(-\s*)?thank\s*you|thank\s*you.*payment|auto\s*pay|autopay|payment received|online payment|mobile payment|epayment|card payment/i
+const CARD_PAYMENT = /payment\s*(-\s*)?thank\s*you|thank\s*you.*payment|auto\s*pay|autopay|payment received|online payment|mobile payment|epayment|card payment|(mobile|online|autopay|auto pay|e)\s*pymt/i
 
 /** Money arriving on a card statement that is really you paying the card off. */
 export function isCardPayment(description: unknown): boolean {
