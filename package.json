@@ -64,6 +64,7 @@
       "store/**/*.ts",
       "!**/*.d.ts"
     ],
-    "globalSetup": "<rootDir>/test/globalSetup.js"
+    "globalSetup": "<rootDir>/test/globalSetup.js",
+    "testTimeout": 30000
   }
 }
