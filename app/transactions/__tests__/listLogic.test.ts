@@ -91,3 +91,24 @@ describe('toCSV', () => {
         ])
     })
 })
+
+import { listSummary } from '../listLogic'
+
+describe('reimbursements in the list', () => {
+    it('the running balance goes up when money is paid back', () => {
+        const rows = withRunningBalance([
+            tx('a', '2026-10-01', 'expense', 120),
+            tx('b', '2026-10-02', 'reimbursement', 90),
+        ])
+        expect(rows[0].balance).toBe(-30)
+    })
+
+    it('the summary shows income, spending net of paybacks, and the difference', () => {
+        expect(listSummary([
+            tx('1', '2026-10-01', 'income', 1000),
+            tx('2', '2026-10-01', 'expense', 120),
+            tx('3', '2026-10-02', 'reimbursement', 90),
+            tx('4', '2026-10-02', 'savings', 200),
+        ])).toEqual({ income: 1000, spent: 30, net: 970 })
+    })
+})

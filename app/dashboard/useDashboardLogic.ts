@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useTransactionStore } from '../../store/useTransactionStore'
 import { Subscription, fetchSubscriptions, upcomingCharges } from '../../lib/subscriptions'
 import {
-    MONTHS, inPeriod, overview, plannedAmount, actualAmount, spendingByCategory, periodLabel,
+    MONTHS, inPeriod, overview, attributeReimbursements, plannedAmount, actualAmount, spendingByCategory, periodLabel,
 } from './calculations'
 
 export { MONTHS }
@@ -60,10 +60,12 @@ export function useDashboardLogic() {
         }
     
     // Overview: always the current year; balance is all-time
-    const { income: overviewIncome, expenses: overviewExpenses, savings: overviewSavings, balance } = overview(transactions, currentYear)
+    // For totals, paybacks count in the month of the expense they pay back
+    const forTotals = attributeReimbursements(transactions)
+    const { income: overviewIncome, expenses: overviewExpenses, savings: overviewSavings, balance } = overview(forTotals, currentYear)
     
     // Analysis period
-    const periodTransactions = transactions.filter(t => inPeriod(t, view, selectedYear, selectedMonth))
+    const periodTransactions = forTotals.filter(t => inPeriod(t, view, selectedYear, selectedMonth))
     const period = periodLabel(view, selectedYear, selectedMonth)
     
     // Upcoming: subscription charges in the next 30 days
@@ -74,7 +76,7 @@ export function useDashboardLogic() {
     const getSpendingByCategory = () => spendingByCategory(periodTransactions)
     
     return {
-        transactions, budgetItems, budgetAmounts,
+        transactions, forTotals, budgetItems, budgetAmounts,
         currentYear,
         balance, overviewIncome, overviewExpenses, overviewSavings,
         view, setView,

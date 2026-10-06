@@ -1,5 +1,6 @@
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Pressable } from 'react-native'
 import { TYPE_COLORS } from './types'
+import { listSummary } from './listLogic'
 import { ImportModal } from './importModel'
 
 interface Props {
@@ -242,19 +243,19 @@ export function TransactionList({
         <View style={styles.summaryItem}>
         <Text style={styles.summaryLabel}>Income</Text>
         <Text style={[styles.summaryValue, { color: '#27ae60' }]}>
-        +${rows.filter(t => t.type !== 'expense').reduce((s, t) => s + Number(t.amount), 0).toFixed(2)}
+        +${listSummary(rows).income.toFixed(2)}
         </Text>
         </View>
         <View style={styles.summaryItem}>
-        <Text style={styles.summaryLabel}>Expenses</Text>
+        <Text style={styles.summaryLabel}>Spent</Text>
         <Text style={[styles.summaryValue, { color: '#e74c3c' }]}>
-        -${rows.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0).toFixed(2)}
+        -${listSummary(rows).spent.toFixed(2)}
         </Text>
         </View>
         <View style={styles.summaryItem}>
         <Text style={styles.summaryLabel}>Net</Text>
         <Text style={[styles.summaryValue, { color: '#2c3e50', fontWeight: '700' }]}>
-        ${rows.reduce((s, t) => t.type === 'expense' ? s - Number(t.amount) : s + Number(t.amount), 0).toFixed(2)}
+        ${listSummary(rows).net.toFixed(2)}
         </Text>
         </View>
         </View>
@@ -322,7 +323,7 @@ const styles = StyleSheet.create({
     checkmark: { color: '#fff', fontSize: 11, fontWeight: '700' },
     col: { paddingHorizontal: 4 },
     colDate: { width: 90 },
-    colType: { width: 90 },
+    colType: { width: 118 }, // fits the "Reimbursement" badge
     colCat: { width: 100 },
     colName: { width: 120 },
     colAmt: { width: 80 },

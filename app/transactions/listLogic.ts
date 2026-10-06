@@ -12,8 +12,8 @@ interface Tx {
 
 /**
  * Adds a running balance to each transaction and returns them newest first.
- * Matches the dashboard: income adds, expenses subtract, and savings or investments
- * don't change it (they move money rather than earn or spend it).
+ * Matches the dashboard: income and money paid back to you add, expenses subtract, and
+ * savings or investments don't change it (they move money rather than earn or spend it).
  */
 export function withRunningBalance<T extends Tx>(list: T[]): (T & { balance: number })[] {
     const oldestFirst = list
@@ -21,7 +21,7 @@ export function withRunningBalance<T extends Tx>(list: T[]): (T & { balance: num
         .sort((a, b) => a.t.date.localeCompare(b.t.date) || a.i - b.i)
     let balance = 0
     return oldestFirst.map(({ t }) => {
-        if (t.type === 'income') balance += Number(t.amount)
+        if (t.type === 'income' || t.type === 'reimbursement') balance += Number(t.amount)
         else if (t.type === 'expense') balance -= Number(t.amount)
         return { ...t, balance: Math.round(balance * 100) / 100 }
     }).reverse()
@@ -65,4 +65,13 @@ export function toCSV(rows: (Tx & { balance: number })[]): string {
         headers.join(','),
         ...rows.map(t => [t.date, t.type, t.category_label, t.name, t.amount, t.note, t.balance].map(quote).join(',')),
     ].join('\n')
+}
+
+/** Totals for the rows on screen: income, spending net of paybacks, and the difference. */
+export function listSummary(rows: Tx[]): { income: number; spent: number; net: number } {
+    const sum = (type: string) => rows.filter(t => t.type === type).reduce((s, t) => s + Number(t.amount), 0)
+    const round = (n: number) => Math.round(n * 100) / 100
+    const income = sum('income')
+    const spent = sum('expense') - sum('reimbursement')
+    return { income: round(income), spent: round(spent), net: round(income - spent) }
 }

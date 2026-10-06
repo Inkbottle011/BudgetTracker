@@ -5,6 +5,7 @@ import { EditingTransaction } from './types'
 import { useToastContext } from '../../context/ToastContext'
 import { parseAmount, parseDate, todayString } from '../../lib/entry'
 import { withRunningBalance, filterTransactions, sortTransactions, toCSV } from './listLogic'
+import { totalShares } from '../../lib/splits'
 
 export function useTransactionLogic() {
     const { transactions, setTransactions } = useTransactionStore()
@@ -17,7 +18,10 @@ export function useTransactionLogic() {
     const [details, setDetails] = useState('')
     const [date, setDate] = useState(todayString()) // local date, not UTC (UTC is tomorrow after 8pm in New York)
     const [name, setName] = useState('')
-    const [errors, setErrors] = useState<{ amount?: string; date?: string }>({})
+    const [errors, setErrors] = useState<{ amount?: string; date?: string; split?: string }>({})
+    // People who owe you part of this expense (empty rows are ignored)
+    const [splitOpen, setSplitOpen] = useState(false)
+    const [splits, setSplits] = useState<{ person: string; amount: string }[]>([])
     const [saving, setSaving] = useState(false)
     const [success, setSuccess] = useState(false)
     
@@ -62,14 +66,44 @@ export function useTransactionLogic() {
         if (data) setTransactions(data)
     }
     
+    // Split rows that have something typed in them
+    const filledSplits = () => splits.filter(r => r.person.trim() || r.amount.trim())
+
     function validate() {
-        const e: { amount?: string; date?: string } = {}
+        const e: { amount?: string; date?: string; split?: string } = {}
         if (!date) e.date = 'Required'
         else if (!parseDate(date)) e.date = 'Use a date like 2026-10-05 or 10/5/2026'
         const amt = parseAmount(amount)
         if (amt === null || amt === 0) e.amount = 'Enter an amount, like 12.50'
+        if (type === 'Expense' && filledSplits().length) {
+            const rows = filledSplits()
+            if (rows.some(r => !r.person.trim())) e.split = 'Add a name for each person'
+            else if (rows.some(r => !parseAmount(r.amount))) e.split = 'Enter how much each person owes'
+            else if (amt && totalShares(rows) > Math.abs(amt) + 0.005) e.split = "Others can't owe more than the total"
+        }
         setErrors(e)
-        return !e.date && !e.amount
+        return !e.date && !e.amount && !e.split
+    }
+
+    /** Share the amount equally between you and everyone listed; you keep any leftover cent. */
+    function splitEvenly() {
+        const total = Math.abs(parseAmount(amount) ?? 0)
+        const people = splits.length
+        if (!total || !people) return
+        const each = Math.floor((total / (people + 1)) * 100) / 100
+        setSplits(rows => rows.map(r => ({ ...r, amount: each.toFixed(2) })))
+        setErrors(e => ({ ...e, split: undefined }))
+    }
+
+    function openSplit() {
+        setSplitOpen(true)
+        if (splits.length === 0) setSplits([{ person: '', amount: '' }])
+    }
+
+    function closeSplit() {
+        setSplitOpen(false)
+        setSplits([])
+        setErrors(e => ({ ...e, split: undefined }))
     }
     
     // Pick a past transaction from the name suggestions: fill in its details
@@ -87,7 +121,8 @@ export function useTransactionLogic() {
         if (!validate()) return
         setSaving(true)
         setErrors({})
-        const { error } = await supabase.from('transactions').insert({
+        const shares = type === 'Expense' ? filledSplits() : []
+        const { data: created, error } = await supabase.from('transactions').insert({
             user_id: session.user.id,
             type: type.toLowerCase(),
             category_id: null,
@@ -96,14 +131,25 @@ export function useTransactionLogic() {
             note: details.trim(),
             category_label: category,
             date: parseDate(date)!,
-        })
+        }).select('id').single()
         if (!error) {
+            let message = 'Transaction added!'
+            if (shares.length && created?.id) {
+                const { error: shareError } = await supabase.from('split_shares').insert(
+                    shares.map(r => ({ expense_id: created.id, person: r.person.trim(), amount: Math.abs(parseAmount(r.amount)!) })),
+                )
+                message = shareError
+                    ? "Transaction added, but who owes you couldn't be saved"
+                    : `Transaction added! $${totalShares(shares).toFixed(2)} is owed to you.`
+            }
             // Keep the type and date for the next entry; clear the rest
             setAmount(''); setDetails(''); setCategory(''); setName(''); setDate(parseDate(date)!)
+            setSplits([]); setSplitOpen(false)
             setSuccess(true)
             setTimeout(() => setSuccess(false), 2000)
             fetchTransactions()
-            showToast('Transaction added!')
+            if (message.includes("couldn't")) showToast(message, 'error')
+            else showToast(message)
         } else {
             showToast('Failed to add transaction', 'error')
         }
@@ -225,6 +271,7 @@ export function useTransactionLogic() {
                 const key = item.type.charAt(0).toUpperCase() + item.type.slice(1)
                 if (grouped[key]) grouped[key].push(item.name)
             })
+            grouped.Reimbursement = grouped.Expense // paybacks go against spending categories
             setBudgetCategories(grouped)
         }
     }
@@ -263,6 +310,7 @@ export function useTransactionLogic() {
         details, setDetails, date, setDate, name, setName,
         errors, setErrors, saving, success,
         handleAdd, applySuggestion, transactions,
+        splitOpen, openSplit, closeSplit, splits, setSplits, splitEvenly,
         editingTransaction, setEditingTransaction,
         handleSaveEdit, handleEditSelect,
         editMode, setEditMode,
