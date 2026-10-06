@@ -19,6 +19,12 @@ A cross-platform personal finance app for planning a yearly budget, tracking tra
 - **CSV export** and a **CSV bank-import wizard**: pick a file, match columns (auto-guessed, including separate money-in / money-out columns), then review before importing. It reads common bank date and amount formats, skips transactions you already have, leaves out credit card payments, suggests categories from how you categorized the same merchant before, and reports any rows it couldn't save
 - Fast entry: name suggestions from past transactions fill in amount, type and category; date picker with Today / Yesterday; amounts like "$1,234.50" accepted; Enter to save
 
+**Linked banks and security**
+- Link bank accounts through Teller; new transactions are added every morning through the same rules as the CSV import (no duplicates, card payments left out, categories from your history)
+- Read-only access; bank tokens are encrypted and never readable by the app; provider-neutral design so Teller can be swapped later
+- Two-factor sign-in with an authenticator app, required for bank linking
+- Setup: [docs/linking-banks.md](docs/linking-banks.md)
+
 **Split expenses and paybacks**
 - Split an expense with others when adding it (per person, or split evenly); the full amount stays the expense so it matches your bank
 - "Owed to you" lists who still has to pay you back, per expense and per person
@@ -108,6 +114,8 @@ For subscriptions, run the files in `supabase/sql/subscriptions/` in order in th
 3. `04_convert_old_recurring.sql` converts transactions from the old recurring system (only needed if you used it)
 
 For split expenses and reimbursements, run `supabase/sql/reimbursements/01_setup.sql`.
+
+For linked banks, follow [docs/linking-banks.md](docs/linking-banks.md).
 
 Then deploy the edge function and schedule it, for example daily with Supabase cron:
 

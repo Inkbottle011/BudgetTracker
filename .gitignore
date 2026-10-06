@@ -39,3 +39,12 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Supabase CLI working files (project details, not needed in the repo)
+supabase/.temp/
+supabase/.branches/
+
+# Never commit secrets: Teller certificates and keys
+*.pem
+.env.*
+!.env.example

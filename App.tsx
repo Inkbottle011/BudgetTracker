@@ -7,6 +7,8 @@ import { supabase } from './lib/supabase'
 import Dashboard from './app/dashboard/index'
 import AuthScreen from './app/auth'
 import ResetPasswordScreen from './app/reset-password'
+import TwoFactorPrompt from './app/two-factor-prompt'
+import { needsTwoFactorCode } from './lib/twoFactor'
 import TransactionsScreen from './app/transactions/index'
 import BudgetScreen from './app/budget/index'
 import SettingsScreen from './app/settings'
@@ -99,6 +101,7 @@ export default function App() {
   const [isRecovering, setIsRecovering] = useState(false)
   const [linkError, setLinkError] = useState<string | null>(null)
   const [chargesSynced, setChargesSynced] = useState(false)
+  const [needsCode, setNeedsCode] = useState<boolean | null>(null)
   const { toast, showToast, hideToast } = useToast()
   
   useEffect(() => {
@@ -144,6 +147,13 @@ export default function App() {
     }
   }, [])
   
+  // With two-factor sign-in on, ask for the code before showing anything
+  const accessToken = session?.access_token
+  useEffect(() => {
+    if (!session) { setNeedsCode(null); return }
+    needsTwoFactorCode().then(setNeedsCode).catch(() => setNeedsCode(false))
+  }, [accessToken, !!session])
+  
   // Once signed in, add any subscription charges that came due while the app was closed
   // (or while Supabase was paused) before the tabs load their data
   const userId = session?.user?.id
@@ -160,6 +170,8 @@ export default function App() {
   if (loading) return null
   if (session && isRecovering) return <ResetPasswordScreen onDone={() => setIsRecovering(false)} />
   if (!session) return <AuthScreen key={linkError ?? "auth"} initialError={linkError} />
+  if (needsCode === null) return null
+  if (needsCode) return <TwoFactorPrompt onDone={() => setNeedsCode(false)} />
   if (!chargesSynced) return null
   
   return (
