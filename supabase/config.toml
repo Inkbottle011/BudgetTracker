@@ -9,3 +9,9 @@ entrypoint = "./functions/generate-recurring/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/generate-recurring/*.html" ]
+
+[functions.bank]
+enabled = true
+# The function checks sign-in itself (and the daily schedule uses its own secret instead of a user token)
+verify_jwt = false
+entrypoint = "./functions/bank/index.ts"

@@ -1,16 +1,21 @@
-import { View, Text, StyleSheet } from 'react-native'
+import { useState } from 'react'
+import { ScrollView, Text, StyleSheet } from 'react-native'
+import { TwoFactorSection } from '../components/TwoFactorSection'
+import { LinkedBanksSection } from '../components/LinkedBanksSection'
 
 export default function SettingsScreen() {
+    const [twoFactorOn, setTwoFactorOn] = useState(false)
     return (
-        <View style={styles.container}>
-        <Text style={styles.heading}>Settings</Text>
-        <Text style={styles.sub}>App preferences coming soon.</Text>
-        </View>
+        <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+            <Text style={styles.heading}>Settings</Text>
+            <TwoFactorSection onChange={setTwoFactorOn} />
+            <LinkedBanksSection twoFactorOn={twoFactorOn} />
+        </ScrollView>
     )
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#f5f6fa', padding: 20 },
-    heading: { fontSize: 24, fontWeight: '700', color: '#1a1a1a', marginBottom: 8 },
-    sub: { fontSize: 14, color: '#888' },
+    container: { flex: 1, backgroundColor: '#f5f6fa' },
+    content: { padding: 20, maxWidth: 720, width: '100%', alignSelf: 'center' },
+    heading: { fontSize: 24, fontWeight: '700', color: '#1a1a1a', marginBottom: 16 },
 })

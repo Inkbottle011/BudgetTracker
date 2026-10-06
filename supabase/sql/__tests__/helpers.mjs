@@ -19,7 +19,7 @@ export const sql = (file) => fs.readFileSync(path.join(SQL_ROOT, file), 'utf8')
 export async function freshDb({ typeCheck = false } = {}) {
     const db = await PGlite.create()
     await db.exec(`
-        create role anon; create role authenticated; create role service_role;
+        create role anon; create role authenticated; create role service_role bypassrls;
         create schema auth;
         create table auth.users (id uuid primary key);
         create function auth.uid() returns uuid language sql stable
@@ -38,7 +38,9 @@ export async function freshDb({ typeCheck = false } = {}) {
         create policy own on public.transactions for all to authenticated
           using (user_id = auth.uid()) with check (user_id = auth.uid());
 
-        grant usage on schema public to anon, authenticated;
+        grant usage on schema public to anon, authenticated, service_role;
+        grant usage on schema auth to service_role;
+        grant all on all tables in schema public to service_role;
         -- Like newer Supabase projects: existing tables are granted, but NEW tables are not
         -- reachable by signed-in users until the setup SQL grants access explicitly
         grant all on all tables in schema public to authenticated;

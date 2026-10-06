@@ -41,7 +41,8 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:app": "jest",
-    "test:db": "node --test \"supabase/sql/__tests__/*.test.mjs\""
+    "test:db": "node --test \"supabase/sql/__tests__/*.test.mjs\"",
+    "sync:shared": "node -e \"require('fs').copyFileSync('lib/entry.ts','supabase/functions/_shared/entry.ts')\""
   },
   "private": true,
   "jest": {
@@ -51,7 +52,7 @@
     ],
     "testPathIgnorePatterns": [
       "/node_modules/",
-      "/supabase/"
+      "/supabase/sql/"
     ],
     "transformIgnorePatterns": [
       "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|victory-native)"
@@ -62,7 +63,8 @@
       "components/**/*.tsx",
       "hooks/**/*.ts",
       "store/**/*.ts",
-      "!**/*.d.ts"
+      "!**/*.d.ts",
+      "supabase/functions/_shared/**/*.ts"
     ],
     "globalSetup": "<rootDir>/test/globalSetup.js",
     "testTimeout": 30000

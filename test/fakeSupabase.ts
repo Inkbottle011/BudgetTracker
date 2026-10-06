@@ -42,12 +42,27 @@ export const auth = {
     updateUser: jest.fn(async () => ({ data: {}, error: null })),
     exchangeCodeForSession: jest.fn(async () => ({ data: {}, error: null })),
     onAuthStateChange: jest.fn(() => ({ data: { subscription: { unsubscribe: jest.fn() } } })),
+    mfa: {
+        listFactors: jest.fn(async () => ({ data: { all: [], totp: [] }, error: null })),
+        enroll: jest.fn(async () => ({
+            data: { id: 'factor-1', type: 'totp', totp: { qr_code: 'data:image/svg+xml;utf-8,<svg/>', secret: 'JBSWY3DPEHPK3PXP', uri: 'otpauth://totp/x' } },
+            error: null,
+        })),
+        challengeAndVerify: jest.fn(async () => ({ data: {}, error: null })),
+        unenroll: jest.fn(async () => ({ data: {}, error: null })),
+        getAuthenticatorAssuranceLevel: jest.fn(async () => ({ data: { currentLevel: 'aal1', nextLevel: 'aal1' }, error: null })),
+    },
+}
+
+export const functions = {
+    invoke: jest.fn(async () => ({ data: {}, error: null })),
 }
 
 export const supabase = {
     from: jest.fn((table: string) => builder(table)),
     rpc: jest.fn(async () => ({ data: 0, error: null })),
     auth,
+    functions,
 }
 
 export const fake = {

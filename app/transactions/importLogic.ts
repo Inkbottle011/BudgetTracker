@@ -1,6 +1,6 @@
 import { supabase } from '../../lib/supabase'
 import {
-    parseAmount, parseDate, detectDateOrder, DateOrder, buildCategoryGuesser, duplicateKey, PastTransaction,
+    parseAmount, parseDate, detectDateOrder, DateOrder, buildCategoryGuesser, duplicateKey, PastTransaction, isCardPayment, isRefund,
 } from '../../lib/entry'
 
 export type ImportField = 'date' | 'amount' | 'debit' | 'credit' | 'description' | 'type' | 'category' | 'skip'
@@ -8,9 +8,6 @@ export type SpendingSign = 'negative' | 'positive'
 
 const VALID_TYPES = ['income', 'expense', 'savings', 'investment', 'reimbursement']
 
-// Paying off a credit card shows up as money coming in on the card's statement,
-// but it isn't income, just money moving between your own accounts.
-const CARD_PAYMENT = /payment\s*(-\s*)?thank\s*you|thank\s*you.*payment|auto\s*pay|autopay|payment received|online payment|mobile payment|epayment|card payment/i
 
 /** Best guess at what a single column header means. */
 export function guessField(header: string): ImportField {
@@ -138,7 +135,7 @@ export function convertRows(
         if (!amount) { problems.push({ row: rowNumber, reason: 'no amount' }); return }
 
         const description = descCols.map(c => String(r[c] ?? '').trim()).filter(Boolean).join(' · ')
-        if (!moneyOut && CARD_PAYMENT.test(description)) {
+        if (!moneyOut && isCardPayment(description)) {
             problems.push({ row: rowNumber, reason: `"${description}" looks like a credit card payment, not income` })
             return
         }
@@ -151,7 +148,11 @@ export function convertRows(
         let category = ''
         let usedHistory = false
         const g = guess(description)
-        if (g && (g.type === type || (type === 'expense' && (g.type === 'savings' || g.type === 'investment')))) {
+        if (!moneyOut && isRefund(description)) {
+            // A refund reduces spending in the purchase's category instead of counting as income
+            type = 'reimbursement'
+            if (g?.type === 'expense') { category = g.category; usedHistory = true }
+        } else if (g && (g.type === type || (type === 'expense' && (g.type === 'savings' || g.type === 'investment')))) {
             type = g.type
             category = g.category
             usedHistory = true

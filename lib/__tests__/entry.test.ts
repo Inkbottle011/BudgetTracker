@@ -203,3 +203,37 @@ describe('duplicateKey', () => {
         expect(duplicateKey(base)).not.toBe(duplicateKey({ ...base, name: 'Other' }))
     })
 })
+
+import { isCardPayment, isCardBillPayment } from '../entry'
+
+describe('isCardPayment (money arriving on a card statement)', () => {
+    it.each([
+        'Payment Thank You-Mobile', 'AUTOPAY PAYMENT - THANK YOU', 'CAPITAL ONE AUTOPAY', 'ONLINE PAYMENT', 'Payment Received', 'EPAYMENT',
+    ])('%p is a card payment', d => expect(isCardPayment(d)).toBe(true))
+    it.each(['Payroll', 'Refund from Store', 'Venmo cashout'])('%p is not', d => expect(isCardPayment(d)).toBe(false))
+})
+
+describe('isCardBillPayment (money leaving checking to pay a card)', () => {
+    it.each([
+        'CHASE CREDIT CRD AUTOPAY PPD ID: 4760039224',
+        'Payment to Chase card ending in 1234',
+        'CAPITAL ONE MOBILE PMT',
+        'AMEX EPAYMENT ACH PMT',
+        'AMERICAN EXPRESS ACH PMT',
+        'DISCOVER E-PAYMENT',
+        'CITI CARD ONLINE PAYMENT',
+        'Credit Card Payment',
+    ])('%p is a card bill payment', d => expect(isCardBillPayment(d)).toBe(true))
+    it.each([
+        'Chase Coffee Shop', 'AUTOPAY INSURANCE CO', 'Netflix.com', 'Citgo gas', 'Discovery Museum', 'Rent payment',
+    ])('%p is not', d => expect(isCardBillPayment(d)).toBe(false))
+})
+
+import { isRefund } from '../entry'
+
+describe('isRefund', () => {
+    it.each(['AMAZON.COM REFUND', 'Return - Target', 'PURCHASE RETURN WALMART', 'Merchant credit adjustment', 'REVERSAL OF FEE', 'Refund: order 123'])(
+        '%p is a refund', d => expect(isRefund(d)).toBe(true))
+    it.each(['ACME PAYROLL', 'Venmo cashout', 'Interest paid', 'Tax return deposit IRS TREAS 310'])(
+        '%p is not', d => expect(isRefund(d)).toBe(false))
+})

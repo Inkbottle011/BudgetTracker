@@ -83,3 +83,22 @@ it('returns to sign-in after signing out', async () => {
     await fire('SIGNED_OUT', null)
     expect(await screen.findByText('Sign in to continue')).toBeTruthy()
 })
+
+describe('two-factor sign-in', () => {
+    const mfa = auth.mfa as unknown as Record<string, jest.Mock>
+
+    it('asks for the code before showing the app when two-factor is on', async () => {
+        auth.getSession.mockResolvedValue({ data: { session } } as any)
+        mfa.getAuthenticatorAssuranceLevel.mockResolvedValue({ data: { currentLevel: 'aal1', nextLevel: 'aal2' }, error: null })
+        await render(<App />)
+        expect(await screen.findByText('Enter the 6-digit code from your authenticator app')).toBeTruthy()
+        expect(screen.queryByText('💰 Budget Tracker')).toBeNull()
+    })
+
+    it('goes straight in when two-factor is off or the code was already entered', async () => {
+        auth.getSession.mockResolvedValue({ data: { session } } as any)
+        mfa.getAuthenticatorAssuranceLevel.mockResolvedValue({ data: { currentLevel: 'aal2', nextLevel: 'aal2' }, error: null })
+        await render(<App />)
+        expect(await screen.findByText('💰 Budget Tracker')).toBeTruthy()
+    })
+})
