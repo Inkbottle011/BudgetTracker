@@ -11,8 +11,9 @@ export const FAKE_BANK = {
     goodToken: 'token_good',
     revokedToken: 'token_revoked',
     accounts: [
-        { id: 'acc_checking', name: 'Everyday Checking', type: 'depository', subtype: 'checking', lastFour: '1234', institution: 'Chase' },
-        { id: 'acc_card', name: 'Sapphire', type: 'credit', subtype: 'credit_card', lastFour: '9876', institution: 'Chase' },
+        // balance: money in the account (checking) or owed on it (card); available: spendable / credit left
+        { id: 'acc_checking', name: 'Everyday Checking', type: 'depository', subtype: 'checking', lastFour: '1234', institution: 'Chase', balance: 1500.25, available: 1400 },
+        { id: 'acc_card', name: 'Sapphire', type: 'credit', subtype: 'credit_card', lastFour: '9876', institution: 'Chase', balance: 812.4, available: 4187.6 },
     ],
     // amount: positive = money in, negative = money out (from the account holder's point of view)
     transactions: [
@@ -56,6 +57,12 @@ export function providerContract(name: string, make: () => BankProvider) {
             const err = await make().listAccounts(FAKE_BANK.revokedToken).catch(e => e)
             expect(err).toBeInstanceOf(ProviderError)
             expect(err.kind).toBe('needs_relink')
+        })
+
+        it('reports balances: what\'s in checking, and what\'s owed on a card as a positive number', async () => {
+            const p = make()
+            expect(await p.getBalance!(FAKE_BANK.goodToken, 'acc_checking', 'depository')).toEqual({ current: 1500.25, available: 1400 })
+            expect(await p.getBalance!(FAKE_BANK.goodToken, 'acc_card', 'credit')).toEqual({ current: 812.4, available: 4187.6 })
         })
 
         it('disconnects, and treats an already-removed connection as done', async () => {

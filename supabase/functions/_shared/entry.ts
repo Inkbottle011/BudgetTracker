@@ -224,3 +224,12 @@ export function isCardBillPayment(description: unknown): boolean {
     if (!PAYMENT_WORD.test(d)) return false
     return CARD_WORD.test(d) || CARD_ISSUER.test(d)
 }
+
+// ---------------------------------------------------------------- refunds
+
+const REFUND = /\brefund|\breversal|credit\s*adj|merchant\s+credit|(?<!tax\s)\breturn\b/i
+
+/** Money coming back from a purchase ("AMAZON.COM REFUND", "PURCHASE RETURN"); not a tax return. */
+export function isRefund(description: unknown): boolean {
+    return REFUND.test(String(description ?? ''))
+}

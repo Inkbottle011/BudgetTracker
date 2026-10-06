@@ -1,6 +1,6 @@
 import { supabase } from '../../lib/supabase'
 import {
-    parseAmount, parseDate, detectDateOrder, DateOrder, buildCategoryGuesser, duplicateKey, PastTransaction, isCardPayment,
+    parseAmount, parseDate, detectDateOrder, DateOrder, buildCategoryGuesser, duplicateKey, PastTransaction, isCardPayment, isRefund,
 } from '../../lib/entry'
 
 export type ImportField = 'date' | 'amount' | 'debit' | 'credit' | 'description' | 'type' | 'category' | 'skip'
@@ -148,7 +148,11 @@ export function convertRows(
         let category = ''
         let usedHistory = false
         const g = guess(description)
-        if (g && (g.type === type || (type === 'expense' && (g.type === 'savings' || g.type === 'investment')))) {
+        if (!moneyOut && isRefund(description)) {
+            // A refund reduces spending in the purchase's category instead of counting as income
+            type = 'reimbursement'
+            if (g?.type === 'expense') { category = g.category; usedHistory = true }
+        } else if (g && (g.type === type || (type === 'expense' && (g.type === 'savings' || g.type === 'investment')))) {
             type = g.type
             category = g.category
             usedHistory = true

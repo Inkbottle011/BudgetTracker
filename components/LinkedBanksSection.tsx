@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { supabase } from '../lib/supabase'
-import { fetchLinkedBanks, callBank, describeStatus, suggestedStartDate, LinkedBank } from '../lib/bank'
+import { fetchLinkedBanks, callBank, describeStatus, suggestedStartDate, accountLabel, LinkedBank } from '../lib/bank'
 import { bankLinkingAvailable, openTellerConnect } from '../lib/tellerConnect'
 import { parseDate, todayString } from '../lib/entry'
 import { useToastContext } from '../context/ToastContext'
@@ -112,7 +112,7 @@ export function LinkedBanksSection({ twoFactorOn }: { twoFactorOn: boolean }) {
                                 )}
                             </View>
                             {bank.accounts.map(a => (
-                                <Text key={a.id} style={styles.account}>{a.name ?? 'Account'}{a.last_four ? ` ••${a.last_four}` : ''}</Text>
+                                <Text key={a.id} style={styles.account}>{accountLabel(a)}</Text>
                             ))}
                             <Text style={[styles.status, bank.status !== 'active' && styles.statusBad]}>{describeStatus(bank)}</Text>
                             {confirmUnlink === bank.id && (

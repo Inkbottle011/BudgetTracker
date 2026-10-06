@@ -46,6 +46,12 @@ create table if not exists public.bank_accounts (
 
 create index if not exists bank_accounts_user_id_idx on public.bank_accounts (user_id);
 
+-- Latest balances, refreshed on every sync. For cards, balance_current is what's owed and
+-- balance_available is the credit left.
+alter table public.bank_accounts add column if not exists balance_current numeric(14, 2);
+alter table public.bank_accounts add column if not exists balance_available numeric(14, 2);
+alter table public.bank_accounts add column if not exists balance_updated_at timestamptz;
+
 -- 3. Where each transaction came from -------------------------------------------
 alter table public.transactions add column if not exists provider text;
 alter table public.transactions add column if not exists external_id text;

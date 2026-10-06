@@ -89,6 +89,13 @@ describe('bank connections', () => {
         assert.deepEqual(await h.rows(`select name, type, last_four from bank_accounts`), [{ name: 'Checking', type: 'depository', last_four: '1234' }])
     })
 
+    it('users can read their account balances', async () => {
+        const { account } = await serverLinks(ALICE)
+        await h.db.query(`update bank_accounts set balance_current = 812.40, balance_available = 4187.60, balance_updated_at = now() where id = $1`, [account])
+        await asUser(ALICE)
+        assert.deepEqual(await h.rows(`select balance_current::float as owed, balance_available::float as available from bank_accounts`), [{ owed: 812.4, available: 4187.6 }])
+    })
+
     it('removing a connection removes its accounts but keeps the transactions', async () => {
         const { connection, account } = await serverLinks(ALICE)
         await h.insert('transactions', { user_id: ALICE, type: 'expense', amount: 5, date: '2026-10-01', provider: 'teller', external_id: 'txn_1', bank_account_id: account })

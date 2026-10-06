@@ -119,7 +119,7 @@ it('reads cards that show spending as positive numbers', async () => {
     await fireEvent.press(screen.getByText('Preview →'))
     await fireEvent.press(await screen.findByText('Import 2 Transactions'))
     await screen.findByText('Imported 2 transactions')
-    expect(inserted().map(t => t.type)).toEqual(['expense', 'income'])
+    expect(inserted().map(t => t.type)).toEqual(['expense', 'reimbursement']) // the refund reduces spending
 })
 
 it('explains when the file has no rows', async () => {

@@ -58,3 +58,39 @@ describe('callBank', () => {
         await expect(callBank('sync')).rejects.toThrow("Couldn't reach the bank service. Check your connection and try again.")
     })
 })
+
+import { cardSummary, formatBalance } from '../bank'
+
+describe('cardSummary', () => {
+    const cards = [
+        { id: 'a', name: 'Sapphire', last_four: '9876', type: 'credit', balance_current: '812.40', balance_available: '4187.60', balance_updated_at: '2026-10-06T09:00:00Z' },
+        { id: 'b', name: 'Quicksilver', last_four: '4455', type: 'credit', balance_current: 0, balance_available: 3000, balance_updated_at: '2026-10-06T09:00:00Z' },
+        { id: 'c', name: 'Checking', last_four: '1234', type: 'depository', balance_current: 1500.25, balance_available: 1400, balance_updated_at: null },
+        { id: 'd', name: 'New card', last_four: '1111', type: 'credit', balance_current: null, balance_available: null, balance_updated_at: null },
+    ] as any[]
+
+    it('lists credit cards only, with what is owed, credit left and how much of the limit is used', () => {
+        const s = cardSummary(cards)
+        expect(s.cards.map(c => [c.name, c.owed, c.available, c.usedPercent])).toEqual([
+            ['Sapphire', 812.4, 4187.6, 16],
+            ['Quicksilver', 0, 3000, 0],
+            ['New card', null, null, null],
+        ])
+    })
+
+    it('totals what is owed across cards with a known balance', () => {
+        expect(cardSummary(cards)).toMatchObject({ totalOwed: 812.4, totalAvailable: 7187.6, usedPercent: 10 })
+    })
+
+    it('is empty without linked cards', () => {
+        expect(cardSummary([cards[2]])).toEqual({ cards: [], totalOwed: 0, totalAvailable: 0, usedPercent: null })
+    })
+})
+
+describe('formatBalance', () => {
+    it('formats money with thousands separators', () => {
+        expect(formatBalance(4187.6)).toBe('$4,187.60')
+        expect(formatBalance(-12)).toBe('-$12.00')
+        expect(formatBalance(null)).toBe('—')
+    })
+})

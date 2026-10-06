@@ -114,10 +114,14 @@ describe('linked banks', () => {
     it('lists linked banks with their accounts and status', async () => {
         twoFactor(true)
         fake.table('bank_connections', { data: [connection] })
-        fake.table('bank_accounts', { data: [{ id: 'a1', connection_id: 'conn-1', name: 'Total Checking', last_four: '1234', type: 'depository' }] })
+        fake.table('bank_accounts', { data: [
+            { id: 'a1', connection_id: 'conn-1', name: 'Total Checking', last_four: '1234', type: 'depository', balance_current: 1500.25 },
+            { id: 'a2', connection_id: 'conn-1', name: 'Sapphire', last_four: '9876', type: 'credit', balance_current: 812.4 },
+        ] })
         await renderSettings()
         expect(await screen.findByText('Chase')).toBeTruthy()
-        expect(screen.getByText('Total Checking ••1234')).toBeTruthy()
+        expect(screen.getByText('Total Checking ••1234 · $1,500.25')).toBeTruthy()
+        expect(screen.getByText('Sapphire ••9876 · $812.40 owed')).toBeTruthy()
         expect(screen.getByText('Synced 3 hours ago')).toBeTruthy()
     })
 

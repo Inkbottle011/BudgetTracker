@@ -69,6 +69,28 @@ describe('convertBankTransactions', () => {
         expect(r.rows.map(x => [x.name, x.type])).toEqual([['Amazon', 'expense'], ['Netflix.com', 'expense']])
     })
 
+    it('records money coming back on a card as a reimbursement in the purchase\'s category, not income', () => {
+        const history = [{ name: 'Amazon', category_label: 'Shopping', type: 'expense' }]
+        const r = convertBankTransactions([tx('r1', '2026-10-04', 25, 'AMAZON MKTPL*AB12', { providerAccountId: 'acc_card' })], card, ctx({ history }))
+        expect(r.rows[0]).toMatchObject({ type: 'reimbursement', category_label: 'Shopping', amount: 25 })
+    })
+
+    it('records a card refund as a reimbursement even without history', () => {
+        const r = convertBankTransactions([tx('r1', '2026-10-04', 25, 'Some Store')], card, ctx())
+        expect(r.rows[0]).toMatchObject({ type: 'reimbursement', category_label: '' })
+    })
+
+    it('records a refund into checking as a reimbursement', () => {
+        const history = [{ name: 'Target', category_label: 'Shopping', type: 'expense' }]
+        const r = convertBankTransactions([tx('r2', '2026-10-04', 30, 'TARGET REFUND')], checking, ctx({ history }))
+        expect(r.rows[0]).toMatchObject({ type: 'reimbursement', category_label: 'Shopping' })
+    })
+
+    it('still treats normal money into checking as income', () => {
+        const r = convertBankTransactions([tx('p', '2026-10-04', 2000, 'ACME PAYROLL')], checking, ctx())
+        expect(r.rows[0].type).toBe('income')
+    })
+
     it('rounds amounts to cents', () => {
         expect(convertBankTransactions([tx('t', '2026-10-01', -1.005, 'x')], checking, ctx()).rows[0].amount).toBe(1.01)
     })

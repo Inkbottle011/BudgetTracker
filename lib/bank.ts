@@ -10,7 +10,56 @@ export interface LinkedBank {
     last_error: string | null
     last_synced_at: string | null
     sync_from: string
-    accounts: { id: string; name: string | null; last_four: string | null; type: string | null }[]
+    accounts: BankAccountRow[]
+}
+
+export interface BankAccountRow {
+    id: string
+    name: string | null
+    last_four: string | null
+    type: string | null
+    balance_current?: number | string | null
+    balance_available?: number | string | null
+    balance_updated_at?: string | null
+}
+
+const toNumber = (v: unknown) => (v === null || v === undefined || v === '' ? null : Number(v))
+
+export function formatBalance(n: number | null | undefined): string {
+    if (n === null || n === undefined || Number.isNaN(n)) return '—'
+    const s = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    return `${n < 0 ? '-' : ''}$${s}`
+}
+
+/** Usage at or above this share of the limit is flagged (it starts to affect credit scores). */
+export const HIGH_CARD_USAGE = 30
+
+/** Linked credit cards: what's owed, credit left, and share of the limit used, plus totals. */
+export function cardSummary(accounts: BankAccountRow[]) {
+    const usedPercent = (owed: number | null, available: number | null) =>
+        owed === null || available === null || owed + available <= 0 ? null : Math.round((owed / (owed + available)) * 100)
+    const cards = accounts.filter(a => a.type === 'credit').map(a => {
+        const owed = toNumber(a.balance_current), available = toNumber(a.balance_available)
+        return { ...a, owed, available, usedPercent: usedPercent(owed, available) }
+    })
+    const known = cards.filter(c => c.owed !== null)
+    const round = (n: number) => Math.round(n * 100) / 100
+    const totalOwed = round(known.reduce((s, c) => s + (c.owed ?? 0), 0))
+    const totalAvailable = round(known.reduce((s, c) => s + (c.available ?? 0), 0))
+    return { cards, totalOwed, totalAvailable, usedPercent: known.length ? usedPercent(totalOwed, totalAvailable) : null }
+}
+
+/** One line for an account in Settings, e.g. "Sapphire ••9876 · $812.40 owed". */
+export function accountLabel(a: BankAccountRow): string {
+    const base = `${a.name ?? 'Account'}${a.last_four ? ` ••${a.last_four}` : ''}`
+    const bal = toNumber(a.balance_current)
+    if (bal === null) return base
+    return `${base} · ${formatBalance(bal)}${a.type === 'credit' ? ' owed' : ''}`
+}
+
+/** "Updated 3 hours ago" for a balance timestamp. */
+export function updatedAgo(iso: string, now = new Date()): string {
+    return describeStatus({ status: 'active', last_error: null, last_synced_at: iso }, now).replace('Synced', 'Updated')
 }
 
 /**
@@ -54,7 +103,8 @@ export async function fetchLinkedBanks(): Promise<LinkedBank[]> {
         .select('id, institution_name, status, last_error, last_synced_at, sync_from')
         .order('created_at')
     if (error) throw new Error(error.message)
-    const { data: accounts } = await supabase.from('bank_accounts').select('id, connection_id, name, last_four, type')
+    const { data: accounts } = await supabase.from('bank_accounts')
+        .select('id, connection_id, name, last_four, type, balance_current, balance_available, balance_updated_at')
     return (banks ?? []).map((b: any) => ({
         ...b,
         accounts: (accounts ?? []).filter((a: any) => a.connection_id === b.id),

@@ -1,6 +1,6 @@
 // Turns a provider's transactions into rows for the transactions table, applying the same rules
 // as the CSV import: skip what you already have, leave out card payments, guess categories.
-import { buildCategoryGuesser, duplicateKey, isCardPayment, isCardBillPayment, PastTransaction } from '../entry.ts'
+import { buildCategoryGuesser, duplicateKey, isCardPayment, isCardBillPayment, isRefund, PastTransaction } from '../entry.ts'
 import type { BankTransaction } from './types.ts'
 
 export interface ConvertContext {
@@ -70,7 +70,12 @@ export function convertBankTransactions(
         let type = moneyOut ? 'expense' : 'income'
         let category = ''
         const g = guess(t.description)
-        if (g && (g.type === type || (type === 'expense' && (g.type === 'savings' || g.type === 'investment')))) {
+        // Money coming back on a card (that isn't paying it off), or a refund into checking,
+        // reduces spending in the purchase's category instead of counting as income
+        if (!moneyOut && (account.type === 'credit' || isRefund(t.description))) {
+            type = 'reimbursement'
+            if (g?.type === 'expense') category = g.category
+        } else if (g && (g.type === type || (type === 'expense' && (g.type === 'savings' || g.type === 'investment')))) {
             type = g.type
             category = g.category
         }

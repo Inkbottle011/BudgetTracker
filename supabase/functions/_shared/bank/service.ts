@@ -93,6 +93,7 @@ export async function syncConnection(deps: BankDeps, connectionId: string) {
         const skipped = { pending: 0, beforeStart: 0, duplicate: 0, cardPayment: 0 }
         for (const acc of (accounts ?? []).filter((a: any) => a.connection_id === conn.id)) {
             const txs = await deps.provider.listTransactions(token, acc.provider_account_id, since)
+            await saveBalance(deps, token, acc)
             const r = convertBankTransactions(txs, { id: acc.id, type: acc.type, providerAccountId: acc.provider_account_id }, {
                 userId: conn.user_id, provider: conn.provider, syncFrom: conn.sync_from,
                 history: history ?? [], existing: existing ?? [], hasLinkedCreditCard,
@@ -116,6 +117,19 @@ export async function syncConnection(deps: BankDeps, connectionId: string) {
         const status = e instanceof ProviderError && e.kind === 'needs_relink' ? 'needs_relink' : 'error'
         await deps.db.from('bank_connections').update({ status, last_error: safeMessage(e, token) }).eq('id', conn.id)
         return { added: 0, skipped: null, status }
+    }
+}
+
+/** Saves an account's current balance. A balance problem never stops transactions from syncing. */
+async function saveBalance(deps: BankDeps, token: string, acc: any) {
+    if (!deps.provider.getBalance) return
+    try {
+        const b = await deps.provider.getBalance(token, acc.provider_account_id, acc.type)
+        await deps.db.from('bank_accounts').update({
+            balance_current: b.current, balance_available: b.available, balance_updated_at: new Date().toISOString(),
+        }).eq('id', acc.id)
+    } catch {
+        // e.g. balances not enabled for this connection: keep the last known balance
     }
 }
 

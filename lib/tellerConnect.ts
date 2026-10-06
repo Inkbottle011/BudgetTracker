@@ -37,7 +37,7 @@ export async function openTellerConnect(): Promise<TellerEnrollment | null> {
         const connect = (globalThis as any).TellerConnect.setup({
             applicationId: APP_ID,
             environment: ENVIRONMENT,
-            products: ['transactions'],
+            products: ['transactions', 'balance'],
             onSuccess: (enrollment: TellerEnrollment) => resolve(enrollment),
             onExit: () => resolve(null),
         })

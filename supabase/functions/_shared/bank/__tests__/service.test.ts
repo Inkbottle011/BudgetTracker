@@ -28,6 +28,8 @@ function fakeProvider(over: Partial<BankProvider> = {}): BankProvider & { calls:
                 : [{ externalId: 't3', providerAccountId: 'acc_card', date: '2026-10-02', amount: -45.99, description: 'Amazon', pending: false }]
         }),
         disconnect: jest.fn(async (token: string) => { calls.push(['disconnect', token]) }),
+        getBalance: jest.fn(async (_token: string, accountId: string) =>
+            accountId === 'acc_card' ? { current: 812.4, available: 4187.6 } : { current: 1500.25, available: 1400 }),
         ...over,
     } as any
 }
@@ -46,7 +48,7 @@ async function databaseWithConnection(status = 'active', lastSynced: string | nu
         }
     })
     fake.table('bank_accounts', call => {
-        if (call.ops.some(o => o.method === 'upsert')) return { data: [{ id: 'db-acc-1' }, { id: 'db-acc-2' }], error: null }
+        if (call.ops.some(o => o.method === 'upsert' || o.method === 'update')) return { data: [{ id: 'db-acc-1' }, { id: 'db-acc-2' }], error: null }
         return {
             data: [
                 { id: 'db-acc-1', connection_id: 'conn-1', user_id: 'user-1', provider_account_id: 'acc_checking', type: 'depository' },
@@ -137,6 +139,32 @@ describe('syncConnection', () => {
         const provider = fakeProvider({ listTransactions: jest.fn(async () => { throw new Error('failed with token_good in it') }) })
         await syncConnection(deps(provider), 'conn-1')
         expect(JSON.stringify(ops('bank_connections', 'update'))).not.toContain('token_good')
+    })
+})
+
+describe('balances', () => {
+    it('saves each account\'s balance on every sync', async () => {
+        await databaseWithConnection()
+        await syncConnection(deps(), 'conn-1')
+        const updates = ops('bank_accounts', 'update')
+        expect(updates.map(u => [u.args[0].balance_current, u.args[0].balance_available])).toEqual([[1500.25, 1400], [812.4, 4187.6]])
+        expect(updates[1].args[0].balance_updated_at).toEqual(expect.any(String))
+        expect(updates[1].call.ops).toContainEqual({ method: 'eq', args: ['id', 'db-acc-2'] })
+    })
+
+    it('keeps syncing transactions if a balance can\'t be fetched', async () => {
+        await databaseWithConnection()
+        const provider = fakeProvider({ getBalance: jest.fn(async () => { throw new ProviderError('other', 'Balance product not enabled') }) })
+        const result = await syncConnection(deps(provider), 'conn-1')
+        expect(result).toMatchObject({ added: 2, status: 'active' })
+        expect(ops('bank_accounts', 'update')).toHaveLength(0)
+    })
+
+    it('works with providers that have no balances', async () => {
+        await databaseWithConnection()
+        const provider = fakeProvider()
+        delete (provider as any).getBalance
+        expect(await syncConnection(deps(provider), 'conn-1')).toMatchObject({ status: 'active' })
     })
 })
 

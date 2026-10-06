@@ -8,7 +8,7 @@ import { providerContract, FAKE_BANK } from '../testing/providerContract'
  * Basic auth with the access token as username, pages of transactions newest-first with `count`
  * and `from_id`, `start_date` filtering, and DELETE /accounts to remove an enrollment.
  */
-function fakeTeller({ pageSize = 10, failWith }: { pageSize?: number; failWith?: number } = {}) {
+function fakeTeller({ pageSize = 10, failWith, cardLedgerSign = 1 }: { pageSize?: number; failWith?: number; cardLedgerSign?: number } = {}) {
     const calls: { method: string; url: string }[] = []
     const fetchImpl = async (input: string, init: any = {}) => {
         const url = new URL(input)
@@ -31,6 +31,12 @@ function fakeTeller({ pageSize = 10, failWith }: { pageSize?: number; failWith?:
                 id: a.id, name: a.name, type: a.type, subtype: a.subtype, last_four: a.lastFour,
                 institution: { id: 'chase', name: a.institution }, enrollment_id: 'enr_1', status: 'open', currency: 'USD', links: {},
             })))
+        }
+        const bal = url.pathname.match(/^\/accounts\/([^/]+)\/balances$/)
+        if (bal) {
+            const a = FAKE_BANK.accounts.find(x => x.id === bal[1])!
+            const ledger = a.type === 'credit' ? cardLedgerSign * a.balance : a.balance
+            return json(200, { account_id: a.id, ledger: ledger.toFixed(2), available: a.available.toFixed(2), links: {} })
         }
         const m = url.pathname.match(/^\/accounts\/([^/]+)\/transactions$/)
         if (m) {
@@ -68,6 +74,11 @@ describe('Teller specifics', () => {
         const err = await createTellerProvider({ fetch: fakeTeller({ failWith: 503 }).fetchImpl }).listAccounts(FAKE_BANK.goodToken).catch(e => e)
         expect(err).toBeInstanceOf(ProviderError)
         expect(err.kind).toBe('temporary')
+    })
+
+    it('reports what\'s owed on a card as positive whichever sign Teller uses', async () => {
+        const p = createTellerProvider({ fetch: fakeTeller({ cardLedgerSign: -1 }).fetchImpl })
+        expect(await p.getBalance!(FAKE_BANK.goodToken, 'acc_card', 'credit')).toEqual({ current: 812.4, available: 4187.6 })
     })
 
     it('stops paging once it reaches the start date', async () => {

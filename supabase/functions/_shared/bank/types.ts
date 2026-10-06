@@ -19,12 +19,19 @@ export interface BankTransaction {
     pending: boolean
 }
 
+export interface BankBalance {
+    current: number | null      // checking/savings: money in the account; card: amount owed (positive)
+    available: number | null    // checking/savings: spendable now; card: credit left
+}
+
 export interface BankProvider {
     name: string
     listAccounts(token: string): Promise<BankAccount[]>
     listTransactions(token: string, providerAccountId: string, since: string): Promise<BankTransaction[]>
     /** Remove our access to this bank login at the provider. */
     disconnect(token: string): Promise<void>
+    /** Optional: providers without balances can leave this out. */
+    getBalance?(token: string, providerAccountId: string, accountType: string): Promise<BankBalance>
 }
 
 /**

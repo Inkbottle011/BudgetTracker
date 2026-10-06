@@ -228,3 +228,12 @@ describe('isCardBillPayment (money leaving checking to pay a card)', () => {
         'Chase Coffee Shop', 'AUTOPAY INSURANCE CO', 'Netflix.com', 'Citgo gas', 'Discovery Museum', 'Rent payment',
     ])('%p is not', d => expect(isCardBillPayment(d)).toBe(false))
 })
+
+import { isRefund } from '../entry'
+
+describe('isRefund', () => {
+    it.each(['AMAZON.COM REFUND', 'Return - Target', 'PURCHASE RETURN WALMART', 'Merchant credit adjustment', 'REVERSAL OF FEE', 'Refund: order 123'])(
+        '%p is a refund', d => expect(isRefund(d)).toBe(true))
+    it.each(['ACME PAYROLL', 'Venmo cashout', 'Interest paid', 'Tax return deposit IRS TREAS 310'])(
+        '%p is not', d => expect(isRefund(d)).toBe(false))
+})

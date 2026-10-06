@@ -79,7 +79,7 @@ Transaction Date,Posted Date,Card No.,Description,Category,Debit,Credit
 2026-10-03,2026-10-04,1234,Refund from Store,Refund,,30.00`)
         const r = convertRows(rows, mapping, 'negative', [], [])
         expect(r.ready.map(x => [x.transaction.type, x.transaction.amount, x.transaction.category_label])).toEqual([
-            ['expense', 6.5, 'Dining'], ['income', 30, 'Refund'],
+            ['expense', 6.5, 'Dining'], ['reimbursement', 30, ''], // a refund reduces spending
         ])
     })
 
@@ -89,7 +89,7 @@ Date,Description,Amount
 10/01/2026,Shop,15.99
 10/02/2026,Refund,-5.00`)
         const r = convertRows(rows, mapping, 'positive', [], [])
-        expect(r.ready.map(x => x.transaction.type)).toEqual(['expense', 'income'])
+        expect(r.ready.map(x => x.transaction.type)).toEqual(['expense', 'reimbursement']) // the refund reduces spending
     })
 
     it('detects day-first dates across the file', () => {
@@ -180,6 +180,14 @@ Date,Description,Amount,Type
 Date,Type,Category,Name,Amount
 2026-10-02,reimbursement,Food,Sam paid back,30`)
         expect(convertRows(rows, mapping, 'negative', [], []).ready[0].transaction).toMatchObject({ type: 'reimbursement', amount: 30 })
+    })
+
+    it('imports refunds as reimbursements in the purchase\'s category', () => {
+        const { rows, mapping } = parse(`
+Date,Description,Amount
+10/04/2026,AMAZON.COM REFUND,25.00`)
+        const r = convertRows(rows, mapping, 'negative', [], [{ name: 'Amazon.com', category_label: 'Shopping', type: 'expense' }])
+        expect(r.ready[0].transaction).toMatchObject({ type: 'reimbursement', category_label: 'Shopping' })
     })
 
     it('does not apply an income category to money going out', () => {

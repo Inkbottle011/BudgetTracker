@@ -2,7 +2,7 @@
 // Docs: https://teller.io/docs/api — Basic auth with the access token as username; in development and
 // production Teller also requires a client certificate (mTLS), which the server function supplies
 // through the `fetch` it passes in.
-import { BankAccount, BankProvider, BankTransaction, ProviderError } from './types.ts'
+import { BankAccount, BankBalance, BankProvider, BankTransaction, ProviderError } from './types.ts'
 
 type FetchLike = (url: string, init?: any) => Promise<{ ok: boolean; status: number; json(): Promise<any>; text(): Promise<string> }>
 
@@ -71,6 +71,17 @@ export function createTellerProvider({ fetch, baseUrl = 'https://api.teller.io' 
                 if (batch[batch.length - 1].date < since) break
             }
             return all
+        },
+
+        async getBalance(token, providerAccountId, accountType): Promise<BankBalance> {
+            const b = await call(token, `/accounts/${encodeURIComponent(providerAccountId)}/balances`)
+            const num = (v: unknown) => (v === null || v === undefined || v === '' ? null : Number(v))
+            const ledger = num(b?.ledger), available = num(b?.available)
+            // Teller doesn't document the sign for cards, so report what's owed as a positive number either way
+            if (accountType === 'credit') {
+                return { current: ledger === null ? null : Math.abs(ledger), available: available === null ? null : Math.abs(available) }
+            }
+            return { current: ledger, available }
         },
 
         async disconnect(token) {
