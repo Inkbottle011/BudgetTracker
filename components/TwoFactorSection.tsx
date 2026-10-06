@@ -76,11 +76,25 @@ export function TwoFactorSection({ onChange }: { onChange: (on: boolean) => void
 
             {setup && (
                 <View style={styles.setup}>
-                    <Text style={styles.step}>1. Scan this with your authenticator app</Text>
+                    <Text style={styles.step}>1. Scan this with your phone</Text>
                     <Image accessibilityLabel="QR code for your authenticator app" source={{ uri: setup.qrCode }} style={styles.qr} />
+                    <View style={styles.howTo}>
+                        <Text style={styles.howToLine}>
+                            <Text style={styles.howToBold}>iPhone: </Text>
+                            open the Camera app, point it at the code (no photo needed) and tap "Add Verification Code in Passwords".
+                            Save it as a new entry called Budget Tracker.
+                        </Text>
+                        <Text style={styles.howToLine}>
+                            <Text style={styles.howToBold}>Android: </Text>
+                            install Google Authenticator, tap +, then "Scan a QR code".
+                        </Text>
+                        <Text style={styles.howToLine}>
+                            Next time you sign in, get the code from the Passwords app (Codes tab) on iPhone, or from Google Authenticator.
+                        </Text>
+                    </View>
                     <Text style={styles.step}>Or type this key into the app:</Text>
                     <Text selectable style={styles.secret}>{setup.secret}</Text>
-                    <Text style={styles.step}>2. Enter the 6-digit code it shows</Text>
+                    <Text style={styles.step}>2. Enter the 6-digit code it shows (it changes every 30 seconds)</Text>
                     <View style={styles.row}>
                         <TextInput
                             style={styles.codeInput}
@@ -146,6 +160,9 @@ const styles = StyleSheet.create({
     setup: { gap: 8 },
     step: { fontSize: 13, color: '#2c3e50', fontWeight: '600', marginTop: 4 },
     qr: { width: 180, height: 180, backgroundColor: '#fff' },
+    howTo: { backgroundColor: '#f4f8fb', borderRadius: 8, padding: 10, gap: 6 },
+    howToLine: { fontSize: 13, color: '#555', lineHeight: 18 },
+    howToBold: { fontWeight: '700', color: '#2c3e50' },
     secret: { fontFamily: 'monospace', fontSize: 14, letterSpacing: 1, color: '#1a1a1a', backgroundColor: '#f8f9fa', padding: 8, borderRadius: 6, alignSelf: 'flex-start' },
     codeInput: { backgroundColor: '#f8f9fa', borderRadius: 8, padding: 10, fontSize: 18, letterSpacing: 4, width: 140, borderWidth: 1, borderColor: '#e8e8e8', color: '#1a1a1a' },
 })

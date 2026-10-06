@@ -67,6 +67,9 @@ and `EXPO_PUBLIC_TELLER_APP_ID` in Netlify and `.env`, and `BANK_PROVIDER=teller
 
 ### 6. Try it (sandbox)
 1. **Settings -> Two-factor sign-in -> Set up**, scan the QR code, enter the code.
+   - iPhone: point the Camera app at the code and tap **Add Verification Code in Passwords**;
+     codes are then in the Passwords app (Codes tab).
+   - Android: install Google Authenticator, tap **+** -> **Scan a QR code**.
 2. **Settings -> Linked banks -> + Link a bank -> Continue to your bank**. Pick any bank and sign
    in with username `user_good`, password `pass_good`.
 3. If it says transactions are still loading, wait a minute and tap **Sync now**.

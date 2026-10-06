@@ -64,6 +64,15 @@ describe('two-factor sign-in', () => {
         expect(showToast).toHaveBeenCalledWith('Two-factor sign-in is on')
     })
 
+    it('explains how to scan the code on an iPhone or Android phone, and where to find codes later', async () => {
+        await renderSettings()
+        await fireEvent.press(screen.getByText('Set up two-factor sign-in'))
+        expect(screen.getByText(/iPhone: open the Camera app/)).toBeTruthy()
+        expect(screen.getByText(/Add Verification Code in Passwords/)).toBeTruthy()
+        expect(screen.getByText(/Android: install Google Authenticator/)).toBeTruthy()
+        expect(screen.getByText(/Next time you sign in/)).toBeTruthy()
+    })
+
     it('clears out a half-finished setup before starting again', async () => {
         mfa.listFactors.mockResolvedValue({ data: { all: [{ id: 'old', status: 'unverified', factor_type: 'totp' }], totp: [] }, error: null })
         await renderSettings()
