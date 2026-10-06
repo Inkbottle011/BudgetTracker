@@ -19,7 +19,7 @@ export function categoriesFor(type: string, available: Record<string, string[] |
 }
 
 export function groupUncategorized(
-    transactions: { id: string; name?: string | null; note?: string | null; amount: number | string; type: string; category_label?: string | null }[],
+    transactions: { id: string; name?: string | null; note?: string | null; original_name?: string | null; amount: number | string; type: string; category_label?: string | null }[],
     available: Record<string, string[] | undefined>,
     guess: (name: unknown) => { type: string; category: string } | null,
 ): UncategorizedGroup[] {
@@ -27,7 +27,9 @@ export function groupUncategorized(
     for (const t of transactions) {
         if (t.type === 'transfer' || (t.category_label ?? '').trim()) continue
         const label = String(t.name || t.note || '').trim()
-        const key = merchantKey(label) || label.toLowerCase()
+        // Grouped by the bank's wording, so renamed and not-yet-renamed ones stay together
+        const matchOn = String(t.original_name || label)
+        const key = merchantKey(matchOn) || matchOn.toLowerCase()
         const id = `${t.type}|${key}`
         const g = groups.get(id) ?? { names: new Map<string, number>(), type: t.type, ids: [] as string[], total: 0, key }
         g.names.set(label, (g.names.get(label) ?? 0) + 1)

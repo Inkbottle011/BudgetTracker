@@ -18,7 +18,7 @@ function pickFile(text: string, name = 'chase.csv') {
     global.fetch = jest.fn(async () => ({ text: async () => text })) as any
 }
 
-/** Saved transactions (for duplicate checks) vs. past categories (for suggestions) are told apart by the columns asked for. */
+/** Saved transactions (for duplicate checks, filtered by date) vs. past categories (for suggestions) are told apart by their filters. */
 function database({ saved = [] as any[], history = [] as any[], rejectName = '' } = {}) {
     fake.table('transactions', call => {
         const insert = call.ops.find(o => o.method === 'insert')
@@ -26,8 +26,8 @@ function database({ saved = [] as any[], history = [] as any[], rejectName = '' 
             const rows = ([] as any[]).concat(insert.args[0])
             return rows.some(r => r.name === rejectName) ? { error: { message: 'value too long' } } : { data: null, error: null }
         }
-        const cols = call.ops.find(o => o.method === 'select')?.args[0] ?? ''
-        return { data: cols.startsWith('date') ? saved : history, error: null }
+        const byDate = call.ops.some(o => o.method === 'gte' && o.args[0] === 'date')
+        return { data: byDate ? saved : history, error: null }
     })
 }
 

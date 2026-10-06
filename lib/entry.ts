@@ -140,6 +140,8 @@ export function merchantKey(name: unknown): string {
 
 export interface PastTransaction {
     name?: string | null
+    /** The bank's wording, when you've renamed the place */
+    original_name?: string | null
     note?: string | null
     category_label?: string | null
     type: string
@@ -230,12 +232,14 @@ export function buildCategoryGuesser(history: PastTransaction[]) {
     const counts = new Map<string, Map<string, number>>()
     for (const t of history) {
         if (!t.category_label) continue
-        const key = merchantKey(t.name || t.note)
-        if (!key) continue
         const label = `${t.type}\u0000${t.category_label}`
-        const byLabel = counts.get(key) ?? new Map<string, number>()
-        byLabel.set(label, (byLabel.get(label) ?? 0) + 1)
-        counts.set(key, byLabel)
+        // A renamed place is known by both your name and the bank's wording
+        const keys = new Set([merchantKey(t.name || t.note), merchantKey(t.original_name)].filter(Boolean))
+        for (const key of keys) {
+            const byLabel = counts.get(key) ?? new Map<string, number>()
+            byLabel.set(label, (byLabel.get(label) ?? 0) + 1)
+            counts.set(key, byLabel)
+        }
     }
     const spendingLabels = [...new Set(history.filter(t => t.type === 'expense' && t.category_label).map(t => String(t.category_label)))]
     return (name: unknown): { type: string; category: string } | null => {
@@ -269,6 +273,18 @@ export function buildCategoryGuesser(history: PastTransaction[]) {
     }
 }
 
+// ---------------------------------------------------------------- your names for places
+
+/**
+ * Your name for a place, if you've renamed it: `renames` maps merchantKey(bank wording) -> your name.
+ * Returns the name to show, plus the bank's wording as original_name when renamed.
+ */
+export function renameFor(description: string, renames: Map<string, string> | undefined): { name: string; original_name?: string } {
+    const key = merchantKey(description)
+    const yours = key ? renames?.get(key) : undefined
+    return yours && yours !== description ? { name: yours, original_name: description } : { name: description }
+}
+
 // ---------------------------------------------------------------- duplicates
 
 /**
@@ -276,8 +292,9 @@ export function buildCategoryGuesser(history: PastTransaction[]) {
  * description. Type is left out on purpose, since you may have re-categorized a row (say, expense to
  * savings) after importing it, and it should still count as already imported.
  */
-export function duplicateKey(t: { date: string; amount: number; name?: string | null; note?: string | null }): string {
-    const desc = String(t.name || t.note || '').toLowerCase().replace(/\s+/g, ' ').trim()
+export function duplicateKey(t: { date: string; amount: number; name?: string | null; note?: string | null; original_name?: string | null }): string {
+    // A renamed transaction is compared by the bank's wording, which is what a file or the bank has
+    const desc = String(t.original_name || t.name || t.note || '').toLowerCase().replace(/\s+/g, ' ').trim()
     return `${String(t.date).slice(0, 10)}|${Math.abs(Number(t.amount)).toFixed(2)}|${desc}`
 }
 

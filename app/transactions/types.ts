@@ -32,6 +32,12 @@ export interface EditingTransaction {
     type: string
     category: string
     name: string
+    /** The name when editing started, to tell if it was changed */
+    startName?: string
+    /** The bank's wording for the place (its original name if renamed before) */
+    placeName?: string
+    /** Rename every transaction from this place, now and in the future */
+    renameAll?: boolean
     amount: string
     details: string
     date: string

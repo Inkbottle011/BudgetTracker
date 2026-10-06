@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useTransactionStore } from '../../store/useTransactionStore'
 import { EditingTransaction } from './types'
 import { useToastContext } from '../../context/ToastContext'
-import { parseAmount, parseDate, todayString } from '../../lib/entry'
+import { parseAmount, parseDate, todayString, merchantKey } from '../../lib/entry'
 import { withRunningBalance, filterTransactions, sortTransactions, toCSV } from './listLogic'
 import { totalShares } from '../../lib/splits'
 
@@ -163,27 +163,59 @@ export function useTransactionLogic() {
         if (editAmount === null || editAmount === 0) { showToast('Enter an amount, like 12.50', 'error'); return }
         if (!editDate) { showToast('Use a date like 2026-10-05 or 10/5/2026', 'error'); return }
         setSaving(true)
+        const newName = editingTransaction.name.trim()
+        const renamed = editingTransaction.startName !== undefined && newName !== '' && newName !== editingTransaction.startName
         const { error } = await supabase
             .from('transactions')
             .update({
                 type: editingTransaction.type.toLowerCase(),
                 category_label: editingTransaction.category,
-                name: editingTransaction.name,
+                // A new name is saved below, keeping the original wording
+                ...(renamed ? {} : { name: editingTransaction.name }),
                 amount: Math.abs(editAmount),
                 note: editingTransaction.details,
                 date: editDate,
             })
             .eq('id', editingTransaction.id)
-        if (!error) {
-            setEditingTransaction(null)
-            fetchTransactions()
-            showToast('Transaction updated!')
-        } else {
+        if (error) {
             showToast('Failed to update transaction', 'error')
+            setSaving(false)
+            return
         }
+        const message = renamed ? await renameTransaction(editingTransaction, newName) : null
+        setEditingTransaction(null)
+        fetchTransactions()
+        if (message?.error) showToast(message.error, 'error')
+        else showToast(message?.ok ?? 'Transaction updated!')
         setSaving(false)
     }
     
+    /**
+     * Renames one transaction, or every one from the same place (and remembers the name for future
+     * imports). The original wording is kept so duplicate checks and matching still work.
+     */
+    async function renameTransaction(t: EditingTransaction, newName: string): Promise<{ ok?: string; error?: string }> {
+        const place = t.placeName || t.startName || ''
+        const key = merchantKey(place)
+        const all = !!t.renameAll && !!key
+        const ids = all
+            ? [...new Set([t.id, ...transactions.filter(x => merchantKey(x.original_name || x.name || x.note) === key).map(x => x.id)])]
+            : [t.id]
+        const { error } = await supabase.rpc('rename_transactions', { p_ids: ids, p_name: newName })
+        if (error) {
+            // Renaming isn't set up yet: still save the new name on this one
+            await supabase.from('transactions').update({ name: newName }).eq('id', t.id)
+            return all ? { error: `Saved. To rename every ${place} transaction, run supabase/sql/merchants/01_setup.sql in Supabase first.` } : {}
+        }
+        if (!all) return {}
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session) {
+            await supabase.from('merchant_renames').upsert(
+                { user_id: session.user.id, merchant_key: key, display_name: newName }, { onConflict: 'user_id,merchant_key' })
+        }
+        return { ok: `Renamed ${ids.length} ${place} transaction${ids.length === 1 ? '' : 's'} to ${newName}. New ones will be too.` }
+    }
+
     function handleEditSelect(t: any) {
         if (selectMode) { toggleSelect(t.id); return }
         if (duplicateMode) {
@@ -197,6 +229,9 @@ export function useTransactionLogic() {
                 type: t.type.charAt(0).toUpperCase() + t.type.slice(1),
                 category: t.category_label || '',
                 name: t.name || '',
+                startName: t.name || '',
+                placeName: t.original_name || t.name || '',
+                renameAll: true,
                 amount: String(t.amount),
                 details: t.note || '',
                 date: t.date,

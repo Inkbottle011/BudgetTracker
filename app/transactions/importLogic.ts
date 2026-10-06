@@ -1,6 +1,6 @@
 import { supabase } from '../../lib/supabase'
 import {
-    parseAmount, parseDate, detectDateOrder, DateOrder, buildCategoryGuesser, duplicateKey, PastTransaction, isCardPayment, isRefund,
+    parseAmount, parseDate, detectDateOrder, DateOrder, buildCategoryGuesser, duplicateKey, PastTransaction, isCardPayment, isRefund, renameFor,
 } from '../../lib/entry'
 
 export type ImportField = 'date' | 'amount' | 'debit' | 'credit' | 'description' | 'type' | 'category' | 'skip'
@@ -61,6 +61,8 @@ export interface NewTransaction {
     note: string
     category_label: string
     category_id: null
+    /** The file's wording when you've renamed the place */
+    original_name?: string
 }
 
 export interface ReadyRow { row: number; transaction: NewTransaction }
@@ -85,8 +87,10 @@ export function convertRows(
     rows: Record<string, string>[],
     mapping: Record<string, ImportField>,
     spendingSign: SpendingSign,
-    existing: { date: string; amount: number; name?: string | null; note?: string | null }[],
+    existing: { date: string; amount: number; name?: string | null; note?: string | null; original_name?: string | null }[],
     history: PastTransaction[],
+    /** Your names for places (merchantKey -> name) */
+    renames?: Map<string, string>,
 ): PreparedImport {
     const [dateCol] = columnFor(mapping, 'date')
     const [amountCol] = columnFor(mapping, 'amount')
@@ -162,7 +166,7 @@ export function convertRows(
 
         const transaction: NewTransaction = {
             date, amount: Math.round((amount + Number.EPSILON) * 100) / 100, type,
-            name: description, note: '', category_label: category, category_id: null,
+            ...renameFor(description, renames), note: '', category_label: category, category_id: null,
         }
 
         const k = duplicateKey(transaction)
@@ -204,13 +208,13 @@ export async function prepareImport(
     const [existing, history] = await Promise.all([
         dates.length === 0 ? [] : fetchAllRows<any>(() => supabase
             .from('transactions')
-            .select('date, amount, type, name, note')
+            .select('*')
             .gte('date', dates[0])
             .lte('date', dates[dates.length - 1])
             .order('id')),
         supabase
             .from('transactions')
-            .select('name, note, category_label, type')
+            .select('*')
             .neq('category_label', '')
             .not('category_label', 'is', null)
             .order('date', { ascending: false })
@@ -218,5 +222,9 @@ export async function prepareImport(
             .then(({ data, error }) => { if (error) throw error; return (data ?? []) as PastTransaction[] }),
     ])
 
-    return convertRows(rows, mapping, spendingSign, existing, history)
+    // Your names for places; none if renaming hasn't been set up
+    const { data: renameRows, error: renameError } = await supabase.from('merchant_renames').select('merchant_key, display_name')
+    const renames = renameError ? undefined : new Map<string, string>((renameRows ?? []).map((r: any) => [r.merchant_key, r.display_name]))
+
+    return convertRows(rows, mapping, spendingSign, existing, history, renames)
 }

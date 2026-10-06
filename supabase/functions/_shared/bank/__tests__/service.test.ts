@@ -378,6 +378,23 @@ describe('syncConnection', () => {
         })
     })
 
+    it('uses your names for places you renamed', async () => {
+        await databaseWithConnection()
+        fake.table('merchant_renames', { data: [{ merchant_key: 'corner store', display_name: 'Corner Store (snacks)' }] })
+        await syncConnection(deps(), 'conn-1')
+        const rows = ops('transactions', 'upsert')[0].args[0]
+        expect(rows.find((r: any) => r.external_id === 't1')).toMatchObject({ name: 'Corner Store (snacks)', original_name: 'Corner Store' })
+        expect(rows.find((r: any) => r.external_id === 't3')).toMatchObject({ name: 'Amazon', original_name: null })
+    })
+
+    it('still syncs if renaming isn\'t set up yet', async () => {
+        await databaseWithConnection()
+        fake.table('merchant_renames', { data: null, error: { message: 'relation "merchant_renames" does not exist' } })
+        const result = await syncConnection(deps(), 'conn-1')
+        expect(result.status).toBe('active')
+        expect('original_name' in ops('transactions', 'upsert')[0].args[0][0]).toBe(false)
+    })
+
     it('re-checks the last week on each sync to catch late-posting transactions', async () => {
         await databaseWithConnection('active', '2026-10-05T08:00:00Z')
         const provider = fakeProvider()

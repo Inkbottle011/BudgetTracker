@@ -4,6 +4,7 @@ import { DateField } from '../../components/DateField'
 import { TRANSACTION_TYPES, TYPE_COLORS, DEFAULT_CATEGORIES } from './types'
 import { SplitSection } from './SplitSection'
 import { EditingTransaction } from './types'
+import { merchantKey } from '../../lib/entry'
 
 interface Props {
     // Add form
@@ -148,6 +149,28 @@ export function TransactionForm({
         blurOnSubmit={false}
         placeholderTextColor="#aaa"
         />
+        {isEditing && (() => {
+            // Renamed: offer to use the new name for the whole place, now and for future imports
+            const t = editingTransaction!
+            const place = t.placeName || t.startName || ''
+            const changed = t.startName !== undefined && t.name.trim() !== '' && t.name.trim() !== t.startName
+            if (!changed || !merchantKey(place)) return null
+            const label = `Use this name for all "${place}" transactions, now and in the future`
+            return (
+                <TouchableOpacity
+                style={styles.renameRow}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: !!t.renameAll }}
+                accessibilityLabel={label}
+                onPress={() => onEditChange({ ...t, renameAll: !t.renameAll })}
+                >
+                <View style={[styles.checkbox, t.renameAll && styles.checkboxOn]}>
+                {t.renameAll && <Text style={styles.checkmark}>✓</Text>}
+                </View>
+                <Text style={styles.renameText}>{label}</Text>
+                </TouchableOpacity>
+            )
+        })()}
         {nameFocused && suggestions.length > 0 && (
             <View style={styles.suggestBox}>
             <Text style={styles.suggestTitle}>Fill in from a past transaction</Text>
@@ -235,6 +258,11 @@ export function TransactionForm({
 }
 
 const styles = StyleSheet.create({
+    renameRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 6, marginBottom: 4 },
+    checkbox: { width: 18, height: 18, borderRadius: 4, borderWidth: 1.5, borderColor: '#2c3e50', alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+    checkboxOn: { backgroundColor: '#2c3e50' },
+    checkmark: { color: '#fff', fontSize: 12, fontWeight: '700', lineHeight: 14 },
+    renameText: { flex: 1, fontSize: 12, color: '#555', lineHeight: 18 },
     container: { flex: 2, backgroundColor: '#fff', padding: 16 },
     formHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
     sectionTitle: { fontSize: 18, fontWeight: '700', color: '#2c3e50' },

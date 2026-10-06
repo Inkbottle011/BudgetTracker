@@ -175,6 +175,23 @@ Date,Description,Amount,Type
         ])
     })
 
+    it('uses your names for places you renamed, keeping the original', () => {
+        const { rows, mapping } = parse(`
+Date,Description,Amount
+2026-10-02,TACOS TEXAS,-12.31
+2026-10-02,Wawa,-3.00`)
+        const r = convertRows(rows, mapping, 'negative', [], [], new Map([['tacos texas', 'Tacos Texas']]))
+        expect(r.ready.map(x => [x.transaction.name, (x.transaction as any).original_name])).toEqual([['Tacos Texas', 'TACOS TEXAS'], ['Wawa', undefined]])
+    })
+
+    it('knows a file row is already imported even after you renamed it', () => {
+        const { rows, mapping } = parse(`
+Date,Description,Amount
+2026-10-02,TACOS TEXAS,-12.31`)
+        const existing = [{ date: '2026-10-02', amount: 12.31, type: 'expense', name: 'Tacos Texas', original_name: 'TACOS TEXAS' }]
+        expect(convertRows(rows, mapping, 'negative', existing, []).ready).toHaveLength(0)
+    })
+
     it('keeps reimbursements as reimbursements when re-importing an exported file', () => {
         const { rows, mapping } = parse(`
 Date,Type,Category,Name,Amount
@@ -235,11 +252,12 @@ describe('prepareImport', () => {
 
     beforeEach(() => jest.clearAllMocks())
 
-    // Both lookups read the transactions table; tell them apart by the columns selected
-    function useQueries(existingQuery: any, historyQuery: any) {
-        from.mockImplementation(() => ({
-            select: (cols: string) => (cols.startsWith('date') ? existingQuery : historyQuery),
-        }))
+    // Both lookups read the transactions table; tell them apart by their first filter
+    // (saved transactions by date range, past categories by having a category)
+    function useQueries(existingQuery: any, historyQuery: any, renames: any = { data: [], error: null }) {
+        from.mockImplementation((table: string) => table === 'merchant_renames'
+            ? { select: () => Promise.resolve(renames) }
+            : { select: () => ({ gte: (...a: any[]) => existingQuery.gte(...a), neq: (...a: any[]) => historyQuery.neq(...a) }) })
     }
 
     it('checks saved transactions in the file\'s date range and pages past 1,000 rows', async () => {
@@ -269,5 +287,23 @@ Date,Description,Amount
 Date,Description,Amount
 10/01/2026,Coffee,-4.00`)
         await expect(prepareImport(rows, mapping, 'negative')).rejects.toThrow('offline')
+    })
+
+    it('applies your names for places', async () => {
+        useQueries(query(() => ({ data: [], error: null })), query(() => ({ data: [], error: null })),
+            { data: [{ merchant_key: 'coffee', display_name: 'Morning coffee' }], error: null })
+        const { rows, mapping } = parse(`
+Date,Description,Amount
+10/01/2026,Coffee,-4.00`)
+        expect((await prepareImport(rows, mapping, 'negative')).ready[0].transaction).toMatchObject({ name: 'Morning coffee', original_name: 'Coffee' })
+    })
+
+    it('still imports if renaming isn\'t set up yet', async () => {
+        useQueries(query(() => ({ data: [], error: null })), query(() => ({ data: [], error: null })),
+            { data: null, error: { message: 'relation "merchant_renames" does not exist' } })
+        const { rows, mapping } = parse(`
+Date,Description,Amount
+10/01/2026,Coffee,-4.00`)
+        expect((await prepareImport(rows, mapping, 'negative')).ready[0].transaction.name).toBe('Coffee')
     })
 })

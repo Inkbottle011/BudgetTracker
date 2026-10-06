@@ -1,6 +1,6 @@
 // Turns a provider's transactions into rows for the transactions table, applying the same rules
 // as the CSV import: skip what you already have, leave out card payments, guess categories.
-import { buildCategoryGuesser, duplicateKey, merchantKey, isCardPayment, isRefund, PastTransaction } from '../entry.ts'
+import { buildCategoryGuesser, duplicateKey, merchantKey, isCardPayment, isRefund, renameFor, PastTransaction } from '../entry.ts'
 import type { BankTransaction } from './types.ts'
 
 export interface ConvertContext {
@@ -12,6 +12,8 @@ export interface ConvertContext {
     existing: ExistingTransaction[]
     /** Bank transaction ids already saved, or waiting for you to review: never added again */
     alreadyImported?: Set<string>
+    /** Your names for places (merchantKey -> name). Absent before renaming is set up. */
+    renames?: Map<string, string>
     /** Whether any credit card is linked (kept for callers; card payments are now paired by the sync) */
     hasLinkedCreditCard?: boolean
 }
@@ -22,6 +24,7 @@ export interface ExistingTransaction {
     amount: number | string
     name?: string | null
     note?: string | null
+    original_name?: string | null
     type?: string | null
 }
 
@@ -60,6 +63,8 @@ export interface TransactionRow {
     note: string
     category_label: string
     category_id: null
+    /** The bank's wording when you've renamed the place (only present once renaming is set up) */
+    original_name?: string | null
 }
 
 export function convertBankTransactions(
@@ -110,10 +115,16 @@ export function convertBankTransactions(
         }
 
         if (!moneyOut) moneyIn.add(t.externalId)
-        candidates.push({
+        const row: TransactionRow = {
             user_id: ctx.userId, provider: ctx.provider, external_id: t.externalId, bank_account_id: account.id,
             date: t.date, amount: value, type, name: t.description, note: '', category_label: category, category_id: null,
-        })
+        }
+        if (ctx.renames) {
+            const named = renameFor(t.description, ctx.renames)
+            row.name = named.name
+            row.original_name = named.original_name ?? null
+        }
+        candidates.push(row)
     }
 
     // 2. Match against what you already have, each of yours at most once.
@@ -139,7 +150,7 @@ export function convertBankTransactions(
             .filter(m => !m.used && Math.abs(m.value - row.amount) < 0.005 && daysApart(m.date, row.date) <= SAME_PLACE_DAYS
                 && m.moneyIn === isIn)
             .sort((a, b) => daysApart(a.date, row.date) - daysApart(b.date, row.date))
-        const same = sameAmount.find(m => samePlace(m.name || m.note, row.name))
+        const same = sameAmount.find(m => samePlace(m.original_name || m.name || m.note, row.original_name || row.name))
         if (same) { same.used = true; skipped.duplicate++; continue }
         const near = sameAmount.find(m => daysApart(m.date, row.date) <= MATCH_DAYS)
         if (near) {

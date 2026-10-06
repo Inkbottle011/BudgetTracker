@@ -111,11 +111,11 @@ export async function syncConnection(deps: BankDeps, connectionId: string) {
         // Which way money went, straight from the bank, for re-sorting transfers saved before (one-time check)
         const fetchedMoneyIn = new Map<string, boolean>()
 
-        const { data: history } = await deps.db.from('transactions').select('name, note, category_label, type')
+        const { data: history } = await deps.db.from('transactions').select('*')
             .eq('user_id', conn.user_id).not('category_label', 'is', null).neq('category_label', '')
             .order('date', { ascending: false }).limit(3000)
         // Yours (typed in or from a CSV), a few days either side since the bank's date can differ
-        const { data: existing } = await deps.db.from('transactions').select('id, date, amount, name, note, type')
+        const { data: existing } = await deps.db.from('transactions').select('*')
             .eq('user_id', conn.user_id).is('external_id', null).gte('date', daysBefore(since, SAME_PLACE_DAYS)).lte('date', today)
         // Bank transactions already saved or waiting for review, so re-checking never adds them twice
         const imported = await loadAll(() => deps.db.from('transactions').select('external_id')
@@ -123,6 +123,12 @@ export async function syncConnection(deps: BankDeps, connectionId: string) {
         const { data: waiting } = await deps.db.from('bank_possible_duplicates').select('external_id')
             .eq('user_id', conn.user_id).eq('provider', conn.provider)
         const alreadyImported = new Set<string>([...imported, ...(waiting ?? [])].map((r: any) => r.external_id))
+
+        // Your names for places; missing until the rename setup has been run, which is fine
+        const { data: renameRows, error: renameError } = await deps.db.from('merchant_renames')
+            .select('merchant_key, display_name').eq('user_id', conn.user_id)
+        const renames = renameError ? undefined
+            : new Map<string, string>((renameRows ?? []).map((r: any) => [r.merchant_key, r.display_name]))
 
         const rows: TransactionRow[] = []
         const moneyIn = new Set<string>()
@@ -134,7 +140,7 @@ export async function syncConnection(deps: BankDeps, connectionId: string) {
             await saveBalance(deps, token, acc)
             const r = convertBankTransactions(txs, { id: acc.id, type: acc.type, providerAccountId: acc.provider_account_id }, {
                 userId: conn.user_id, provider: conn.provider, syncFrom: conn.sync_from,
-                history: history ?? [], existing: existing ?? [], hasLinkedCreditCard, alreadyImported,
+                history: history ?? [], existing: existing ?? [], hasLinkedCreditCard, alreadyImported, renames,
             })
             rows.push(...r.rows)
             reviews.push(...r.reviews)
@@ -215,7 +221,7 @@ function isSavingsAccount(a: AccountInfo | undefined) {
  */
 async function markTransfers(deps: BankDeps, conn: any, rows: TransactionRow[], moneyIn: Set<string>,
     accounts: Map<string, AccountInfo>, fetchedMoneyIn: Map<string, boolean>, from: string, fullCheck: boolean) {
-    const saved = await loadAll(() => deps.db.from('transactions').select('id, external_id, bank_account_id, date, amount, type, name')
+    const saved = await loadAll(() => deps.db.from('transactions').select('*')
         .eq('user_id', conn.user_id).not('provider', 'is', null).gte('date', from).order('date'))
 
     const candidates: TransferCandidate[] = []
@@ -238,15 +244,15 @@ async function markTransfers(deps: BankDeps, conn: any, rows: TransactionRow[], 
         else continue                                                     // can't tell which way it went
         savedById.set(t.id, t)
         candidates.push({ key: `saved:${t.id}`, accountId: t.bank_account_id, accountType: acc.type, date: String(t.date).slice(0, 10),
-            amount: Math.abs(Number(t.amount)), moneyIn: isIn, description: t.name ?? '' })
+            amount: Math.abs(Number(t.amount)), moneyIn: isIn, description: t.original_name ?? t.name ?? '' })
         // Card payments imported before they were recognized
-        if (fullCheck && acc.type === 'credit' && isIn && t.type !== 'transfer' && isCardPayment(t.name)) { update(t.id, 'transfer'); cardFixes++ }
+        if (fullCheck && acc.type === 'credit' && isIn && t.type !== 'transfer' && isCardPayment(t.original_name ?? t.name)) { update(t.id, 'transfer'); cardFixes++ }
     }
     const newByKey = new Map<string, TransactionRow>()
     for (const r of rows) {
         newByKey.set(`new:${r.external_id}`, r)
         candidates.push({ key: `new:${r.external_id}`, accountId: r.bank_account_id, accountType: accounts.get(r.bank_account_id)?.type ?? 'depository',
-            date: r.date, amount: r.amount, moneyIn: moneyIn.has(r.external_id), description: r.name })
+            date: r.date, amount: r.amount, moneyIn: moneyIn.has(r.external_id), description: r.original_name ?? r.name })
     }
     const accountOf = (key: string) => accounts.get(newByKey.get(key)?.bank_account_id ?? savedById.get(key.slice('saved:'.length))?.bank_account_id)
 
