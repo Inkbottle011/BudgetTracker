@@ -12,8 +12,8 @@ interface Tx {
 
 /**
  * Adds a running balance to each transaction and returns them newest first.
- * Matches the dashboard: income and money paid back to you add, expenses subtract, and
- * savings or investments don't change it (they move money rather than earn or spend it).
+ * Matches the dashboard: income, money paid back to you and money taken out of savings add;
+ * expenses and money put into savings subtract. Investments and transfers don't change it.
  */
 export function withRunningBalance<T extends Tx>(list: T[]): (T & { balance: number })[] {
     const oldestFirst = list
@@ -21,8 +21,8 @@ export function withRunningBalance<T extends Tx>(list: T[]): (T & { balance: num
         .sort((a, b) => a.t.date.localeCompare(b.t.date) || a.i - b.i)
     let balance = 0
     return oldestFirst.map(({ t }) => {
-        if (t.type === 'income' || t.type === 'reimbursement') balance += Number(t.amount)
-        else if (t.type === 'expense') balance -= Number(t.amount)
+        if (t.type === 'income' || t.type === 'reimbursement' || t.type === 'withdrawal') balance += Number(t.amount)
+        else if (t.type === 'expense' || t.type === 'savings') balance -= Number(t.amount)
         return { ...t, balance: Math.round(balance * 100) / 100 }
     }).reverse()
 }

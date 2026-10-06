@@ -50,14 +50,22 @@ export function attributeReimbursements<T extends Tx>(list: T[]): T[] {
     })
 }
 
-/** Totals for one year, plus the all-time balance (income minus expenses). */
+/** Money put into savings minus money taken back out. */
+export function netSaved(list: Tx[]): number {
+    return sumByType(list, 'savings') - sumByType(list, 'withdrawal')
+}
+
+/**
+ * Totals for one year, plus the all-time balance: income minus spending and minus what's sitting in
+ * savings (putting money into savings lowers it; withdrawing raises it again).
+ */
 export function overview(all: Tx[], year: number) {
     const yearList = all.filter(t => dateParts(t.date).year === year)
     return {
         income: sumByType(yearList, 'income'),
         expenses: netSpent(yearList),
-        savings: sumByType(yearList, 'savings'),
-        balance: sumByType(all, 'income') - netSpent(all),
+        savings: netSaved(yearList),
+        balance: sumByType(all, 'income') - netSpent(all) - netSaved(all),
     }
 }
 
@@ -69,8 +77,10 @@ export function plannedAmount(amounts: PlannedAmount[], itemId: string, view: Vi
 
 export function actualAmount(periodList: Tx[], itemName: string, itemType: string): number {
     const inCategory = periodList.filter(t => t.category_label === itemName)
-    // Paybacks in a category reduce what was spent in it
-    return itemType === 'expense' ? netSpent(inCategory) : sumByType(inCategory, itemType)
+    // Paybacks in a category reduce what was spent in it; withdrawals reduce what was saved
+    if (itemType === 'expense') return netSpent(inCategory)
+    if (itemType === 'savings') return netSaved(inCategory)
+    return sumByType(inCategory, itemType)
 }
 
 export function spendingByCategory(periodList: Tx[]): { label: string; amount: number }[] {

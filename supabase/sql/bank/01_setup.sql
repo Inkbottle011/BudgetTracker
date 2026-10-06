@@ -9,8 +9,10 @@
 --   * bank_accounts: the accounts inside each linked bank
 --   * transactions.provider / external_id / bank_account_id: where a transaction came from,
 --     so the same bank transaction is never saved twice
---   * a 'transfer' transaction type: money moving between your own accounts (savings -> checking,
+--   * a 'transfer' transaction type: money moving between your own accounts (vault to vault,
 --     paying a card). Shown in your list but never counted as income or spending.
+--   * a 'withdrawal' transaction type: money taken back out of savings. It lowers what you've
+--     saved and raises your balance (the opposite of 'savings').
 --   * bank_possible_duplicates: bank transactions that look like ones you already have
 --     (same amount, a few days apart, different name), held back until you decide
 -- Reading bank details also requires having passed two-factor sign-in.
@@ -75,8 +77,8 @@ begin
   end if;
 end $$;
 
--- Allow the 'transfer' type. If the transactions table limits which types are allowed, replace that
--- limit with one that also allows 'transfer' (and 'reimbursement'). If there's no limit, nothing changes.
+-- Allow the 'transfer' and 'withdrawal' types. If the transactions table limits which types are
+-- allowed, replace that limit with one that also allows them. If there's no limit, nothing changes.
 do $$
 declare
   c record;
@@ -88,14 +90,14 @@ begin
     where conrelid = 'public.transactions'::regclass
       and contype = 'c'
       and pg_get_constraintdef(oid) ~* '\mtype\M'
-      and pg_get_constraintdef(oid) !~* 'transfer'
+      and pg_get_constraintdef(oid) !~* 'withdrawal'
   loop
     execute format('alter table public.transactions drop constraint %I', c.conname);
     had_limit := true;
   end loop;
   if had_limit then
     alter table public.transactions add constraint transactions_type_check
-      check (type in ('income', 'expense', 'savings', 'investment', 'reimbursement', 'transfer'));
+      check (type in ('income', 'expense', 'savings', 'investment', 'reimbursement', 'withdrawal', 'transfer'));
   end if;
 end $$;
 

@@ -242,7 +242,7 @@ describe('transfers between your own accounts', () => {
         const d = await dbWithTypeLimit()
         await d.db.exec(sql('reimbursements/01_setup.sql'))
         await d.db.exec(sql('bank/01_setup.sql'))
-        for (const type of ['transfer', 'reimbursement', 'expense']) {
+        for (const type of ['transfer', 'withdrawal', 'reimbursement', 'expense']) {
             await d.insert('transactions', { user_id: ALICE, type, amount: 1, date: '2026-10-01' })
         }
         await assert.rejects(d.insert('transactions', { user_id: ALICE, type: 'bogus', amount: 1, date: '2026-10-01' }), /check constraint/)
@@ -253,6 +253,7 @@ describe('transfers between your own accounts', () => {
         await d.db.exec(sql('bank/01_setup.sql'))
         await d.db.exec(sql('reimbursements/01_setup.sql'))
         await d.insert('transactions', { user_id: ALICE, type: 'transfer', amount: 1, date: '2026-10-01' })
+        await d.insert('transactions', { user_id: ALICE, type: 'withdrawal', amount: 1, date: '2026-10-01' })
     })
 
     it('linked banks start out needing the one-time transfer check', async () => {

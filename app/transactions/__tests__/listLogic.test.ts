@@ -13,13 +13,13 @@ describe('withRunningBalance', () => {
         expect(rows.map(r => [r.id, r.balance])).toEqual([['c', 50], ['b', 70], ['a', 100]])
     })
 
-    it('matches the dashboard balance: savings and investments do not change it', () => {
+    it('matches the dashboard balance: money put into savings lowers it, investments do not change it', () => {
         const rows = withRunningBalance([
             tx('a', '2026-10-01', 'income', 100),
             tx('b', '2026-10-02', 'savings', 40),
             tx('c', '2026-10-03', 'investment', 10),
         ])
-        expect(rows[0].balance).toBe(100)
+        expect(rows[0].balance).toBe(60)
     })
 
     it('keeps the original order for transactions on the same day', () => {
@@ -126,5 +126,22 @@ describe('transfers in the list', () => {
     it('can be filtered', () => {
         const list = [tx('a', '2026-10-01', 'income', 100), tx('b', '2026-10-02', 'transfer', 500)]
         expect(filterTransactions(list, { search: '', type: 'Transfer', from: '', to: '' }).map(t => t.id)).toEqual(['b'])
+    })
+})
+
+describe('savings in the list', () => {
+    it('the running balance goes down when you save and back up when you withdraw', () => {
+        const rows = withRunningBalance([
+            tx('a', '2026-10-01', 'income', 1000),
+            tx('b', '2026-10-02', 'savings', 400),
+            tx('c', '2026-10-03', 'withdrawal', 100),
+        ])
+        expect(rows.map(r => r.balance)).toEqual([700, 600, 1000])
+    })
+
+    it('Withdrawal is a type you can pick and filter by', () => {
+        expect(TRANSACTION_TYPES).toContain('Withdrawal')
+        const list = [tx('a', '2026-10-01', 'income', 100), tx('b', '2026-10-02', 'withdrawal', 50)]
+        expect(filterTransactions(list, { search: '', type: 'Withdrawal', from: '', to: '' }).map(t => t.id)).toEqual(['b'])
     })
 })

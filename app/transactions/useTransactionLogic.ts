@@ -272,6 +272,7 @@ export function useTransactionLogic() {
                 if (grouped[key]) grouped[key].push(item.name)
             })
             grouped.Reimbursement = grouped.Expense // paybacks go against spending categories
+            grouped.Withdrawal = grouped.Savings    // withdrawals come out of savings categories
             setBudgetCategories(grouped)
         }
     }

@@ -105,9 +105,11 @@ export async function syncConnection(deps: BankDeps, connectionId: string) {
         const since = fullCheck || lastSynced < conn.sync_from ? conn.sync_from : lastSynced
 
         const { data: accounts } = await deps.db.from('bank_accounts').select('*').eq('connection_id', conn.id)
-        const { data: allAccounts } = await deps.db.from('bank_accounts').select('id, type').eq('user_id', conn.user_id)
+        const { data: allAccounts } = await deps.db.from('bank_accounts').select('id, type, subtype').eq('user_id', conn.user_id)
         const hasLinkedCreditCard = (allAccounts ?? []).some((a: any) => a.type === 'credit')
-        const accountType = new Map<string, string>((allAccounts ?? []).map((a: any) => [a.id, a.type]))
+        const accountInfo = new Map<string, AccountInfo>((allAccounts ?? []).map((a: any) => [a.id, { type: a.type, subtype: a.subtype ?? null }]))
+        // Which way money went, straight from the bank, for re-sorting transfers saved before (one-time check)
+        const fetchedMoneyIn = new Map<string, boolean>()
 
         const { data: history } = await deps.db.from('transactions').select('name, note, category_label, type')
             .eq('user_id', conn.user_id).not('category_label', 'is', null).neq('category_label', '')
@@ -128,6 +130,7 @@ export async function syncConnection(deps: BankDeps, connectionId: string) {
         const skipped = { pending: 0, beforeStart: 0, duplicate: 0, cardPayment: 0, alreadyImported: 0 }
         for (const acc of (accounts ?? []).filter((a: any) => a.connection_id === conn.id)) {
             const txs = await deps.provider.listTransactions(token, acc.provider_account_id, since)
+            if (acc.type !== 'credit') for (const t of txs) fetchedMoneyIn.set(t.externalId, t.amount > 0)
             await saveBalance(deps, token, acc)
             const r = convertBankTransactions(txs, { id: acc.id, type: acc.type, providerAccountId: acc.provider_account_id }, {
                 userId: conn.user_id, provider: conn.provider, syncFrom: conn.sync_from,
@@ -141,7 +144,7 @@ export async function syncConnection(deps: BankDeps, connectionId: string) {
 
         // Money moving between your own accounts is saved as 'transfer' so it isn't counted twice.
         // The first time (transfers_checked false) this also fixes transfers imported before.
-        const transfers = await markTransfers(deps, conn, rows, moneyIn, accountType,
+        const transfers = await markTransfers(deps, conn, rows, moneyIn, accountInfo, fetchedMoneyIn,
             daysBefore(fullCheck ? conn.sync_from : since, TRANSFER_DAYS), fullCheck)
 
         let added = 0
@@ -191,60 +194,87 @@ async function loadAll(query: () => any, pageSize = 1000) {
     }
 }
 
+interface AccountInfo { type: string; subtype: string | null }
+
+/** Savings-type bank accounts (SoFi vaults count): money in is saved, money out is withdrawn. */
+function isSavingsAccount(a: AccountInfo | undefined) {
+    return !!a && a.type === 'depository' && /savings|money\s*market|\bcd\b/i.test(a.subtype ?? '')
+}
+
 /**
- * Pairs money leaving one of your linked accounts with the same amount arriving in another and
- * marks both 'transfer': new rows before they're saved, saved rows with an update. Saved rows are
- * only changed when paired with a new one, or during the one-time full check, so if you change a
- * transfer back to something else, it stays changed. Returns how many became transfers.
+ * Pairs money leaving one of your linked accounts with the same amount arriving in another, then:
+ *   - checking -> savings: the checking side counts as Savings, the savings side is a transfer
+ *   - savings -> checking: the checking side is a Withdrawal, the savings side is a transfer
+ *   - anything else (vault to vault, between checking accounts, paying a card): both are transfers
+ * New rows are changed before they're saved, saved rows with an update. Saved rows are only changed
+ * when paired with a new one, or during the one-time full check, so if you change one yourself, it
+ * stays changed. Rows you marked Savings or Investment are never changed. Returns how many changed.
  */
 async function markTransfers(deps: BankDeps, conn: any, rows: TransactionRow[], moneyIn: Set<string>,
-    accountType: Map<string, string>, from: string, fullCheck: boolean) {
-    const saved = await loadAll(() => deps.db.from('transactions').select('id, bank_account_id, date, amount, type, name')
+    accounts: Map<string, AccountInfo>, fetchedMoneyIn: Map<string, boolean>, from: string, fullCheck: boolean) {
+    const saved = await loadAll(() => deps.db.from('transactions').select('id, external_id, bank_account_id, date, amount, type, name')
         .eq('user_id', conn.user_id).not('provider', 'is', null).gte('date', from).order('date'))
 
     const candidates: TransferCandidate[] = []
     const savedById = new Map<string, any>()
-    const toUpdate = new Set<string>()
+    const updates = new Map<string, Set<string>>()   // new type -> ids
+    let cardFixes = 0
+    const update = (id: string, type: string) => {
+        for (const ids of updates.values()) ids.delete(id)
+        if (!updates.has(type)) updates.set(type, new Set())
+        updates.get(type)!.add(id)
+    }
+
     for (const t of saved) {
-        const type = accountType.get(t.bank_account_id)
-        if (!type) continue
-        // A saved transfer can only be told apart by direction on a card: there it's a payment coming in
-        if (t.type === 'transfer' && type !== 'credit') continue
-        const isIn = t.type === 'transfer' || MONEY_IN_TYPES.has(t.type)
+        const acc = accounts.get(t.bank_account_id)
+        if (!acc) continue
+        let isIn: boolean
+        if (t.type !== 'transfer') isIn = MONEY_IN_TYPES.has(t.type) || t.type === 'withdrawal'
+        else if (acc.type === 'credit') isIn = true                      // a transfer on a card is a payment arriving
+        else if (fullCheck && fetchedMoneyIn.has(t.external_id)) isIn = fetchedMoneyIn.get(t.external_id)!
+        else continue                                                     // can't tell which way it went
         savedById.set(t.id, t)
-        candidates.push({ key: `saved:${t.id}`, accountId: t.bank_account_id, accountType: type, date: String(t.date).slice(0, 10),
+        candidates.push({ key: `saved:${t.id}`, accountId: t.bank_account_id, accountType: acc.type, date: String(t.date).slice(0, 10),
             amount: Math.abs(Number(t.amount)), moneyIn: isIn, description: t.name ?? '' })
         // Card payments imported before they were recognized
-        if (fullCheck && type === 'credit' && isIn && t.type !== 'transfer' && isCardPayment(t.name)) toUpdate.add(t.id)
+        if (fullCheck && acc.type === 'credit' && isIn && t.type !== 'transfer' && isCardPayment(t.name)) { update(t.id, 'transfer'); cardFixes++ }
     }
     const newByKey = new Map<string, TransactionRow>()
     for (const r of rows) {
         newByKey.set(`new:${r.external_id}`, r)
-        candidates.push({ key: `new:${r.external_id}`, accountId: r.bank_account_id, accountType: accountType.get(r.bank_account_id) ?? 'depository',
+        candidates.push({ key: `new:${r.external_id}`, accountId: r.bank_account_id, accountType: accounts.get(r.bank_account_id)?.type ?? 'depository',
             date: r.date, amount: r.amount, moneyIn: moneyIn.has(r.external_id), description: r.name })
     }
+    const accountOf = (key: string) => accounts.get(newByKey.get(key)?.bank_account_id ?? savedById.get(key.slice('saved:'.length))?.bank_account_id)
 
-    for (const pair of findTransferPairs(candidates)) {
-        const involvesNew = pair.some(k => k.startsWith('new:'))
-        if (!involvesNew && !fullCheck) continue
-        for (const key of pair) {
+    let changed = 0
+    for (const [outKey, inKey] of findTransferPairs(candidates)) {
+        if (!outKey.startsWith('new:') && !inKey.startsWith('new:') && !fullCheck) continue
+        const outAcc = accountOf(outKey), inAcc = accountOf(inKey)
+        let outType = 'transfer', inType = 'transfer'
+        if (!isSavingsAccount(outAcc) && isSavingsAccount(inAcc)) outType = 'savings'
+        else if (isSavingsAccount(outAcc) && !isSavingsAccount(inAcc) && inAcc?.type !== 'credit') inType = 'withdrawal'
+
+        for (const [key, type] of [[outKey, outType], [inKey, inType]]) {
             const row = newByKey.get(key)
-            const type = row ? row.type : savedById.get(key.slice('saved:'.length))?.type
-            // Money put into savings or investments still counts as saved; only its other side
-            // (showing up as income in the savings account) is the transfer
-            if (KEEP_TYPES.has(type) || type === 'transfer') continue
-            if (row) { row.type = 'transfer'; row.category_label = '' }
-            else toUpdate.add(key.slice('saved:'.length))
+            const current = row ? row.type : savedById.get(key.slice('saved:'.length))?.type
+            // Money you marked as Savings or Investment yourself stays that way
+            if (current === type || (KEEP_TYPES.has(current) && type !== 'savings')) continue
+            changed++
+            if (row) { row.type = type; if (type === 'transfer') row.category_label = ''; continue }
+            update(key.slice('saved:'.length), type)
         }
     }
 
-    const ids = [...toUpdate]
-    for (let i = 0; i < ids.length; i += 200) {
-        const { error } = await deps.db.from('transactions').update({ type: 'transfer', category_label: '' })
-            .eq('user_id', conn.user_id).in('id', ids.slice(i, i + 200))
-        if (error) throw new Error(`Couldn't mark transfers: ${error.message}`)
+    for (const [type, idSet] of updates) {
+        const ids = [...idSet]
+        const fields = type === 'transfer' ? { type, category_label: '' } : { type }
+        for (let i = 0; i < ids.length; i += 200) {
+            const { error } = await deps.db.from('transactions').update(fields).eq('user_id', conn.user_id).in('id', ids.slice(i, i + 200))
+            if (error) throw new Error(`Couldn't mark transfers: ${error.message}`)
+        }
     }
-    return rows.filter(r => r.type === 'transfer').length + ids.length
+    return changed + cardFixes
 }
 
 /** Saves an account's current balance. A balance problem never stops transactions from syncing. */
