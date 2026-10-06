@@ -12,7 +12,9 @@ interface Props {
 }
 
 export function OverviewStats({ income, expenses, savings, budgetItems, budgetAmounts, transactions, year }: Props) {
-    const net = income - expenses - savings
+    // What you earned minus what you spent. Money moved into savings isn't spent, so it isn't
+    // taken away here; it shows in the savings rate instead.
+    const net = income - expenses
     const saveRate = income > 0 ? ((savings / income) * 100).toFixed(1) : '0.0'
     const expenseRatio = income > 0 ? ((expenses / income) * 100).toFixed(1) : '0.0'
     
@@ -24,9 +26,9 @@ export function OverviewStats({ income, expenses, savings, budgetItems, budgetAm
     return (
         <View style={styles.container}>
         <View style={styles.card}>
-        <Text style={styles.label}>Net Saved</Text>
+        <Text style={styles.label}>Income − Spending</Text>
         <Text style={[styles.value, { color: net >= 0 ? '#27ae60' : '#e74c3c' }]}>
-        {net >= 0 ? '+' : ''}${net.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+        {net >= 0 ? '+' : '-'}${Math.abs(net).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </Text>
         <View style={[styles.badge, { backgroundColor: parseFloat(expenseRatio) <= 70 ? '#eafaf1' : '#fdedec' }]}>
         <Text style={[styles.badgeText, { color: parseFloat(expenseRatio) <= 70 ? '#27ae60' : '#e74c3c' }]}>
