@@ -163,3 +163,62 @@ describe('budgetHealth', () => {
         expect(budgetHealth(items, amounts, [tx('2026-01-01', 'expense', 99999, 'Rent')], 2026).score).toBe(0)
     })
 })
+
+import { attributeReimbursements, netSpent } from '../calculations'
+
+describe('reimbursements', () => {
+    // $120 dinner on Sept 30, friends pay back $90 in October
+    const dinner = { ...tx('2026-09-30', 'expense', 120, 'Food'), id: 'dinner' }
+    const sam = { ...tx('2026-10-02', 'reimbursement', 30, 'Food'), id: 'sam', reimburses_id: 'dinner' }
+    const alex = { ...tx('2026-10-03', 'reimbursement', '60', 'Food'), id: 'alex', reimburses_id: 'dinner' }
+    const refund = { ...tx('2026-10-10', 'reimbursement', 15, 'Shopping'), id: 'refund' } // not linked to anything
+    const shirt = { ...tx('2026-10-05', 'expense', 40, 'Shopping'), id: 'shirt' }
+    const pay = { ...tx('2026-10-01', 'income', 3000, 'Salary'), id: 'pay' }
+    const all = attributeReimbursements([dinner, sam, alex, refund, shirt, pay])
+
+    it('counts a linked payback in the month of the expense it pays back', () => {
+        expect(all.find(t => t.id === 'sam')!.date).toBe('2026-09-30')
+        expect(all.find(t => t.id === 'refund')!.date).toBe('2026-10-10')
+        expect(all.find(t => t.id === 'dinner')!.date).toBe('2026-09-30')
+    })
+
+    it('leaves a payback on its own date when its expense is not in the list', () => {
+        expect(attributeReimbursements([sam])[0].date).toBe('2026-10-02')
+    })
+
+    it('net spending subtracts reimbursements', () => {
+        expect(netSpent(all)).toBe(120 + 40 - 90 - 15)
+    })
+
+    it('a split dinner costs your share in its month, and does not touch the next month', () => {
+        const sept = all.filter(t => inPeriod(t, 'month', 2026, 9))
+        const oct = all.filter(t => inPeriod(t, 'month', 2026, 10))
+        expect(netSpent(sept)).toBe(30)
+        expect(netSpent(oct)).toBe(40 - 15)
+    })
+
+    it('does not count paybacks as income', () => {
+        expect(overview(all, 2026)).toMatchObject({ income: 3000, expenses: 55 })
+    })
+
+    it('balance counts money coming back', () => {
+        expect(overview(all, 2026).balance).toBe(3000 - 160 + 105)
+    })
+
+    it('budget actuals and category spending are net of paybacks', () => {
+        expect(actualAmount(all, 'Food', 'expense')).toBe(30)
+        expect(actualAmount(all, 'Shopping', 'expense')).toBe(25)
+        expect(spendingByCategory(all)).toEqual([{ label: 'Food', amount: 30 }, { label: 'Shopping', amount: 25 }])
+    })
+
+    it('leaves out a category whose paybacks cover all of its spending', () => {
+        const list = attributeReimbursements([dinner, { ...sam, amount: 120 }])
+        expect(spendingByCategory(list)).toEqual([])
+    })
+
+    it('the trend chart and budget health use net spending', () => {
+        expect(monthlyTrend(all, [{ month: 9, year: 2026, label: 'Sep' }])[0]).toMatchObject({ expense: 30, net: -30 })
+        const health = budgetHealth([{ id: 'f', name: 'Food', type: 'expense' }], [{ budget_item_id: 'f', month: 9, amount: 50 }], all, 2026)
+        expect(health).toMatchObject({ actual: 30, score: 100 })
+    })
+})

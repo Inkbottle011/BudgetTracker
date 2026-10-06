@@ -175,6 +175,13 @@ Date,Description,Amount,Type
         ])
     })
 
+    it('keeps reimbursements as reimbursements when re-importing an exported file', () => {
+        const { rows, mapping } = parse(`
+Date,Type,Category,Name,Amount
+2026-10-02,reimbursement,Food,Sam paid back,30`)
+        expect(convertRows(rows, mapping, 'negative', [], []).ready[0].transaction).toMatchObject({ type: 'reimbursement', amount: 30 })
+    })
+
     it('does not apply an income category to money going out', () => {
         const { rows, mapping } = parse(`
 Date,Description,Amount

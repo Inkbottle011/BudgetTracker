@@ -2,12 +2,15 @@ import { View, StyleSheet } from 'react-native'
 import { useTransactionLogic } from './useTransactionLogic'
 import { TransactionList } from './TransactionList'
 import { TransactionForm } from './TransactionForm'
+import { OwedPanel } from './OwedPanel'
 
 export default function TransactionsScreen() {
     const logic = useTransactionLogic()
     //edit
     return (
         <View style={styles.container}>
+        <View style={styles.listColumn}>
+        <OwedPanel transactions={logic.transactions} onChanged={logic.fetchTransactions} />
         <TransactionList
         rows={logic.rows}
         selectMode={logic.selectMode}
@@ -47,6 +50,7 @@ export default function TransactionsScreen() {
         onCloseImport={() => logic.setShowImport(false)}
         onImported={() => { logic.setShowImport(false); logic.fetchTransactions() }}
         />
+        </View>
         <TransactionForm
         type={logic.type}
         category={logic.category}
@@ -71,6 +75,12 @@ export default function TransactionsScreen() {
         budgetCategories={logic.budgetCategories}
         pastTransactions={logic.transactions}
         onPickSuggestion={logic.applySuggestion}
+        splitOpen={logic.splitOpen}
+        splits={logic.splits}
+        onOpenSplit={logic.openSplit}
+        onCloseSplit={logic.closeSplit}
+        onSplitsChange={rows => { logic.setSplits(rows); logic.setErrors(e => ({ ...e, split: undefined })) }}
+        onSplitEvenly={logic.splitEvenly}
         />
         </View>
     )
@@ -78,4 +88,5 @@ export default function TransactionsScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1, flexDirection: 'row', backgroundColor: '#f5f6fa' },
+    listColumn: { flex: 3 },
 })

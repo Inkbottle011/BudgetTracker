@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native'
 import { DateField } from '../../components/DateField'
-import { TYPES, TYPE_COLORS, DEFAULT_CATEGORIES } from './types'
+import { TRANSACTION_TYPES, TYPE_COLORS, DEFAULT_CATEGORIES } from './types'
+import { SplitSection } from './SplitSection'
 import { EditingTransaction } from './types'
 
 interface Props {
@@ -12,7 +13,7 @@ interface Props {
     amount: string
     details: string
     date: string
-    errors: { amount?: string; date?: string }
+    errors: { amount?: string; date?: string; split?: string }
     saving: boolean
     success: boolean
     onTypeChange: (t: string) => void
@@ -31,6 +32,13 @@ interface Props {
     // Name suggestions from past transactions
     pastTransactions: any[]
     onPickSuggestion: (t: any) => void
+    // Splitting an expense with others
+    splitOpen: boolean
+    splits: { person: string; amount: string }[]
+    onOpenSplit: () => void
+    onCloseSplit: () => void
+    onSplitsChange: (rows: { person: string; amount: string }[]) => void
+    onSplitEvenly: () => void
 }
 
 export function TransactionForm({
@@ -40,6 +48,7 @@ export function TransactionForm({
     onAmountChange, onDetailsChange, onDateChange, onAdd,
     editingTransaction, onEditChange, onSaveEdit, onCancelEdit, budgetCategories,
     pastTransactions, onPickSuggestion,
+    splitOpen, splits, onOpenSplit, onCloseSplit, onSplitsChange, onSplitEvenly,
 }: Props) {
     const isEditing = !!editingTransaction
     const activeType = isEditing ? editingTransaction!.type : type
@@ -91,7 +100,7 @@ export function TransactionForm({
         {/* Type */}
         <Text style={styles.label}>Type</Text>
         <View style={styles.typeRow}>
-        {TYPES.map(t => (
+        {TRANSACTION_TYPES.map(t => (
             <TouchableOpacity
             key={t}
             style={[styles.typeBtn, activeType === t && { backgroundColor: TYPE_COLORS[t].bg }]}
@@ -176,6 +185,18 @@ export function TransactionForm({
         placeholderTextColor="#aaa"
         />
         {!isEditing && errors.amount && <Text style={styles.errorText}>{errors.amount}</Text>}
+        {!isEditing && activeType === 'Expense' && (
+            <SplitSection
+            open={splitOpen}
+            rows={splits}
+            total={amount}
+            error={errors.split}
+            onOpen={onOpenSplit}
+            onClose={onCloseSplit}
+            onChange={onSplitsChange}
+            onSplitEvenly={onSplitEvenly}
+            />
+        )}
         
         {/* Date */}
         <Text style={styles.label}>Date</Text>

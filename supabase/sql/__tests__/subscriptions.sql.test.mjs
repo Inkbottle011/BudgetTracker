@@ -3,61 +3,19 @@
 // Uses Node's built-in test runner (run with `npm run test:db`, or `npm test` for everything).
 import { describe, it, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
-import fs from 'node:fs'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { PGlite } from '@electric-sql/pglite'
+import { freshDb as makeDb, sql as readSql, ALICE, BOB } from './helpers.mjs'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const SQL_DIR = path.join(__dirname, '..', 'subscriptions')
-const sql = (file) => fs.readFileSync(path.join(SQL_DIR, file), 'utf8')
+const sql = (file) => readSql(`subscriptions/${file}`)
 
-const ALICE = '00000000-0000-0000-0000-00000000000a'
-const BOB = '00000000-0000-0000-0000-00000000000b'
+let db, as, rows, one
 
-let db
-
-/** A fresh database with Supabase-like auth, roles and the app's transactions table. */
+/** A fresh database for each test, as the shared helper builds it. */
 async function freshDb() {
-    const d = await PGlite.create()
-    await d.exec(`
-        create role anon; create role authenticated; create role service_role;
-        create schema auth;
-        create table auth.users (id uuid primary key);
-        create function auth.uid() returns uuid language sql stable
-          as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
-        grant usage on schema auth to anon, authenticated;
-        grant execute on function auth.uid() to anon, authenticated;
-        insert into auth.users values ('${ALICE}'), ('${BOB}');
-
-        create table public.transactions (
-          id uuid primary key default gen_random_uuid(),
-          user_id uuid references auth.users(id), type text, category_id uuid, amount numeric,
-          name text, note text, category_label text, date date,
-          recurring text default 'none', recurring_end date, created_at timestamptz default now());
-        alter table public.transactions enable row level security;
-        create policy own on public.transactions for all to authenticated
-          using (user_id = auth.uid()) with check (user_id = auth.uid());
-
-        grant usage on schema public to anon, authenticated;
-        -- Like newer Supabase projects: existing tables are granted, but NEW tables are not
-        -- reachable by signed-in users until the setup SQL grants access explicitly
-        grant all on all tables in schema public to authenticated;
-        -- Supabase lets anon execute new functions by default; the setup must revoke it
-        alter default privileges in schema public grant execute on functions to anon;
-    `)
-    return d
+    const h = await makeDb()
+    ;({ as, rows, one } = h)
+    return h.db
 }
 
-/** Run the rest of the test as a signed-in user, as the anon key, or as the scheduled job (no user). */
-async function as(who) {
-    await db.exec(`reset role; select set_config('request.jwt.claim.sub', '', false);`)
-    if (who === 'anon') await db.exec('set role anon')
-    else if (who !== 'job') await db.exec(`select set_config('request.jwt.claim.sub', '${who}', false); set role authenticated;`)
-}
-
-const rows = async (q, params = []) => (await db.query(q, params)).rows
-const one = async (q, params = []) => (await rows(q, params))[0]
 const generate = async (today) => (await one(`select generate_subscription_transactions($1::date) as n`, [today])).n
 const charges = async (name) =>
     (await rows(`select date::text d from transactions where name = $1 and subscription_id is not null order by date`, [name])).map(r => r.d)

@@ -19,6 +19,12 @@ A cross-platform personal finance app for planning a yearly budget, tracking tra
 - **CSV export** and a **CSV bank-import wizard**: pick a file, match columns (auto-guessed, including separate money-in / money-out columns), then review before importing. It reads common bank date and amount formats, skips transactions you already have, leaves out credit card payments, suggests categories from how you categorized the same merchant before, and reports any rows it couldn't save
 - Fast entry: name suggestions from past transactions fill in amount, type and category; date picker with Today / Yesterday; amounts like "$1,234.50" accepted; Enter to save
 
+**Split expenses and paybacks**
+- Split an expense with others when adding it (per person, or split evenly); the full amount stays the expense so it matches your bank
+- "Owed to you" lists who still has to pay you back, per expense and per person
+- Mark someone paid to record a **reimbursement**, or link a Venmo deposit you already imported so it isn't counted twice
+- Reimbursements reduce spending in their category instead of counting as income, and count in the month of the expense they pay back
+
 **Subscriptions**
 - Repeating charges and income (weekly, every 2 weeks, monthly, yearly) with optional end dates
 - Monthly and yearly cost totals, next charge date, and pause, resume, cancel or delete
@@ -100,6 +106,8 @@ For subscriptions, run the files in `supabase/sql/subscriptions/` in order in th
 1. `01_setup.sql` creates the `subscriptions` table, its security rules, and the charge function
 2. `02_preview_subscriptions.sql` and `03_preview_deletions.sql` are read-only previews of the conversion
 3. `04_convert_old_recurring.sql` converts transactions from the old recurring system (only needed if you used it)
+
+For split expenses and reimbursements, run `supabase/sql/reimbursements/01_setup.sql`.
 
 Then deploy the edge function and schedule it, for example daily with Supabase cron:
 

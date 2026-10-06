@@ -31,12 +31,12 @@ export default function Dashboard() {
         savings={logic.overviewSavings}
         budgetItems={logic.budgetItems}
         budgetAmounts={logic.budgetAmounts}
-        transactions={logic.transactions}
+        transactions={logic.forTotals}
         year={logic.currentYear}
         />
         <View style={styles.trendCol}>
         <MonthlyTrend
-        transactions={logic.transactions}
+        transactions={logic.forTotals}
         selectedYear={logic.selectedYear}
         />
         </View>

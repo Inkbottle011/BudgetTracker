@@ -6,7 +6,7 @@ import {
 export type ImportField = 'date' | 'amount' | 'debit' | 'credit' | 'description' | 'type' | 'category' | 'skip'
 export type SpendingSign = 'negative' | 'positive'
 
-const VALID_TYPES = ['income', 'expense', 'savings', 'investment']
+const VALID_TYPES = ['income', 'expense', 'savings', 'investment', 'reimbursement']
 
 // Paying off a credit card shows up as money coming in on the card's statement,
 // but it isn't income, just money moving between your own accounts.

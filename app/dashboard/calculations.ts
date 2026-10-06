@@ -4,7 +4,14 @@ export const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', '
 
 export type View = 'month' | 'year'
 
-interface Tx { date: string; type: string; amount: number | string; category_label?: string | null }
+interface Tx {
+    id?: string
+    date: string
+    type: string
+    amount: number | string
+    category_label?: string | null
+    reimburses_id?: string | null
+}
 interface PlannedAmount { budget_item_id: string; month: number; amount: number | string }
 
 /**
@@ -25,14 +32,32 @@ export function sumByType(list: Tx[], type: string): number {
     return list.filter(t => t.type === type).reduce((s, t) => s + Number(t.amount), 0)
 }
 
+/** What you actually spent: expenses minus money paid back to you (Venmo from friends, refunds). */
+export function netSpent(list: Tx[]): number {
+    return sumByType(list, 'expense') - sumByType(list, 'reimbursement')
+}
+
+/**
+ * Counts a payback in the month of the expense it pays back, so a split dinner on Sept 30
+ * repaid on Oct 2 costs your share in September instead of overspending Sept and underspending Oct.
+ * Use the result for totals only; show transactions with their real dates.
+ */
+export function attributeReimbursements<T extends Tx>(list: T[]): T[] {
+    const dateOf = new Map(list.filter(t => t.id).map(t => [t.id!, t.date]))
+    return list.map(t => {
+        const expenseDate = t.type === 'reimbursement' && t.reimburses_id ? dateOf.get(t.reimburses_id) : undefined
+        return expenseDate ? { ...t, date: expenseDate } : t
+    })
+}
+
 /** Totals for one year, plus the all-time balance (income minus expenses). */
 export function overview(all: Tx[], year: number) {
     const yearList = all.filter(t => dateParts(t.date).year === year)
     return {
         income: sumByType(yearList, 'income'),
-        expenses: sumByType(yearList, 'expense'),
+        expenses: netSpent(yearList),
         savings: sumByType(yearList, 'savings'),
-        balance: sumByType(all, 'income') - sumByType(all, 'expense'),
+        balance: sumByType(all, 'income') - netSpent(all),
     }
 }
 
@@ -43,20 +68,22 @@ export function plannedAmount(amounts: PlannedAmount[], itemId: string, view: Vi
 }
 
 export function actualAmount(periodList: Tx[], itemName: string, itemType: string): number {
-    return periodList
-        .filter(t => t.category_label === itemName && t.type === itemType)
-        .reduce((s, t) => s + Number(t.amount), 0)
+    const inCategory = periodList.filter(t => t.category_label === itemName)
+    // Paybacks in a category reduce what was spent in it
+    return itemType === 'expense' ? netSpent(inCategory) : sumByType(inCategory, itemType)
 }
 
 export function spendingByCategory(periodList: Tx[]): { label: string; amount: number }[] {
     const grouped: Record<string, number> = {}
     for (const t of periodList) {
-        if (t.type !== 'expense') continue
+        const sign = t.type === 'expense' ? 1 : t.type === 'reimbursement' ? -1 : 0
+        if (!sign) continue
         const key = t.category_label || 'Other'
-        grouped[key] = (grouped[key] || 0) + Number(t.amount)
+        grouped[key] = (grouped[key] || 0) + sign * Number(t.amount)
     }
     return Object.entries(grouped)
-        .map(([label, amount]) => ({ label, amount }))
+        .filter(([, amount]) => amount > 0.005)
+        .map(([label, amount]) => ({ label, amount: Math.round(amount * 100) / 100 }))
         .sort((a, b) => b.amount - a.amount)
 }
 
@@ -79,7 +106,7 @@ export function monthlyTrend(list: Tx[], months: TrendMonth[]) {
     return months.map(({ month, year, label }) => {
         const inMonth = list.filter(t => { const d = dateParts(t.date); return d.year === year && d.month === month })
         const income = sumByType(inMonth, 'income')
-        const expense = sumByType(inMonth, 'expense')
+        const expense = netSpent(inMonth)
         return { label, income, expense, net: income - expense }
     })
 }
@@ -97,9 +124,7 @@ export function budgetHealth(
     let planned = 0, actual = 0, overBudgetCount = 0
     for (const item of items.filter(i => i.type === 'expense')) {
         const p = plannedAmount(amounts, item.id, 'year', 1)
-        const a = list
-            .filter(t => t.category_label === item.name && t.type === 'expense' && dateParts(t.date).year === year)
-            .reduce((s, t) => s + Number(t.amount), 0)
+        const a = actualAmount(list.filter(t => dateParts(t.date).year === year), item.name, 'expense')
         planned += p
         actual += a
         if (a > p && p > 0) overBudgetCount++
