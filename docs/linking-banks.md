@@ -37,6 +37,7 @@ Start in **sandbox**, then switch to **production** (your Trial plan) for real b
 
 ### 2. Database
 In Supabase, open **SQL Editor -> New query**, paste `supabase/sql/bank/01_setup.sql` and **Run**.
+(Safe to run again after updates; it only adds what's missing.)
 
 ### 3. Function secrets
 Supabase dashboard -> **Edge Functions -> Secrets**, add:
@@ -80,6 +81,14 @@ Change the function secrets `PLAID_SECRET` to your **Production** secret and `PL
 `production`, then link your bank. Unlink the sandbox banks in Settings first.
 
 ## What gets imported
+- History: banks are asked for transactions back to **January 1** of the current year (Plaid
+  collects history once, when a bank is first linked). You pick the start date when linking; it
+  defaults to the day after your latest transaction.
+- Transactions you already have (typed in or from a CSV) aren't added again:
+  - Same date, amount and wording, or the same amount at the same place within 3 days: skipped.
+  - Same amount within 3 days but a different name (e.g. your "Groceries" vs. the bank's
+    "WHOLE FOODS #10234"): held back under **Settings -> Linked banks -> Possible duplicates**,
+    and not counted until you pick **Keep mine**, **Use bank's** or **Keep both**.
 - Purchases: expenses (card purchases too). Interest and fees: expenses.
 - Paychecks and other money in: income.
 - Refunds, and any money coming back on a card that isn't a payment: reimbursements.

@@ -123,3 +123,97 @@ describe('transactions from banks', () => {
         assert.deepEqual(await h.one(`select count(*)::int c from transactions`), { c: 2 })
     })
 })
+
+describe('possible duplicates to review', () => {
+    /** You typed in $84.23 "Groceries"; the bank's copy says "WHOLE FOODS" a day later. */
+    async function setup(userId = ALICE) {
+        const { account } = await serverLinks(userId)
+        const mine = await h.insert('transactions', { user_id: userId, type: 'expense', amount: 84.23, date: '2026-10-01', name: 'Groceries', category_label: 'Food' })
+        await h.as('job')
+        await h.db.exec('set role service_role')
+        const review = await h.insert('bank_possible_duplicates', {
+            user_id: userId, provider: 'plaid', external_id: 'txn_wf', bank_account_id: account,
+            date: '2026-10-02', amount: 84.23, type: 'expense', name: 'WHOLE FOODS #10234', category_label: '',
+            existing_transaction_id: mine,
+        })
+        return { mine, review, account }
+    }
+    const resolve = (id, choice) => h.db.query(`select resolve_possible_duplicate($1, $2)`, [id, choice])
+    const transactions = () => h.rows(`select name, external_id from transactions order by name`)
+
+    it('users see their own, side by side with the transaction they already have', async () => {
+        await setup()
+        await asUser(ALICE)
+        assert.deepEqual(await h.rows(`
+            select d.name as bank_name, d.amount::float, t.name as my_name
+            from bank_possible_duplicates d left join transactions t on t.id = d.existing_transaction_id`),
+        [{ bank_name: 'WHOLE FOODS #10234', amount: 84.23, my_name: 'Groceries' }])
+    })
+
+    it('are private, and need two-factor sign-in like other bank details', async () => {
+        await setup()
+        await asUser(BOB)
+        assert.deepEqual(await h.rows(`select id from bank_possible_duplicates`), [])
+        await asUser(ALICE, { twoFactor: false })
+        assert.deepEqual(await h.rows(`select id from bank_possible_duplicates`), [])
+        await h.as('anon')
+        await assert.rejects(h.rows(`select id from bank_possible_duplicates`), /permission denied/)
+    })
+
+    it('the app can only resolve them, not add or change them', async () => {
+        const { review } = await setup()
+        await asUser(ALICE)
+        await assert.rejects(h.db.query(`update bank_possible_duplicates set amount = 1 where id = $1`, [review]), /permission denied/)
+        await assert.rejects(h.insert('bank_possible_duplicates', { user_id: ALICE, provider: 'plaid', external_id: 'x', date: '2026-10-01', amount: 1, type: 'expense' }), /permission denied/)
+    })
+
+    it('"Keep mine": yours stays and takes the bank\'s id, so the bank\'s copy is never added', async () => {
+        const { review } = await setup()
+        await asUser(ALICE)
+        await resolve(review, 'keep_mine')
+        assert.deepEqual(await transactions(), [{ name: 'Groceries', external_id: 'txn_wf' }])
+        assert.deepEqual(await h.rows(`select id from bank_possible_duplicates`), [])
+        await h.as('job')
+        await assert.rejects(h.insert('transactions', { user_id: ALICE, type: 'expense', amount: 84.23, date: '2026-10-02', provider: 'plaid', external_id: 'txn_wf' }), /duplicate key/)
+    })
+
+    it('"Use bank\'s": the bank\'s copy replaces yours', async () => {
+        const { review, account } = await setup()
+        await asUser(ALICE)
+        await resolve(review, 'use_bank')
+        assert.deepEqual(await h.rows(`select name, amount::float, date::text, type, provider, external_id, bank_account_id from transactions`), [{
+            name: 'WHOLE FOODS #10234', amount: 84.23, date: '2026-10-02', type: 'expense', provider: 'plaid', external_id: 'txn_wf', bank_account_id: account,
+        }])
+    })
+
+    it('"Keep both": they really are two transactions', async () => {
+        const { review } = await setup()
+        await asUser(ALICE)
+        await resolve(review, 'keep_both')
+        assert.deepEqual(await transactions(), [{ name: 'Groceries', external_id: null }, { name: 'WHOLE FOODS #10234', external_id: 'txn_wf' }])
+    })
+
+    it('still works if you deleted yours in the meantime', async () => {
+        const { review, mine } = await setup()
+        await asUser(ALICE)
+        await h.db.query(`delete from transactions where id = $1`, [mine])
+        await resolve(review, 'use_bank')
+        assert.deepEqual(await transactions(), [{ name: 'WHOLE FOODS #10234', external_id: 'txn_wf' }])
+    })
+
+    it('rejects unknown choices and other people\'s reviews', async () => {
+        const { review } = await setup()
+        await asUser(ALICE)
+        await assert.rejects(resolve(review, 'delete_everything'), /Unknown choice/)
+        await asUser(BOB)
+        await assert.rejects(resolve(review, 'use_bank'), /not found/)
+        await asUser(ALICE)
+        assert.equal((await transactions()).length, 1)
+    })
+
+    it('the public anon key cannot resolve anything', async () => {
+        const { review } = await setup()
+        await h.as('anon')
+        await assert.rejects(resolve(review, 'keep_both'), /permission denied/)
+    })
+})

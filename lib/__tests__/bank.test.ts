@@ -1,4 +1,4 @@
-import { suggestedStartDate, callBank, describeStatus } from '../bank'
+import { suggestedStartDate, earliestStartDate, callBank, describeStatus } from '../bank'
 import { functions } from '../../test/fakeSupabase'
 
 jest.mock('../supabase', () => require('../../test/fakeSupabase').module)
@@ -8,14 +8,20 @@ describe('suggestedStartDate', () => {
         expect(suggestedStartDate([{ date: '2026-09-20' }, { date: '2026-10-03' }, { date: '2026-08-01' }], '2026-10-06')).toBe('2026-10-04')
     })
 
-    it('uses the last 30 days when you have no recent transactions', () => {
-        expect(suggestedStartDate([], '2026-10-06')).toBe('2026-09-06')
-        expect(suggestedStartDate([{ date: '2025-01-01' }], '2026-10-06')).toBe('2026-09-06')
+    it('starts on January 1 when you have nothing this year', () => {
+        expect(suggestedStartDate([], '2026-10-06')).toBe('2026-01-01')
+        expect(suggestedStartDate([{ date: '2025-06-01' }], '2026-10-06')).toBe('2026-01-01')
     })
 
     it('never suggests a future date', () => {
         expect(suggestedStartDate([{ date: '2026-10-06' }], '2026-10-06')).toBe('2026-10-06')
         expect(suggestedStartDate([{ date: '2026-12-25' }], '2026-10-06')).toBe('2026-10-06')
+    })
+})
+
+describe('earliestStartDate', () => {
+    it('is January 1 of this year, as far back as banks are asked to share', () => {
+        expect(earliestStartDate('2026-10-06')).toBe('2026-01-01')
     })
 })
 

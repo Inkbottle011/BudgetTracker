@@ -9,6 +9,8 @@
 --   * bank_accounts: the accounts inside each linked bank
 --   * transactions.provider / external_id / bank_account_id: where a transaction came from,
 --     so the same bank transaction is never saved twice
+--   * bank_possible_duplicates: bank transactions that look like ones you already have
+--     (same amount, a few days apart, different name), held back until you decide
 -- Reading bank details also requires having passed two-factor sign-in.
 -- Nothing existing is changed or deleted.
 
@@ -91,3 +93,82 @@ drop policy if exists "Users see their own bank accounts" on public.bank_account
 create policy "Users see their own bank accounts"
   on public.bank_accounts for select to authenticated
   using (user_id = (select auth.uid()) and (select auth.jwt() ->> 'aal') = 'aal2');
+
+-- 5. Possible duplicates, waiting for you to decide ---------------------------------
+-- A bank transaction with the same amount as one of yours, within a few days, but a different
+-- name. It isn't added to your transactions (so nothing is counted twice) until you choose:
+--   keep_mine  yours stays and takes the bank's id, so the bank's copy is never offered again
+--   use_bank   the bank's copy replaces yours
+--   keep_both  they're really two transactions
+create table if not exists public.bank_possible_duplicates (
+  id                       uuid primary key default gen_random_uuid(),
+  user_id                  uuid not null references auth.users (id) on delete cascade,
+  provider                 text not null,
+  external_id              text not null,
+  bank_account_id          uuid references public.bank_accounts (id) on delete set null,
+  date                     date not null,
+  amount                   numeric(14, 2) not null,
+  type                     text not null,
+  name                     text,
+  category_label           text,
+  existing_transaction_id  uuid references public.transactions (id) on delete set null,
+  created_at               timestamptz not null default now(),
+  unique (user_id, provider, external_id)
+);
+
+create index if not exists bank_possible_duplicates_user_id_idx on public.bank_possible_duplicates (user_id);
+
+revoke all on public.bank_possible_duplicates from anon, authenticated;
+grant select, delete on public.bank_possible_duplicates to authenticated;
+grant all on public.bank_possible_duplicates to service_role;
+
+alter table public.bank_possible_duplicates enable row level security;
+
+drop policy if exists "Users see their own possible duplicates" on public.bank_possible_duplicates;
+create policy "Users see their own possible duplicates"
+  on public.bank_possible_duplicates for select to authenticated
+  using (user_id = (select auth.uid()) and (select auth.jwt() ->> 'aal') = 'aal2');
+
+drop policy if exists "Users resolve their own possible duplicates" on public.bank_possible_duplicates;
+create policy "Users resolve their own possible duplicates"
+  on public.bank_possible_duplicates for delete to authenticated
+  using (user_id = (select auth.uid()) and (select auth.jwt() ->> 'aal') = 'aal2');
+
+-- Runs as the signed-in user (security invoker), so their own row-level security still applies
+create or replace function public.resolve_possible_duplicate(p_id uuid, p_choice text)
+returns void
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  d public.bank_possible_duplicates;
+begin
+  if p_choice is null or p_choice not in ('keep_mine', 'use_bank', 'keep_both') then
+    raise exception 'Unknown choice: %', p_choice;
+  end if;
+
+  delete from public.bank_possible_duplicates where id = p_id returning * into d;
+  if not found then
+    raise exception 'Possible duplicate not found';
+  end if;
+
+  if p_choice = 'keep_mine' then
+    update public.transactions
+       set provider = d.provider, external_id = d.external_id, bank_account_id = d.bank_account_id
+     where id = d.existing_transaction_id and external_id is null;
+    return;
+  end if;
+
+  if p_choice = 'use_bank' and d.existing_transaction_id is not null then
+    delete from public.transactions where id = d.existing_transaction_id;
+  end if;
+
+  insert into public.transactions (user_id, provider, external_id, bank_account_id, date, amount, type, name, note, category_label)
+  values (d.user_id, d.provider, d.external_id, d.bank_account_id, d.date, d.amount, d.type, d.name, '', d.category_label)
+  on conflict on constraint transactions_external_key do nothing;
+end;
+$$;
+
+revoke all on function public.resolve_possible_duplicate(uuid, text) from public, anon;
+grant execute on function public.resolve_possible_duplicate(uuid, text) to authenticated, service_role;

@@ -46,6 +46,69 @@ describe('convertBankTransactions', () => {
         expect(r.skipped.duplicate).toBe(1)
     })
 
+    describe('transactions you already have, worded or dated differently', () => {
+        it('skips the same purchase at the same place, even a few days apart and worded differently', () => {
+            const existing = [{ id: 'mine-1', date: '2026-10-01', amount: 6.5, name: 'SQ *BLUE BOTTLE', type: 'expense' }]
+            const r = convertBankTransactions([tx('t1', '2026-10-03', -6.5, 'Blue Bottle Coffee')], checking, ctx({ existing }))
+            expect(r.rows).toEqual([])
+            expect(r.reviews).toEqual([])
+            expect(r.skipped.duplicate).toBe(1)
+        })
+
+        it('asks you about the same amount within 3 days when the names don\'t match', () => {
+            const existing = [{ id: 'mine-1', date: '2026-10-01', amount: 84.23, name: 'Groceries', type: 'expense' }]
+            const r = convertBankTransactions([tx('t1', '2026-10-02', -84.23, 'WHOLE FOODS #10234')], checking, ctx({ existing }))
+            expect(r.rows).toEqual([])
+            expect(r.reviews).toEqual([{
+                existing_transaction_id: 'mine-1',
+                row: expect.objectContaining({ external_id: 't1', date: '2026-10-02', amount: 84.23, type: 'expense', name: 'WHOLE FOODS #10234' }),
+            }])
+        })
+
+        it('treats more than 3 days apart, a different amount, or the other direction as new', () => {
+            const existing = [
+                { id: 'a', date: '2026-10-01', amount: 20, name: 'Gas', type: 'expense' },
+                { id: 'b', date: '2026-10-01', amount: 30, name: 'Paycheck', type: 'income' },
+            ]
+            const r = convertBankTransactions([
+                tx('t1', '2026-10-05', -20, 'Shell'),     // 4 days later
+                tx('t2', '2026-10-01', -20.01, 'Shell'),  // a cent off
+                tx('t3', '2026-10-01', -30, 'Paycheck'),  // money out, but yours was money in
+            ], checking, ctx({ existing }))
+            expect(r.rows.map(x => x.external_id)).toEqual(['t1', 't2', 't3'])
+            expect(r.reviews).toEqual([])
+        })
+
+        it('matches each of your transactions only once, so two real $5 coffees both count', () => {
+            const existing = [{ id: 'mine-1', date: '2026-10-01', amount: 5, name: 'Starbucks', type: 'expense' }]
+            const r = convertBankTransactions([tx('t1', '2026-10-01', -5, 'STARBUCKS STORE 123'), tx('t2', '2026-10-01', -5, 'STARBUCKS STORE 123')], checking, ctx({ existing }))
+            expect(r.rows.map(x => x.external_id)).toEqual(['t2'])
+            expect(r.skipped.duplicate).toBe(1)
+        })
+
+        it('prefers an exact match over a near one', () => {
+            const existing = [
+                { id: 'near', date: '2026-10-02', amount: 5, name: 'Coffee', type: 'expense' },
+                { id: 'exact', date: '2026-10-01', amount: 5, name: 'Corner Cafe', type: 'expense' },
+            ]
+            const r = convertBankTransactions([
+                tx('t1', '2026-10-02', -5, 'Corner Cafe'),   // close to both of yours
+                tx('t2', '2026-10-01', -5, 'Corner Cafe'),   // exactly "exact"
+            ], checking, ctx({ existing }))
+            // t2 takes "exact"; t1 then pairs with the remaining one, whose name differs, so it's for review
+            expect(r.skipped.duplicate).toBe(1)
+            expect(r.reviews.map(x => [x.row.external_id, x.existing_transaction_id])).toEqual([['t1', 'near']])
+        })
+
+        it('skips bank transactions that were already imported or are waiting for review', () => {
+            const existing = [{ id: 'mine-1', date: '2026-10-01', amount: 5, name: 'Coffee', type: 'expense' }]
+            const r = convertBankTransactions([tx('t1', '2026-10-01', -5, 'Blue Bottle'), tx('t2', '2026-10-02', -9, 'Lunch')], checking,
+                ctx({ existing, alreadyImported: new Set(['t1', 't2']) }))
+            expect(r.rows).toEqual([])
+            expect(r.reviews).toEqual([])
+        })
+    })
+
     it('leaves out payments arriving on a credit card', () => {
         const r = convertBankTransactions([tx('t1', '2026-10-01', 500, 'Payment Thank You-Mobile', { providerAccountId: 'acc_card' })], card, ctx())
         expect(r.rows).toEqual([])

@@ -6,6 +6,13 @@ import { BankAccount, BankBalance, BankProvider, BankTransaction, ProviderError 
 type FetchLike = (url: string, init?: any) => Promise<{ ok: boolean; status: number; json(): Promise<any>; text(): Promise<string> }>
 
 const PAGE_SIZE = 500
+const PLAID_DEFAULT_DAYS = 90
+
+/** Days of history to ask for: back to January 1 of this year, but never less than Plaid's usual 90. */
+function daysSinceNewYear(today: string) {
+    const ms = Date.parse(`${today}T00:00:00Z`) - Date.parse(`${today.slice(0, 4)}-01-01T00:00:00Z`)
+    return Math.max(PLAID_DEFAULT_DAYS, Math.round(ms / 86_400_000) + 1)
+}
 const MAX_PAGES = 100
 
 const NEEDS_RELINK = new Set([
@@ -68,6 +75,8 @@ export function createPlaidProvider({ fetch, clientId, secret, env, today = () =
                 products: ['transactions'],
                 country_codes: ['US'],
                 language: 'en',
+                // Plaid only collects this much history when the bank is first linked
+                transactions: { days_requested: daysSinceNewYear(today()) },
             })
             return { linkToken: data.link_token }
         },
