@@ -83,7 +83,7 @@ describe('linkBank', () => {
             expect.objectContaining({ connection_id: 'conn-1', user_id: 'user-1', provider_account_id: 'acc_checking', name: 'Checking', last_four: '1234' }),
             expect.objectContaining({ provider_account_id: 'acc_card', type: 'credit' }),
         ])
-        expect(result).toMatchObject({ connectionId: 'conn-1', added: 2 })
+        expect(result).toMatchObject({ connectionId: 'conn-1', added: 3 })
     })
 
     it('exchanges the one-time token from the sign-in window when the provider uses one (Plaid)', async () => {
@@ -115,13 +115,13 @@ describe('linkBank', () => {
 })
 
 describe('syncConnection', () => {
-    it('adds new transactions, skipping the card bill payment because the card is linked too', async () => {
+    it('adds new transactions, saving the card bill payment as a transfer because the card is linked too', async () => {
         await databaseWithConnection()
         const result = await syncConnection(deps(), 'conn-1')
         const rows = ops('transactions', 'upsert')[0]
-        expect(rows.args[0].map((r: any) => r.external_id)).toEqual(['t1', 't3'])
+        expect(rows.args[0].map((r: any) => [r.external_id, r.type])).toEqual([['t1', 'expense'], ['t2', 'transfer'], ['t3', 'expense']])
         expect(rows.args[1]).toEqual({ onConflict: 'user_id,provider,external_id', ignoreDuplicates: true })
-        expect(result).toMatchObject({ added: 2 })
+        expect(result).toMatchObject({ added: 3 })
         expect(ops('bank_connections', 'update').at(-1)!.args[0]).toMatchObject({ status: 'active', last_error: null, last_synced_at: expect.any(String) })
     })
 
@@ -141,14 +141,14 @@ describe('syncConnection', () => {
             return { data: upsert ? upsert.args[0].map((_: any, i: number) => ({ id: `rev-${i}` })) : [], error: null }
         })
         const result = await syncConnection(deps(), 'conn-1')
-        expect(ops('transactions', 'upsert')[0].args[0].map((r: any) => r.external_id)).toEqual(['t3'])
+        expect(ops('transactions', 'upsert')[0].args[0].map((r: any) => r.external_id)).toEqual(['t2', 't3'])
         const held = ops('bank_possible_duplicates', 'upsert')[0]
         expect(held.args[0]).toEqual([{
             user_id: 'user-1', provider: 'teller', external_id: 't1', bank_account_id: 'db-acc-1', date: '2026-10-02',
             amount: 12.5, type: 'expense', name: 'Corner Store', category_label: '', existing_transaction_id: 'mine-1',
         }])
         expect(held.args[1]).toEqual({ onConflict: 'user_id,provider,external_id', ignoreDuplicates: true })
-        expect(result).toMatchObject({ added: 1, toReview: 1 })
+        expect(result).toMatchObject({ added: 2, toReview: 1 })
     })
 
     it('looks for your matching transactions a few days either side of the sync window', async () => {
@@ -163,13 +163,86 @@ describe('syncConnection', () => {
         fake.table('transactions', call => {
             const upsert = call.ops.find(o => o.method === 'upsert')
             if (upsert) return { data: upsert.args[0].map((_: any, i: number) => ({ id: `new-${i}` })), error: null }
-            if (call.ops.some(o => o.method === 'not' && o.args[0] === 'external_id')) return { data: [{ external_id: 't1' }], error: null }
+            if (call.ops.some(o => o.method === 'not' && o.args[0] === 'external_id')) return { data: [{ external_id: 't1', provider: 'teller' }, { external_id: 't2', provider: 'teller' }], error: null }
             return { data: [], error: null }
         })
         fake.table('bank_possible_duplicates', { data: [{ external_id: 't3' }] })
         const result = await syncConnection(deps(), 'conn-1')
         expect(ops('transactions', 'upsert')).toHaveLength(0)
         expect(result).toMatchObject({ added: 0, toReview: 0 })
+    })
+
+    describe('transfers between your own accounts', () => {
+        /** Savings -> checking at the same bank, plus whatever's already saved. */
+        function bankWithTransfer(saved: any[] = [], transfersChecked = true) {
+            return fakeProvider({
+                listAccounts: jest.fn(async () => []),
+                listTransactions: jest.fn(async (_t: string, accountId: string) => accountId === 'acc_checking'
+                    ? [{ externalId: 'in1', providerAccountId: 'acc_checking', date: '2026-10-05', amount: 500, description: 'From Savings - 5213', pending: false }]
+                    : [{ externalId: 'out1', providerAccountId: 'acc_card', date: '2026-10-05', amount: -42, description: 'Lunch', pending: false }]),
+            })
+        }
+        async function database(saved: any[], transfersChecked: boolean) {
+            await databaseWithConnection()
+            fake.table('bank_connections', call => {
+                if (call.ops.some(o => ['update', 'delete', 'upsert'].includes(o.method))) return { data: { id: 'conn-1' }, error: null }
+                return { data: [{ id: 'conn-1', user_id: 'user-1', provider: 'teller', encrypted_token: (globalThis as any).__tok, status: 'active',
+                    sync_from: '2026-09-01', last_synced_at: null, transfers_checked: transfersChecked }], error: null }
+            })
+            fake.table('transactions', call => {
+                const upsert = call.ops.find(o => o.method === 'upsert')
+                if (upsert) return { data: upsert.args[0].map((_: any, i: number) => ({ id: `new-${i}` })), error: null }
+                if (call.ops.some(o => o.method === 'update')) return { data: null, error: null }
+                if (call.ops.some(o => o.method === 'not' && o.args[0] === 'provider')) return { data: saved, error: null }
+                return { data: [], error: null }
+            })
+        }
+        beforeEach(async () => { (globalThis as any).__tok = await encryptToken('token_good', KEY) })
+
+        it('saves a new transfer as "transfer" when its other side is already saved from another account', async () => {
+            // The savings side came in earlier (e.g. from another bank's sync)
+            await database([{ id: 'saved-out', bank_account_id: 'other-savings', date: '2026-10-04', amount: 500, type: 'expense', name: 'To Checking - 0026' }], true)
+            fake.table('bank_accounts', call => call.ops.some(o => o.method === 'update') ? { data: null, error: null } : { data: [
+                { id: 'db-acc-1', connection_id: 'conn-1', user_id: 'user-1', provider_account_id: 'acc_checking', type: 'depository' },
+                { id: 'db-acc-2', connection_id: 'conn-1', user_id: 'user-1', provider_account_id: 'acc_card', type: 'credit' },
+                { id: 'other-savings', connection_id: 'conn-2', user_id: 'user-1', provider_account_id: 'x', type: 'depository' },
+            ], error: null })
+            const result = await syncConnection(deps(bankWithTransfer()), 'conn-1')
+            const rows = ops('transactions', 'upsert')[0].args[0]
+            expect(rows.map((r: any) => [r.external_id, r.type])).toEqual([['in1', 'transfer'], ['out1', 'expense']])
+            const update = ops('transactions', 'update')[0]
+            expect(update.args[0]).toEqual({ type: 'transfer', category_label: '' })
+            expect(update.call.ops.find(o => o.method === 'in')!.args).toEqual(['id', ['saved-out']])
+            expect(result).toMatchObject({ transfers: 2 })
+        })
+
+        it('fixes transfers already imported, once', async () => {
+            const saved = [
+                { id: 'a', bank_account_id: 'db-acc-1', date: '2026-09-10', amount: 300, type: 'expense', name: 'To Savings - 5213' },
+                { id: 'b', bank_account_id: 'other-savings', date: '2026-09-10', amount: 300, type: 'income', name: 'From Checking - 0026' },
+                { id: 'c', bank_account_id: 'db-acc-2', date: '2026-09-20', amount: 99, type: 'reimbursement', name: 'CAPITAL ONE MOBILE PYMT' },
+            ]
+            await database(saved, false)
+            fake.table('bank_accounts', call => call.ops.some(o => o.method === 'update') ? { data: null, error: null } : { data: [
+                { id: 'db-acc-1', connection_id: 'conn-1', user_id: 'user-1', provider_account_id: 'acc_checking', type: 'depository' },
+                { id: 'db-acc-2', connection_id: 'conn-1', user_id: 'user-1', provider_account_id: 'acc_card', type: 'credit' },
+                { id: 'other-savings', connection_id: 'conn-2', user_id: 'user-1', provider_account_id: 'x', type: 'depository' },
+            ], error: null })
+            await syncConnection(deps(bankWithTransfer()), 'conn-1')
+            const updated = ops('transactions', 'update').flatMap(u => u.call.ops.find(o => o.method === 'in')!.args[1])
+            expect(updated.sort()).toEqual(['a', 'b', 'c'])
+            expect(ops('bank_connections', 'update').some(u => u.args[0].transfers_checked === true)).toBe(true)
+        })
+
+        it('after that, leaves transactions you already have alone (so changing one back sticks)', async () => {
+            const saved = [
+                { id: 'a', bank_account_id: 'db-acc-1', date: '2026-09-10', amount: 300, type: 'expense', name: 'To Savings - 5213' },
+                { id: 'b', bank_account_id: 'other-savings', date: '2026-09-10', amount: 300, type: 'income', name: 'From Checking - 0026' },
+            ]
+            await database(saved, true)
+            await syncConnection(deps(bankWithTransfer()), 'conn-1')
+            expect(ops('transactions', 'update')).toHaveLength(0)
+        })
     })
 
     it('re-checks the last week on each sync to catch late-posting transactions', async () => {
@@ -222,7 +295,7 @@ describe('balances', () => {
         await databaseWithConnection()
         const provider = fakeProvider({ getBalance: jest.fn(async () => { throw new ProviderError('other', 'Balance product not enabled') }) })
         const result = await syncConnection(deps(provider), 'conn-1')
-        expect(result).toMatchObject({ added: 2, status: 'active' })
+        expect(result).toMatchObject({ added: 3, status: 'active' })
         expect(ops('bank_accounts', 'update')).toHaveLength(0)
     })
 
@@ -248,7 +321,7 @@ describe('startLink', () => {
 describe('syncUser', () => {
     it('syncs every connection of the user and totals the results', async () => {
         await databaseWithConnection()
-        expect(await syncUser(deps(), 'user-1')).toMatchObject({ added: 2, toReview: 0, connections: 1 })
+        expect(await syncUser(deps(), 'user-1')).toMatchObject({ added: 3, toReview: 0, connections: 1 })
     })
 })
 

@@ -43,7 +43,7 @@ interface Props {
     onImported: () => void
 }
 
-const FILTER_TYPES = ['Income', 'Expense', 'Savings', 'Investment']
+const FILTER_TYPES = ['Income', 'Expense', 'Savings', 'Investment', 'Transfer']
 const TYPE_BADGE_COLORS: Record<string, string> = {
     income: '#2980b9',
     expense: '#e74c3c',

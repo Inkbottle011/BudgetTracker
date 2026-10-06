@@ -34,7 +34,7 @@ export interface PossibleDuplicate {
 /** How many days apart the bank's date and yours can be (purchase date vs. posting date). */
 export const MATCH_DAYS = 3
 
-const MONEY_IN_TYPES = new Set(['income', 'reimbursement'])
+export const MONEY_IN_TYPES = new Set(['income', 'reimbursement'])
 
 function daysApart(a: string, b: string) {
     return Math.abs(Date.parse(`${a.slice(0, 10)}T00:00:00Z`) - Date.parse(`${b.slice(0, 10)}T00:00:00Z`)) / 86_400_000
@@ -78,6 +78,7 @@ export function convertBankTransactions(
 
     // 1. Decide what each bank transaction is
     const candidates: TransactionRow[] = []
+    const moneyIn = new Set<string>()   // external ids of money coming in (a transfer's type doesn't say)
     for (const t of transactions) {
         if (t.pending) { skipped.pending++; continue }
         if (t.date < ctx.syncFrom) { skipped.beforeStart++; continue }
@@ -85,18 +86,19 @@ export function convertBankTransactions(
 
         const amount = sign * t.amount
         const moneyOut = amount < 0
-        if (!moneyOut && isCardPayment(t.description)) { skipped.cardPayment++; continue }
-        if (moneyOut && account.type !== 'credit' && ctx.hasLinkedCreditCard && isCardBillPayment(t.description)) {
-            skipped.cardPayment++; continue
-        }
-
         const value = Math.round((Math.abs(amount) + Number.EPSILON) * 100) / 100
         let type = moneyOut ? 'expense' : 'income'
         let category = ''
         const g = guess(t.description)
+        // Paying off a card is money moving between your own accounts: the purchases on the card
+        // are the spending. Saved as a transfer (never counted) so the other side can pair with it.
+        if ((!moneyOut && isCardPayment(t.description))
+            || (moneyOut && account.type !== 'credit' && ctx.hasLinkedCreditCard && isCardBillPayment(t.description))) {
+            skipped.cardPayment++
+            type = 'transfer'
         // Money coming back on a card (that isn't paying it off), or a refund into checking,
         // reduces spending in the purchase's category instead of counting as income
-        if (!moneyOut && (account.type === 'credit' || isRefund(t.description))) {
+        } else if (!moneyOut && (account.type === 'credit' || isRefund(t.description))) {
             type = 'reimbursement'
             if (g?.type === 'expense') category = g.category
         } else if (g && (g.type === type || (type === 'expense' && (g.type === 'savings' || g.type === 'investment')))) {
@@ -104,6 +106,7 @@ export function convertBankTransactions(
             category = g.category
         }
 
+        if (!moneyOut) moneyIn.add(t.externalId)
         candidates.push({
             user_id: ctx.userId, provider: ctx.provider, external_id: t.externalId, bank_account_id: account.id,
             date: t.date, amount: value, type, name: t.description, note: '', category_label: category, category_id: null,
@@ -119,8 +122,8 @@ export function convertBankTransactions(
     const matched = new Set<TransactionRow>()
     for (const row of candidates) {
         const key = duplicateKey(row)
-        const moneyIn = MONEY_IN_TYPES.has(row.type)
-        const hit = mine.find(m => !m.used && m.moneyIn === moneyIn && duplicateKey({ ...m, amount: m.value }) === key)
+        const isIn = moneyIn.has(row.external_id)
+        const hit = mine.find(m => !m.used && m.moneyIn === isIn && duplicateKey({ ...m, amount: m.value }) === key)
         if (hit) { hit.used = true; matched.add(row); skipped.duplicate++ }
     }
 
@@ -128,10 +131,10 @@ export function convertBankTransactions(
     const reviews: PossibleDuplicate[] = []
     for (const row of candidates) {
         if (matched.has(row)) continue
-        const moneyIn = MONEY_IN_TYPES.has(row.type)
+        const isIn = moneyIn.has(row.external_id)
         const near = mine
             .filter(m => !m.used && Math.abs(m.value - row.amount) < 0.005 && daysApart(m.date, row.date) <= MATCH_DAYS
-                && m.moneyIn === moneyIn)
+                && m.moneyIn === isIn)
             .sort((a, b) => daysApart(a.date, row.date) - daysApart(b.date, row.date))
         const same = near.find(m => samePlace(m.name || m.note, row.name))
         if (same) { same.used = true; skipped.duplicate++; continue }
@@ -143,5 +146,5 @@ export function convertBankTransactions(
         }
         rows.push(row)
     }
-    return { rows, reviews, skipped }
+    return { rows, reviews, skipped, moneyIn }
 }

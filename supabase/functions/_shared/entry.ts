@@ -204,7 +204,7 @@ export function duplicateKey(t: { date: string; amount: number; name?: string | 
 
 // Paying off a credit card shows up as money coming in on the card's statement,
 // but it isn't income, just money moving between your own accounts.
-const CARD_PAYMENT = /payment\s*(-\s*)?thank\s*you|thank\s*you.*payment|auto\s*pay|autopay|payment received|online payment|mobile payment|epayment|card payment/i
+const CARD_PAYMENT = /payment\s*(-\s*)?thank\s*you|thank\s*you.*payment|auto\s*pay|autopay|payment received|online payment|mobile payment|epayment|card payment|(mobile|online|autopay|auto pay|e)\s*pymt/i
 
 /** Money arriving on a card statement that is really you paying the card off. */
 export function isCardPayment(description: unknown): boolean {

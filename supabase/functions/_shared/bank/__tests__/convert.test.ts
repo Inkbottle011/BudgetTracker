@@ -109,15 +109,16 @@ describe('convertBankTransactions', () => {
         })
     })
 
-    it('leaves out payments arriving on a credit card', () => {
+    it('saves payments arriving on a credit card as transfers, which never count toward totals', () => {
         const r = convertBankTransactions([tx('t1', '2026-10-01', 500, 'Payment Thank You-Mobile', { providerAccountId: 'acc_card' })], card, ctx())
-        expect(r.rows).toEqual([])
+        expect(r.rows).toEqual([expect.objectContaining({ external_id: 't1', type: 'transfer', amount: 500, category_label: '' })])
         expect(r.skipped.cardPayment).toBe(1)
     })
 
-    it('leaves out card bill payments from checking when the card is linked too, so purchases are not counted twice', () => {
+    it('saves card bill payments from checking as transfers when the card is linked too, so purchases are not counted twice', () => {
         const bill = tx('t1', '2026-10-01', -500, 'CHASE CREDIT CRD AUTOPAY')
-        expect(convertBankTransactions([bill], checking, ctx({ hasLinkedCreditCard: true })).rows).toEqual([])
+        expect(convertBankTransactions([bill], checking, ctx({ hasLinkedCreditCard: true })).rows)
+            .toEqual([expect.objectContaining({ external_id: 't1', type: 'transfer' })])
         // Without the card linked, the payment is the only record of that spending, so keep it
         expect(convertBankTransactions([bill], checking, ctx({ hasLinkedCreditCard: false })).rows).toHaveLength(1)
     })
@@ -129,7 +130,8 @@ describe('convertBankTransactions', () => {
             tx('pay', '2026-10-03', -500, 'Payment Thank You-Mobile', { providerAccountId: 'acc_card' }),
         ]
         const r = convertBankTransactions(flipped, card, ctx())
-        expect(r.rows.map(x => [x.name, x.type])).toEqual([['Amazon', 'expense'], ['Netflix.com', 'expense']])
+        expect(r.rows.map(x => [x.name, x.type])).toEqual([['Amazon', 'expense'], ['Netflix.com', 'expense'], ['Payment Thank You-Mobile', 'transfer']])
+        expect(r.moneyIn).toEqual(new Set(['pay']))
     })
 
     it('records money coming back on a card as a reimbursement in the purchase\'s category, not income', () => {

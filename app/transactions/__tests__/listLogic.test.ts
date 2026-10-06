@@ -112,3 +112,19 @@ describe('reimbursements in the list', () => {
         ])).toEqual({ income: 1000, spent: 30, net: 970 })
     })
 })
+
+import { TRANSACTION_TYPES } from '../types'
+
+describe('transfers in the list', () => {
+    it('are a type you can pick, and are left out of the balance and summary', () => {
+        expect(TRANSACTION_TYPES).toContain('Transfer')
+        const list = [tx('a', '2026-10-01', 'income', 100), tx('b', '2026-10-02', 'transfer', 500)]
+        expect(withRunningBalance(list)[0].balance).toBe(100)
+        expect(listSummary(list)).toEqual({ income: 100, spent: 0, net: 100 })
+    })
+
+    it('can be filtered', () => {
+        const list = [tx('a', '2026-10-01', 'income', 100), tx('b', '2026-10-02', 'transfer', 500)]
+        expect(filterTransactions(list, { search: '', type: 'Transfer', from: '', to: '' }).map(t => t.id)).toEqual(['b'])
+    })
+})

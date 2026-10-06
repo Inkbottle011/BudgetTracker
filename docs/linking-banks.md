@@ -95,8 +95,12 @@ Change the function secrets `PLAID_SECRET` to your **Production** secret and `PL
 - Purchases: expenses (card purchases too). Interest and fees: expenses.
 - Paychecks and other money in: income.
 - Refunds, and any money coming back on a card that isn't a payment: reimbursements.
-- Paying a card off: left out on the card; also left out on checking when that card is linked,
-  so spending isn't counted twice.
+- Money moving between your own linked accounts (savings -> checking, between banks, vaults,
+  paying off a card): saved as **Transfer**, shown in your list but never counted as income or
+  spending. Both sides are paired by amount within 3 days. Zelle, Venmo, Cash App and PayPal are
+  never treated as transfers, since those are usually other people. If a transfer is wrong, edit
+  its type; your change sticks.
+- Transfers imported before this existed are fixed automatically on the next sync.
 - Pending transactions: added once they post.
 
 ## If something goes wrong

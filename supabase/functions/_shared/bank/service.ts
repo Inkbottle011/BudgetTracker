@@ -1,6 +1,8 @@
 // Linking, syncing and unlinking banks. Runs only on the server (service role); provider-neutral.
 import { encryptToken, decryptToken } from './crypto.ts'
-import { convertBankTransactions, MATCH_DAYS, type PossibleDuplicate } from './convert.ts'
+import { convertBankTransactions, MATCH_DAYS, MONEY_IN_TYPES, type PossibleDuplicate, type TransactionRow } from './convert.ts'
+import { findTransferPairs, TRANSFER_DAYS, type TransferCandidate } from './transfers.ts'
+import { isCardPayment } from '../entry.ts'
 import { BankProvider, ProviderError } from './types.ts'
 
 export interface BankDeps {
@@ -100,8 +102,9 @@ export async function syncConnection(deps: BankDeps, connectionId: string) {
         const since = lastSynced > conn.sync_from ? lastSynced : conn.sync_from
 
         const { data: accounts } = await deps.db.from('bank_accounts').select('*').eq('connection_id', conn.id)
-        const { data: allAccounts } = await deps.db.from('bank_accounts').select('type').eq('user_id', conn.user_id)
+        const { data: allAccounts } = await deps.db.from('bank_accounts').select('id, type').eq('user_id', conn.user_id)
         const hasLinkedCreditCard = (allAccounts ?? []).some((a: any) => a.type === 'credit')
+        const accountType = new Map<string, string>((allAccounts ?? []).map((a: any) => [a.id, a.type]))
 
         const { data: history } = await deps.db.from('transactions').select('name, note, category_label, type')
             .eq('user_id', conn.user_id).not('category_label', 'is', null).neq('category_label', '')
@@ -116,7 +119,8 @@ export async function syncConnection(deps: BankDeps, connectionId: string) {
             .eq('user_id', conn.user_id).eq('provider', conn.provider)
         const alreadyImported = new Set<string>([...(imported ?? []), ...(waiting ?? [])].map((r: any) => r.external_id))
 
-        const rows = []
+        const rows: TransactionRow[] = []
+        const moneyIn = new Set<string>()
         const reviews: PossibleDuplicate[] = []
         const skipped = { pending: 0, beforeStart: 0, duplicate: 0, cardPayment: 0, alreadyImported: 0 }
         for (const acc of (accounts ?? []).filter((a: any) => a.connection_id === conn.id)) {
@@ -128,8 +132,15 @@ export async function syncConnection(deps: BankDeps, connectionId: string) {
             })
             rows.push(...r.rows)
             reviews.push(...r.reviews)
+            r.moneyIn.forEach(id => moneyIn.add(id))
             for (const k of Object.keys(skipped) as (keyof typeof skipped)[]) skipped[k] += r.skipped[k]
         }
+
+        // Money moving between your own accounts is saved as 'transfer' so it isn't counted twice.
+        // The first time (transfers_checked false) this also fixes transfers imported before.
+        const fullCheck = !conn.transfers_checked
+        const transfers = await markTransfers(deps, conn, rows, moneyIn, accountType,
+            daysBefore(fullCheck ? conn.sync_from : since, TRANSFER_DAYS), fullCheck)
 
         let added = 0
         if (rows.length) {
@@ -151,18 +162,82 @@ export async function syncConnection(deps: BankDeps, connectionId: string) {
         }
 
         await deps.db.from('bank_connections')
-            .update({ status: 'active', last_error: null, last_synced_at: new Date().toISOString() }).eq('id', conn.id)
-        return { added, toReview, skipped, status: 'active' as const }
+            .update({ status: 'active', last_error: null, last_synced_at: new Date().toISOString(), transfers_checked: true }).eq('id', conn.id)
+        return { added, toReview, transfers, skipped, status: 'active' as const }
     } catch (e) {
         // Just linked and the bank's data is still loading: not a problem, try again later
         if (e instanceof ProviderError && e.kind === 'not_ready') {
             await deps.db.from('bank_connections').update({ status: 'active', last_error: null }).eq('id', conn.id)
-            return { added: 0, toReview: 0, skipped: null, status: 'pending' as const }
+            return { added: 0, toReview: 0, transfers: 0, skipped: null, status: 'pending' as const }
         }
         const status = e instanceof ProviderError && e.kind === 'needs_relink' ? 'needs_relink' : 'error'
         await deps.db.from('bank_connections').update({ status, last_error: safeMessage(e, token) }).eq('id', conn.id)
-        return { added: 0, toReview: 0, skipped: null, status }
+        return { added: 0, toReview: 0, transfers: 0, skipped: null, status }
     }
+}
+
+/** Reads every row of a query, a page at a time (Supabase returns at most 1000 rows per request). */
+async function loadAll(query: () => any, pageSize = 1000) {
+    const all: any[] = []
+    for (let from = 0; ; from += pageSize) {
+        const { data, error } = await query().range(from, from + pageSize - 1)
+        if (error) throw new Error(error.message)
+        all.push(...(data ?? []))
+        if (!data || data.length < pageSize) return all
+    }
+}
+
+/**
+ * Pairs money leaving one of your linked accounts with the same amount arriving in another and
+ * marks both 'transfer': new rows before they're saved, saved rows with an update. Saved rows are
+ * only changed when paired with a new one, or during the one-time full check, so if you change a
+ * transfer back to something else, it stays changed. Returns how many became transfers.
+ */
+async function markTransfers(deps: BankDeps, conn: any, rows: TransactionRow[], moneyIn: Set<string>,
+    accountType: Map<string, string>, from: string, fullCheck: boolean) {
+    const saved = await loadAll(() => deps.db.from('transactions').select('id, bank_account_id, date, amount, type, name')
+        .eq('user_id', conn.user_id).not('provider', 'is', null).gte('date', from).order('date'))
+
+    const candidates: TransferCandidate[] = []
+    const savedById = new Map<string, any>()
+    const toUpdate = new Set<string>()
+    for (const t of saved) {
+        const type = accountType.get(t.bank_account_id)
+        if (!type) continue
+        // A saved transfer can only be told apart by direction on a card: there it's a payment coming in
+        if (t.type === 'transfer' && type !== 'credit') continue
+        const isIn = t.type === 'transfer' || MONEY_IN_TYPES.has(t.type)
+        savedById.set(t.id, t)
+        candidates.push({ key: `saved:${t.id}`, accountId: t.bank_account_id, accountType: type, date: String(t.date).slice(0, 10),
+            amount: Math.abs(Number(t.amount)), moneyIn: isIn, description: t.name ?? '' })
+        // Card payments imported before they were recognized
+        if (fullCheck && type === 'credit' && isIn && t.type !== 'transfer' && isCardPayment(t.name)) toUpdate.add(t.id)
+    }
+    const newByKey = new Map<string, TransactionRow>()
+    for (const r of rows) {
+        newByKey.set(`new:${r.external_id}`, r)
+        candidates.push({ key: `new:${r.external_id}`, accountId: r.bank_account_id, accountType: accountType.get(r.bank_account_id) ?? 'depository',
+            date: r.date, amount: r.amount, moneyIn: moneyIn.has(r.external_id), description: r.name })
+    }
+
+    for (const pair of findTransferPairs(candidates)) {
+        const involvesNew = pair.some(k => k.startsWith('new:'))
+        if (!involvesNew && !fullCheck) continue
+        for (const key of pair) {
+            const row = newByKey.get(key)
+            if (row) { row.type = 'transfer'; row.category_label = ''; continue }
+            const id = key.slice('saved:'.length)
+            if (savedById.get(id)?.type !== 'transfer') toUpdate.add(id)
+        }
+    }
+
+    const ids = [...toUpdate]
+    for (let i = 0; i < ids.length; i += 200) {
+        const { error } = await deps.db.from('transactions').update({ type: 'transfer', category_label: '' })
+            .eq('user_id', conn.user_id).in('id', ids.slice(i, i + 200))
+        if (error) throw new Error(`Couldn't mark transfers: ${error.message}`)
+    }
+    return rows.filter(r => r.type === 'transfer').length + ids.length
 }
 
 /** Saves an account's current balance. A balance problem never stops transactions from syncing. */
