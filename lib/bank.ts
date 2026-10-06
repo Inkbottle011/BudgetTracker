@@ -18,6 +18,7 @@ export interface BankAccountRow {
     name: string | null
     last_four: string | null
     type: string | null
+    subtype?: string | null
     balance_current?: number | string | null
     balance_available?: number | string | null
     balance_updated_at?: string | null
@@ -169,4 +170,12 @@ export function reviewNote(n: number | undefined): string {
     return n === 1
         ? ' 1 might already be in the app: check it under Possible duplicates.'
         : ` ${n} might already be in the app: check them under Possible duplicates.`
+}
+
+/**
+ * Savings-type accounts: savings, vaults (SoFi labels them "cash management"), money market, CDs.
+ * Matches how the bank sync decides what counts as savings.
+ */
+export function isSavingsAccount(a: { type?: string | null; subtype?: string | null }): boolean {
+    return a.type === 'depository' && /savings|money\s*market|cash\s*management|\bcd\b/i.test(a.subtype ?? '')
 }

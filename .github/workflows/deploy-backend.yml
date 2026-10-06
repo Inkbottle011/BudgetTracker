@@ -1,0 +1,70 @@
+# Updates Supabase when changes are merged into master, so you never have to paste SQL into the
+# SQL Editor or run "supabase functions deploy" by hand:
+#   1. applies new or changed database setup files (scripts/apply-database-setup.mjs)
+#   2. redeploys the bank server function
+#
+# Setup (one time): in GitHub go to Settings -> Secrets and variables -> Actions and add:
+#   SUPABASE_DB_URL        Supabase -> Connect -> "Session pooler" connection string, with your
+#                          database password filled in
+#   SUPABASE_ACCESS_TOKEN  supabase.com/dashboard/account/tokens -> Generate new token
+
+name: Deploy backend
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'supabase/sql/**'
+      - 'supabase/functions/**'
+      - 'supabase/config.toml'
+      - 'scripts/apply-database-setup.mjs'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch: # run it by hand from the Actions tab
+
+# Never two deploys at once
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
+
+env:
+  PROJECT_REF: xvnzbseochefpuuzkhql
+
+jobs:
+  database:
+    name: Apply database setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Apply new or changed setup files
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "Missing SUPABASE_DB_URL secret. See the setup note at the top of this file."
+            exit 1
+          fi
+          node scripts/apply-database-setup.mjs
+
+  functions:
+    name: Deploy the bank function
+    needs: database
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Deploy
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
+            echo "Missing SUPABASE_ACCESS_TOKEN secret. See the setup note at the top of this file."
+            exit 1
+          fi
+          supabase functions deploy bank --project-ref "$PROJECT_REF"
