@@ -115,11 +115,11 @@ describe('linkBank', () => {
 })
 
 describe('syncConnection', () => {
-    it('adds new transactions, saving the card bill payment as a transfer because the card is linked too', async () => {
+    it('adds new transactions; a card payment from checking stays spending when no matching payment is on a linked card', async () => {
         await databaseWithConnection()
         const result = await syncConnection(deps(), 'conn-1')
         const rows = ops('transactions', 'upsert')[0]
-        expect(rows.args[0].map((r: any) => [r.external_id, r.type])).toEqual([['t1', 'expense'], ['t2', 'transfer'], ['t3', 'expense']])
+        expect(rows.args[0].map((r: any) => [r.external_id, r.type])).toEqual([['t1', 'expense'], ['t2', 'expense'], ['t3', 'expense']])
         expect(rows.args[1]).toEqual({ onConflict: 'user_id,provider,external_id', ignoreDuplicates: true })
         expect(result).toMatchObject({ added: 3 })
         expect(ops('bank_connections', 'update').at(-1)!.args[0]).toMatchObject({ status: 'active', last_error: null, last_synced_at: expect.any(String) })
@@ -232,6 +232,29 @@ describe('syncConnection', () => {
             const updated = ops('transactions', 'update').flatMap(u => u.call.ops.find(o => o.method === 'in')!.args[1])
             expect(updated.sort()).toEqual(['a', 'b', 'c'])
             expect(ops('bank_connections', 'update').some(u => u.args[0].transfers_checked === true)).toBe(true)
+        })
+
+        it('keeps money you marked as Savings or Investment counted; only the other side becomes a transfer', async () => {
+            await database([{ id: 'saved-out', bank_account_id: 'other-savings', date: '2026-10-05', amount: 500, type: 'savings', name: 'To Savings' }], true)
+            fake.table('bank_accounts', call => call.ops.some(o => o.method === 'update') ? { data: null, error: null } : { data: [
+                { id: 'db-acc-1', connection_id: 'conn-1', user_id: 'user-1', provider_account_id: 'acc_checking', type: 'depository' },
+                { id: 'db-acc-2', connection_id: 'conn-1', user_id: 'user-1', provider_account_id: 'acc_card', type: 'credit' },
+                { id: 'other-savings', connection_id: 'conn-2', user_id: 'user-1', provider_account_id: 'x', type: 'depository' },
+            ], error: null })
+            await syncConnection(deps(bankWithTransfer()), 'conn-1')
+            expect(ops('transactions', 'upsert')[0].args[0].find((r: any) => r.external_id === 'in1').type).toBe('transfer')
+            expect(ops('transactions', 'update')).toHaveLength(0)
+        })
+
+        it('pairs a payment from checking with the payment arriving on a linked card', async () => {
+            await database([], true)
+            const provider = fakeProvider({
+                listTransactions: jest.fn(async (_t: string, accountId: string) => accountId === 'acc_checking'
+                    ? [{ externalId: 'chk', providerAccountId: 'acc_checking', date: '2026-10-05', amount: -353.35, description: 'CAPITAL ONE', pending: false }]
+                    : [{ externalId: 'card', providerAccountId: 'acc_card', date: '2026-10-05', amount: 353.35, description: 'CAPITAL ONE MOBILE PYMT', pending: false }]),
+            })
+            await syncConnection(deps(provider), 'conn-1')
+            expect(ops('transactions', 'upsert')[0].args[0].map((r: any) => [r.external_id, r.type])).toEqual([['chk', 'transfer'], ['card', 'transfer']])
         })
 
         it('after that, leaves transactions you already have alone (so changing one back sticks)', async () => {

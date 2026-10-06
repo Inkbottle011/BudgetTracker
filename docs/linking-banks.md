@@ -100,6 +100,10 @@ Change the function secrets `PLAID_SECRET` to your **Production** secret and `PL
   spending. Both sides are paired by amount within 3 days. Zelle, Venmo, Cash App and PayPal are
   never treated as transfers, since those are usually other people. If a transfer is wrong, edit
   its type; your change sticks.
+  - A side you marked **Savings** or **Investment** stays that way (it still counts as saved);
+    only the other side becomes a transfer.
+  - A card payment from checking stays spending unless the matching payment shows up on a linked
+    card, since for an unlinked card it's the only record of that spending.
 - Transfers imported before this existed are fixed automatically on the next sync.
 - Pending transactions: added once they post.
 

@@ -1,6 +1,6 @@
 // Turns a provider's transactions into rows for the transactions table, applying the same rules
 // as the CSV import: skip what you already have, leave out card payments, guess categories.
-import { buildCategoryGuesser, duplicateKey, merchantKey, isCardPayment, isCardBillPayment, isRefund, PastTransaction } from '../entry.ts'
+import { buildCategoryGuesser, duplicateKey, merchantKey, isCardPayment, isRefund, PastTransaction } from '../entry.ts'
 import type { BankTransaction } from './types.ts'
 
 export interface ConvertContext {
@@ -12,8 +12,8 @@ export interface ConvertContext {
     existing: ExistingTransaction[]
     /** Bank transaction ids already saved, or waiting for you to review: never added again */
     alreadyImported?: Set<string>
-    /** Whether any credit card is linked; if so, card bill payments from checking are left out */
-    hasLinkedCreditCard: boolean
+    /** Whether any credit card is linked (kept for callers; card payments are now paired by the sync) */
+    hasLinkedCreditCard?: boolean
 }
 
 export interface ExistingTransaction {
@@ -90,10 +90,11 @@ export function convertBankTransactions(
         let type = moneyOut ? 'expense' : 'income'
         let category = ''
         const g = guess(t.description)
-        // Paying off a card is money moving between your own accounts: the purchases on the card
-        // are the spending. Saved as a transfer (never counted) so the other side can pair with it.
-        if ((!moneyOut && isCardPayment(t.description))
-            || (moneyOut && account.type !== 'credit' && ctx.hasLinkedCreditCard && isCardBillPayment(t.description))) {
+        // A payment arriving on a card is money moving between your own accounts: the purchases on the
+        // card are the spending. Saved as a transfer (never counted); the sync then pairs it with the
+        // payment leaving checking. A payment from checking with no linked card on the other end stays
+        // spending, since it's the only record of what was bought on that card.
+        if (!moneyOut && isCardPayment(t.description)) {
             skipped.cardPayment++
             type = 'transfer'
         // Money coming back on a card (that isn't paying it off), or a refund into checking,

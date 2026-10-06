@@ -115,12 +115,11 @@ describe('convertBankTransactions', () => {
         expect(r.skipped.cardPayment).toBe(1)
     })
 
-    it('saves card bill payments from checking as transfers when the card is linked too, so purchases are not counted twice', () => {
+    it('keeps card bill payments from checking as spending: the sync only pairs them with a payment on a linked card', () => {
+        // e.g. a Chase card that isn't linked: the payment is the only record of that spending
         const bill = tx('t1', '2026-10-01', -500, 'CHASE CREDIT CRD AUTOPAY')
         expect(convertBankTransactions([bill], checking, ctx({ hasLinkedCreditCard: true })).rows)
-            .toEqual([expect.objectContaining({ external_id: 't1', type: 'transfer' })])
-        // Without the card linked, the payment is the only record of that spending, so keep it
-        expect(convertBankTransactions([bill], checking, ctx({ hasLinkedCreditCard: false })).rows).toHaveLength(1)
+            .toEqual([expect.objectContaining({ external_id: 't1', type: 'expense' })])
     })
 
     it('fixes the sign for card providers that show purchases as positive numbers', () => {

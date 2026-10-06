@@ -176,6 +176,8 @@ export async function syncConnection(deps: BankDeps, connectionId: string) {
     }
 }
 
+const KEEP_TYPES = new Set(['savings', 'investment'])
+
 /** Reads every row of a query, a page at a time (Supabase returns at most 1000 rows per request). */
 async function loadAll(query: () => any, pageSize = 1000) {
     const all: any[] = []
@@ -225,9 +227,12 @@ async function markTransfers(deps: BankDeps, conn: any, rows: TransactionRow[], 
         if (!involvesNew && !fullCheck) continue
         for (const key of pair) {
             const row = newByKey.get(key)
-            if (row) { row.type = 'transfer'; row.category_label = ''; continue }
-            const id = key.slice('saved:'.length)
-            if (savedById.get(id)?.type !== 'transfer') toUpdate.add(id)
+            const type = row ? row.type : savedById.get(key.slice('saved:'.length))?.type
+            // Money put into savings or investments still counts as saved; only its other side
+            // (showing up as income in the savings account) is the transfer
+            if (KEEP_TYPES.has(type) || type === 'transfer') continue
+            if (row) { row.type = 'transfer'; row.category_label = '' }
+            else toUpdate.add(key.slice('saved:'.length))
         }
     }
 
