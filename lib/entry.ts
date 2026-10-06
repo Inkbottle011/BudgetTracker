@@ -147,6 +147,81 @@ export interface PastTransaction {
     date?: string
 }
 
+// ---------------------------------------------------------------- common merchants
+
+// Places most people put in the same kind of category. Each rule lists category names to look for
+// among YOUR categories, in order; nothing is suggested if you have none of them. Checked in order,
+// so "Uber Eats" is food before "Uber" is a ride, and "Amazon Prime" a subscription before shopping.
+const KEYWORD_RULES: { pattern: RegExp; categories: string[] }[] = [
+    {
+        pattern: /\bfees?\b|service charge|overdraft/,
+        categories: ['fees', 'bank fees', 'misc', 'other'],
+    },
+    {
+        pattern: /cash withdrawal|\batm\b/,
+        categories: ['cash', 'misc', 'other'],
+    },
+    {
+        pattern: /pharmacy|cvs|walgreens|rite aid|doctor|medical|dental|hospital|clinic/,
+        categories: ['health', 'medical', 'healthcare', 'misc', 'other'],
+    },
+    {
+        pattern: /pearson|mcgraw|textbook|chegg|tuition|bookstore|books|university|college board/,
+        categories: ['education', 'school', 'books', 'misc', 'other'],
+    },
+    {
+        pattern: /uber\s*eats|doordash|grubhub|taco|pizza|burger|mcdonald|chipotle|subway|wawa|sheetz|giant|aldi|\bweis\b|\bacme\b|grocer|trader joe|whole foods|cafe|coffee|starbucks|dunkin|bagel|gyro|halal|chicken|grill|bbq|\bwok\b|sushi|\bdeli\b|bakery|popeyes|wendy|\bkfc\b|\bfood\b|diner|restaurant|cookies|\btea\b|kitchen|eatery|7.?eleven|\bpub\b|\bbar\b|ale house|cheesecake|sweet sh|qdoba|panera|chick.?fil|raising cane|five guys|shake shack|noodle|ramen|\bpho\b|wings|donut|ice cream|\brita|beer|wine and spirits|liquor|truck|\btst\s*\*|applebee|snack|pasta|\bcibo\b|sazon|treats/,
+        categories: ['food', 'dining', 'restaurants', 'groceries', 'eating out'],
+    },
+    {
+        pattern: /spotify|netflix|hulu|disney\s*(\+|plus)|apple\.com|apple cloud|icloud|google (cloud|storage|one)|amazon prime|prime video|youtube|anthropic|claude|openai|chatgpt|patreon|audible|\bhbo\b|max\.com/,
+        categories: ['subscriptions', 'subscription', 'streaming'],
+    },
+    {
+        pattern: /planet fitness|\bpf\b|\bgym\b|fitness/,
+        categories: ['fitness', 'gym', 'health', 'subscriptions'],
+    },
+    {
+        pattern: /fandango|cinema|movie|theat(er|re)|steam|ticket|dice\.fm|bowling|concert|playstation|xbox|nintendo|draft\s*kings|fanduel|polymarket|golf|arcade|museum|\breel\b|\bamc\b|\bregal\b/,
+        categories: ['entertainment', 'fun', 'leisure'],
+    },
+    {
+        pattern: /septa|\buber\b|\blyft\b|parking|metropolis|\bgas\b|shell oil|exxon|sunoco|amtrak|\btoll|e-?zpass|transit|ubahn|\bmta\b|suica/,
+        categories: ['transportation', 'transport', 'travel', 'gas', 'car'],
+    },
+    {
+        pattern: /\bpeco\b|electric|energy|water|comcast|xfinity|verizon|t-?mobile|at&t|phone bill|internet|ultra mobile|mint mobile|landlord|rent payment|property management/,
+        categories: ['rent/utilities', 'utilities', 'bills', 'rent', 'housing', 'phone'],
+    },
+    {
+        pattern: /amazon|target|walmart|ebay|newegg|micro center|best buy|thrift|costco|ikea|etsy|shein|temu|lowe|home depot/,
+        categories: ['shopping', 'misc', 'other'],
+    },
+]
+
+/**
+ * A category for a well-known kind of place, picked from `available` (your own category names),
+ * or null. Your spelling is kept: with "dining" and "food" both available, the first rule match wins.
+ */
+export function keywordCategory(name: unknown, available: string[]): string | null {
+    const text = String(name ?? '').toLowerCase().replace(/['\u2019`]/g, '')
+    if (!text.trim() || !available.length) return null
+    const mine = available.map(a => ({ label: a, key: a.toLowerCase().trim() }))
+    for (const rule of KEYWORD_RULES) {
+        if (!rule.pattern.test(text)) continue
+        for (const wanted of rule.categories) {
+            const exact = mine.find(m => m.key === wanted)
+            if (exact) return exact.label
+        }
+        for (const wanted of rule.categories) {
+            const close = mine.find(m => m.key.startsWith(wanted) || m.key.split(/[\s/&]+/).includes(wanted))
+            if (close) return close.label
+        }
+        return null
+    }
+    return null
+}
+
 /**
  * Learns from past transactions which category and type each merchant usually gets.
  * Returns a lookup: merchant key -> { category, type }.
@@ -162,6 +237,7 @@ export function buildCategoryGuesser(history: PastTransaction[]) {
         byLabel.set(label, (byLabel.get(label) ?? 0) + 1)
         counts.set(key, byLabel)
     }
+    const spendingLabels = [...new Set(history.filter(t => t.type === 'expense' && t.category_label).map(t => String(t.category_label)))]
     return (name: unknown): { type: string; category: string } | null => {
         const key = merchantKey(name)
         if (!key) return null
@@ -180,7 +256,12 @@ export function buildCategoryGuesser(history: PastTransaction[]) {
                 if (shared >= needed && shared > bestShared && words[0].length >= 3) { bestShared = shared; byLabel = v }
             }
         }
-        if (!byLabel) return null
+        if (!byLabel) {
+            // A place you've never categorized: try the common-merchant list, using spending
+            // categories you already use
+            const category = keywordCategory(name, spendingLabels)
+            return category ? { type: 'expense', category } : null
+        }
         let best = '', bestCount = 0
         for (const [label, c] of byLabel) if (c > bestCount) { best = label; bestCount = c }
         const [type, category] = best.split('\u0000')
