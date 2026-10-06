@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useTransactionStore } from '../../store/useTransactionStore'
 import { EditingTransaction } from './types'
 import { useToastContext } from '../../context/ToastContext'
+import { parseAmount, parseDate, todayString } from '../../lib/entry'
 
 export function useTransactionLogic() {
     const { transactions, setTransactions } = useTransactionStore()
@@ -13,7 +14,7 @@ export function useTransactionLogic() {
     const [category, setCategory] = useState('')
     const [amount, setAmount] = useState('')
     const [details, setDetails] = useState('')
-    const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+    const [date, setDate] = useState(todayString()) // local date, not UTC (UTC is tomorrow after 8pm in New York)
     const [name, setName] = useState('')
     const [errors, setErrors] = useState<{ amount?: string; date?: string }>({})
     const [saving, setSaving] = useState(false)
@@ -63,9 +64,20 @@ export function useTransactionLogic() {
     function validate() {
         const e: { amount?: string; date?: string } = {}
         if (!date) e.date = 'Required'
-        if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) e.amount = 'Enter a valid amount'
+        else if (!parseDate(date)) e.date = 'Use a date like 2026-10-05 or 10/5/2026'
+        const amt = parseAmount(amount)
+        if (amt === null || amt === 0) e.amount = 'Enter an amount, like 12.50'
         setErrors(e)
         return !e.date && !e.amount
+    }
+    
+    // Pick a past transaction from the name suggestions: fill in its details
+    function applySuggestion(t: { name?: string; amount: number; type: string; category_label?: string }) {
+        setName(t.name || '')
+        setAmount(String(t.amount))
+        setType(t.type.charAt(0).toUpperCase() + t.type.slice(1))
+        setCategory(t.category_label || '')
+        setErrors({})
     }
     
     async function handleAdd() {
@@ -78,14 +90,15 @@ export function useTransactionLogic() {
             user_id: session.user.id,
             type: type.toLowerCase(),
             category_id: null,
-            amount: parseFloat(amount),
-            name,
-            note: details,
+            amount: Math.abs(parseAmount(amount)!),
+            name: name.trim(),
+            note: details.trim(),
             category_label: category,
-            date,
+            date: parseDate(date)!,
         })
         if (!error) {
-            setAmount(''); setDetails(''); setCategory(''); setName('')
+            // Keep the type and date for the next entry; clear the rest
+            setAmount(''); setDetails(''); setCategory(''); setName(''); setDate(parseDate(date)!)
             setSuccess(true)
             setTimeout(() => setSuccess(false), 2000)
             fetchTransactions()
@@ -98,6 +111,10 @@ export function useTransactionLogic() {
     
     async function handleSaveEdit() {
         if (!editingTransaction) return
+        const editAmount = parseAmount(editingTransaction.amount)
+        const editDate = parseDate(editingTransaction.date)
+        if (editAmount === null || editAmount === 0) { showToast('Enter an amount, like 12.50', 'error'); return }
+        if (!editDate) { showToast('Use a date like 2026-10-05 or 10/5/2026', 'error'); return }
         setSaving(true)
         const { error } = await supabase
             .from('transactions')
@@ -105,9 +122,9 @@ export function useTransactionLogic() {
                 type: editingTransaction.type.toLowerCase(),
                 category_label: editingTransaction.category,
                 name: editingTransaction.name,
-                amount: parseFloat(editingTransaction.amount),
+                amount: Math.abs(editAmount),
                 note: editingTransaction.details,
-                date: editingTransaction.date,
+                date: editDate,
             })
             .eq('id', editingTransaction.id)
         if (!error) {
@@ -245,7 +262,7 @@ export function useTransactionLogic() {
             name: t.name,
             note: t.note,
             category_label: t.category_label,
-            date: new Date().toISOString().split('T')[0],
+            date: todayString(),
         })
         if (!error) {
             fetchTransactions()
@@ -289,7 +306,7 @@ export function useTransactionLogic() {
         type, setType, category, setCategory, amount, setAmount,
         details, setDetails, date, setDate, name, setName,
         errors, setErrors, saving, success,
-        handleAdd,
+        handleAdd, applySuggestion, transactions,
         editingTransaction, setEditingTransaction,
         handleSaveEdit, handleEditSelect,
         editMode, setEditMode,

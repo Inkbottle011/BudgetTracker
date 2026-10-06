@@ -16,7 +16,8 @@ A cross-platform personal finance app for planning a yearly budget, tracking tra
 - Add, edit, duplicate, and multi-select delete
 - Search, filter by type and date range, and sort by date, type, or amount
 - Running balance, summary bar for the visible rows, and pagination (20 per page)
-- **CSV export** and a **CSV bank-import wizard**: pick a file, map columns (auto-guessed from headers), preview, then import in batches of 50
+- **CSV export** and a **CSV bank-import wizard**: pick a file, match columns (auto-guessed, including separate money-in / money-out columns), then review before importing. It reads common bank date and amount formats, skips transactions you already have, leaves out credit card payments, suggests categories from how you categorized the same merchant before, and reports any rows it couldn't save
+- Fast entry: name suggestions from past transactions fill in amount, type and category; date picker with Today / Yesterday; amounts like "$1,234.50" accepted; Enter to save
 
 **Subscriptions**
 - Repeating charges and income (weekly, every 2 weeks, monthly, yearly) with optional end dates

@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native'
 import { TYPES, TYPE_COLORS, DEFAULT_CATEGORIES } from '../transactions/types'
-import { FREQUENCIES, FREQUENCY_LABELS, isValidDate, localToday, formatDate, occurrence } from '../../lib/subscriptions'
+import { FREQUENCIES, FREQUENCY_LABELS, localToday, formatDate, occurrence } from '../../lib/subscriptions'
 import { SubscriptionDraft } from './useSubscriptions'
+import { parseAmount, parseDate } from '../../lib/entry'
 
 interface Props {
     initial: SubscriptionDraft
@@ -26,34 +27,42 @@ export function SubscriptionForm({ initial, budgetCategories, onSave, onCancel }
         setErrors(e => ({ ...e, [key]: undefined }))
     }
 
-    function validate(): boolean {
+    // Accepts amounts like "$15.99" and dates like "10/5/2026"; returns the tidied draft, or null if invalid
+    function validate(): SubscriptionDraft | null {
         const e: Errors = {}
         if (!draft.name.trim()) e.name = 'Give it a name, e.g. Netflix'
-        const amt = parseFloat(draft.amount)
-        if (!draft.amount || isNaN(amt) || amt <= 0) e.amount = 'Enter an amount above 0'
-        if (!isValidDate(draft.startDate)) e.startDate = 'Use YYYY-MM-DD'
-        if (draft.endDate && !isValidDate(draft.endDate)) e.endDate = 'Use YYYY-MM-DD, or leave empty'
-        else if (draft.endDate && draft.endDate < draft.startDate) e.endDate = 'Must be on or after the first charge'
+        const amt = parseAmount(draft.amount)
+        if (amt === null || amt === 0) e.amount = 'Enter an amount, like 15.99'
+        const start = parseDate(draft.startDate)
+        const end = draft.endDate.trim() ? parseDate(draft.endDate) : ''
+        if (!start) e.startDate = 'Use a date like 2026-10-05 or 10/5/2026'
+        if (end === null) e.endDate = 'Use a date like 2026-10-05, or leave empty'
+        else if (end && start && end < start) e.endDate = 'Must be on or after the first charge'
         setErrors(e)
-        return Object.keys(e).length === 0
+        if (Object.keys(e).length) return null
+        return { ...draft, amount: String(Math.abs(amt!)), startDate: start!, endDate: end || '' }
     }
 
     async function submit() {
-        if (!validate()) return
+        const clean = validate()
+        if (!clean) return
+        setDraft(clean)
         setSaving(true)
-        const ok = await onSave(draft)
+        const ok = await onSave(clean)
         setSaving(false)
         if (ok) onCancel()
     }
 
     // Tell people what will happen when the first charge is in the past
     const today = localToday()
-    const startsInPast = !isEditing && isValidDate(draft.startDate) && draft.startDate < today
+    const startParsed = parseDate(draft.startDate)
+    const startsInPast = !isEditing && !!startParsed && startParsed < today
     let pastCount = 0
     if (startsInPast) {
         for (let n = 0; n < 5000; n++) {
-            const d = occurrence(draft.startDate, draft.frequency, n)
-            if (d > today || (draft.endDate && d > draft.endDate)) break
+            const d = occurrence(startParsed!, draft.frequency, n)
+            const endParsed = draft.endDate ? parseDate(draft.endDate) : null
+            if (d > today || (endParsed && d > endParsed)) break
             pastCount++
         }
     }
@@ -155,7 +164,7 @@ export function SubscriptionForm({ initial, budgetCategories, onSave, onCancel }
 
         {startsInPast && pastCount > 0 && (
             <Text style={styles.hint}>
-            {pastCount} past charge{pastCount > 1 ? 's' : ''} from {formatDate(draft.startDate)} to today will be added to your transactions.
+            {pastCount} past charge{pastCount > 1 ? 's' : ''} from {formatDate(startParsed!)} to today will be added to your transactions.
             </Text>
         )}
         {isEditing && (
