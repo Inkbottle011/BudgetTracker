@@ -100,7 +100,7 @@ Change the function secrets `PLAID_SECRET` to your **Production** secret and `PL
   spending. Both sides are paired by amount within 3 days. Zelle, Venmo, Cash App and PayPal are
   never treated as transfers, since those are usually other people. If a transfer is wrong, edit
   its type; your change sticks.
-  - Checking -> a savings account (or SoFi vault): the checking side counts as **Savings** (your
+  - Checking -> a savings account (or a vault: SoFi labels them "cash management"): the checking side counts as **Savings** (your
     savings total goes up, your balance goes down); the savings side is a transfer.
   - Savings -> checking: the checking side is a **Withdrawal** (savings total down, balance back
     up); the savings side is a transfer.
