@@ -109,6 +109,39 @@ supabase functions deploy generate-recurring
 
 The function reads `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`, which Supabase provides automatically. Never put the service-role key in the app or in `.env`.
 
+## Testing
+
+```bash
+npm test               # everything: app tests (Jest) + database tests (Node)
+npm run test:watch     # re-run app tests as you save
+npm run test:coverage  # app tests with a coverage report
+npm run test:db        # just the database SQL tests
+```
+
+Tests also run on every pull request (GitHub Actions: type-check, then `npm test`).
+
+**What's covered**
+
+| Where | What the tests check |
+|---|---|
+| `lib/__tests__/` | Reading typed amounts and bank dates, merchant matching, subscription dates (month ends, leap years, daylight saving) |
+| `app/*/__tests__/*calculations*`, `listLogic` | Dashboard totals, budget grid totals, running balance, search, sort, CSV export |
+| `app/transactions/__tests__/importLogic` | Bank CSV formats (Chase, Capital One, Amex, UK banks), duplicate detection, card payments |
+| Screen tests (`*.test.tsx`) | Sign-in, sign-up and forgot password; reset password; adding, editing and deleting transactions; CSV import; subscriptions; budget grid; dashboard; app routing and email links |
+| `supabase/sql/__tests__/` | The real subscription SQL run against an in-memory Postgres: catch-up, no duplicates, row-level security, conversion of old data |
+
+Tests run in US Eastern time on purpose, so date bugs that only appear west of UTC get caught. Screen tests use a fake Supabase client (`test/fakeSupabase.ts`) instead of a real database.
+
+**Working test-first**
+
+For a new feature or a bug fix:
+
+1. Write a test that describes what should happen, and run it. It should fail, for the reason you expect.
+2. Write the smallest change that makes it pass.
+3. Tidy the code with the tests still passing.
+
+Keep calculations in plain functions (like `app/dashboard/calculations.ts`) rather than inside screens or hooks: they're quicker to test and easier to reuse.
+
 ## Project structure
 
 ```
@@ -130,7 +163,6 @@ supabase/functions/     generate-recurring edge function (scheduled charges)
 
 **Foundation**
 - Commit database migrations and seed data to the repo so a new Supabase project can be set up in one step
-- Add automated tests for the budget, dashboard, and subscription calculations
 - Show clear errors when a CSV import row fails, instead of skipping it silently
 - Deploy the web version so the app can be tried without installing anything
 

@@ -59,33 +59,38 @@ export default function AuthScreen({ initialError }: { initialError?: string | n
         if (!validate()) return
         setLoading(true)
         setErrors({})
-        
-        if (isForgot) {
-            const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                // Where the link in the email sends the user back to (web origin or the app's deep link)
-                redirectTo: Linking.createURL('/'),
-            })
-            if (error) {
-                setErrors({ general: error.message })
+        try {
+            if (isForgot) {
+                const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                    // Where the link in the email sends the user back to (web origin or the app's deep link)
+                    redirectTo: Linking.createURL('/'),
+                })
+                if (error) {
+                    setErrors({ general: error.message })
+                } else {
+                    // Same message whether or not the account exists, so emails can't be probed
+                    setSuccess(`If an account exists for ${email}, we've sent a link to reset your password. Check your inbox.`)
+                }
+            } else if (isLogin) {
+                const { error } = await supabase.auth.signInWithPassword({ email, password })
+                if (error) setErrors({ general: signInErrorMessage(error) })
             } else {
-                // Same message whether or not the account exists, so emails can't be probed
-                setSuccess(`If an account exists for ${email}, we've sent a link to reset your password. Check your inbox.`)
+                const { error } = await supabase.auth.signUp({ email, password })
+                if (error) {
+                    setErrors({ general: error.message })
+                } else {
+                    setIsLogin(true)
+                    setPassword('')
+                    setPasswordStrength(0)
+                    setSuccess('Account created! Check your email to confirm before signing in.')
+                }
             }
-        } else if (isLogin) {
-            const { error } = await supabase.auth.signInWithPassword({ email, password })
-            if (error) setErrors({ general: signInErrorMessage(error) })
-            } else {
-            const { error } = await supabase.auth.signUp({ email, password })
-            if (error) {
-                setErrors({ general: error.message })
-            } else {
-                setIsLogin(true)
-                setPassword('')
-                setPasswordStrength(0)
-                setSuccess('Account created! Check your email to confirm before signing in.')
-            }
+        } catch (e: any) {
+            // Never leave the button spinning
+            setErrors({ general: `Something went wrong: ${e?.message ?? 'unknown error'}` })
+        } finally {
+            setLoading(false)
         }
-        setLoading(false)
     }
     
     function openForgot(show: boolean) {

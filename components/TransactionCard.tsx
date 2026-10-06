@@ -11,11 +11,13 @@ export function TransactionCard({ transaction }: Props) {
   return (
     <View style={styles.card}>
       <View style={styles.left}>
-        <Text style={styles.note}>{transaction.note || transaction.category?.name || 'Transaction'}</Text>
+        <Text style={styles.note}>
+          {transaction.name || transaction.note || transaction.category_label || transaction.category?.name || 'Transaction'}
+        </Text>
         <Text style={styles.date}>{transaction.date}</Text>
       </View>
       <Text style={[styles.amount, isExpense ? styles.expense : styles.income]}>
-        {isExpense ? '-' : '+'}${transaction.amount.toFixed(2)}
+        {isExpense ? '-' : '+'}${Number(transaction.amount).toFixed(2)}
       </Text>
     </View>
   )

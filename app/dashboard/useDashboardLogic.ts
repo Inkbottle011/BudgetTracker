@@ -3,8 +3,11 @@ import { useFocusEffect } from '@react-navigation/native'
 import { supabase } from '../../lib/supabase'
 import { useTransactionStore } from '../../store/useTransactionStore'
 import { Subscription, fetchSubscriptions, upcomingCharges } from '../../lib/subscriptions'
+import {
+    MONTHS, inPeriod, overview, plannedAmount, actualAmount, spendingByCategory, periodLabel,
+} from './calculations'
 
-export const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+export { MONTHS }
 
 export const SECTION_COLORS: Record<string, any> = {
     income:     { header: '#2980b9', light: '#EBF5FB', text: '#1a5276' },
@@ -56,53 +59,19 @@ export function useDashboardLogic() {
         if (amounts) setBudgetAmounts(amounts)
         }
     
-    // Overview — always current year
-    const yearTransactions = transactions.filter(t => new Date(t.date).getFullYear() === currentYear)
-    const overviewIncome = yearTransactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
-    const overviewExpenses = yearTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
-    const overviewSavings = yearTransactions.filter(t => t.type === 'savings').reduce((s, t) => s + t.amount, 0)
+    // Overview: always the current year; balance is all-time
+    const { income: overviewIncome, expenses: overviewExpenses, savings: overviewSavings, balance } = overview(transactions, currentYear)
     
-    // All-time balance
-    const balance = transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
-    - transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
-    
-    // Analysis period filter
-    function filterForPeriod(t: any): boolean {
-        const d = new Date(t.date)
-        if (view === 'year') return d.getFullYear() === selectedYear
-        return d.getFullYear() === selectedYear && d.getMonth() + 1 === selectedMonth
-    }
-    
-    const periodTransactions = transactions.filter(filterForPeriod)
-    const period = view === 'year' ? String(selectedYear) : `${MONTHS[selectedMonth - 1]} ${selectedYear}`
+    // Analysis period
+    const periodTransactions = transactions.filter(t => inPeriod(t, view, selectedYear, selectedMonth))
+    const period = periodLabel(view, selectedYear, selectedMonth)
     
     // Upcoming: subscription charges in the next 30 days
     const upcoming = upcomingCharges(subscriptions, 30)
     
-    function getPlanned(itemId: string): number {
-        if (view === 'month') {
-            const a = budgetAmounts.find(a => a.budget_item_id === itemId && a.month === selectedMonth)
-            return a ? a.amount : 0
-        }
-        return budgetAmounts.filter(a => a.budget_item_id === itemId).reduce((s, a) => s + a.amount, 0)
-    }
-    
-    function getActual(itemName: string, itemType: string): number {
-        return periodTransactions
-        .filter(t => t.category_label === itemName && t.type === itemType)
-        .reduce((s, t) => s + t.amount, 0)
-    }
-    
-    function getSpendingByCategory() {
-        const grouped: Record<string, number> = {}
-        periodTransactions.filter(t => t.type === 'expense').forEach(t => {
-            const key = t.category_label || 'Other'
-            grouped[key] = (grouped[key] || 0) + Number(t.amount)
-        })
-        return Object.entries(grouped)
-        .map(([label, amount]) => ({ label, amount }))
-        .sort((a, b) => b.amount - a.amount)
-    }
+    const getPlanned = (itemId: string) => plannedAmount(budgetAmounts, itemId, view, selectedMonth)
+    const getActual = (itemName: string, itemType: string) => actualAmount(periodTransactions, itemName, itemType)
+    const getSpendingByCategory = () => spendingByCategory(periodTransactions)
     
     return {
         transactions, budgetItems, budgetAmounts,

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { BudgetItem, BudgetAmount, BudgetType } from './types'
 import { useToastContext } from '../../context/ToastContext'
+import { cellAmount, rowTotal, monthTotal, sectionTotal, netByMonth, netTotal, parseBudgetInput } from './calculations'
 
 export function useBudgetLogic() {
     const { showToast } = useToastContext()
@@ -41,39 +42,15 @@ export function useBudgetLogic() {
         setLoading(false)
     }
 
-    function getAmount(itemId: string, month: number): number {
-        const a = amounts.find(a => a.budget_item_id === itemId && a.month === month)
-        return a ? a.amount : 0
-    }
-
-    function getRowTotal(itemId: string): number {
-        return Array.from({ length: 12 }, (_, i) => i + 1).reduce((sum, m) => sum + getAmount(itemId, m), 0)
-    }
-
-    function getMonthTotal(type: BudgetType, month: number): number {
-        return items
-            .filter(i => i.type === type)
-            .reduce((sum, i) => sum + getAmount(i.id, month), 0)
-    }
-
-    function getSectionTotal(type: BudgetType): number {
-        return Array.from({ length: 12 }, (_, i) => i + 1).reduce((sum, m) => sum + getMonthTotal(type, m), 0)
-    }
-
-    function getNetByMonth(month: number): number {
-        const income = getMonthTotal('income', month)
-        const expense = getMonthTotal('expense', month)
-        const savings = getMonthTotal('savings', month)
-        const investment = getMonthTotal('investment', month)
-        return income - expense - savings - investment
-    }
-
-    function getNetTotal(): number {
-        return Array.from({ length: 12 }, (_, i) => i + 1).reduce((sum, m) => sum + getNetByMonth(m), 0)
-    }
+    const getAmount = (itemId: string, month: number) => cellAmount(amounts, itemId, month)
+    const getRowTotal = (itemId: string) => rowTotal(amounts, itemId)
+    const getMonthTotal = (type: BudgetType, month: number) => monthTotal(items, amounts, type, month)
+    const getSectionTotal = (type: BudgetType) => sectionTotal(items, amounts, type)
+    const getNetByMonth = (month: number) => netByMonth(items, amounts, month)
+    const getNetTotal = () => netTotal(items, amounts)
 
     async function handleCellSave(itemId: string, month: number, value: string, fillRight: boolean) {
-        const amount = parseFloat(value) || 0
+        const amount = parseBudgetInput(value) // "1,200" and "$1,200" both save 1200
         const { data: { session } } = await supabase.auth.getSession()
         if (!session) return
 

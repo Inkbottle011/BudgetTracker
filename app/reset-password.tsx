@@ -26,10 +26,15 @@ export default function ResetPasswordScreen({ onDone }: { onDone: () => void }) 
         if (problem) { setError(problem); return }
         setLoading(true)
         setError(null)
-        const { error } = await supabase.auth.updateUser({ password })
-        setLoading(false)
-        if (error) setError(error.message)
-        else setSuccess(true)
+        try {
+            const { error } = await supabase.auth.updateUser({ password })
+            if (error) setError(error.message)
+            else setSuccess(true)
+        } catch (e: any) {
+            setError(`Something went wrong: ${e?.message ?? 'unknown error'}`)
+        } finally {
+            setLoading(false)
+        }
     }
 
     async function handleCancel() {

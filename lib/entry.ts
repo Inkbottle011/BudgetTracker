@@ -167,9 +167,17 @@ export function buildCategoryGuesser(history: PastTransaction[]) {
         if (!key) return null
         let byLabel = counts.get(key)
         if (!byLabel) {
-            // Fall back to a past merchant that starts with the same word(s), e.g. "amazon mktp" ~ "amazon"
+            // Fall back to the past merchant sharing the most leading words. Two shared words is enough
+            // ("blue bottle oakland" ~ "blue bottle coffee"); one is enough only when that's the whole
+            // name of one of them ("amazon mktpl" ~ "amazon"), so "whole foods" doesn't match "whole earth".
+            const words = key.split(' ')
+            let bestShared = 0
             for (const [k, v] of counts) {
-                if (k.length >= 4 && (key.startsWith(k + ' ') || k.startsWith(key + ' ') || key === k.split(' ')[0])) { byLabel = v; break }
+                const kWords = k.split(' ')
+                let shared = 0
+                while (shared < words.length && shared < kWords.length && words[shared] === kWords[shared]) shared++
+                const needed = Math.min(2, words.length, kWords.length)
+                if (shared >= needed && shared > bestShared && words[0].length >= 3) { bestShared = shared; byLabel = v }
             }
         }
         if (!byLabel) return null

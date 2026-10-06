@@ -1,38 +1,15 @@
+import { useState } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
+import { monthlyTrend, trendMonths } from './calculations'
 
 interface Props {
     transactions: any[]
     selectedYear: number
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
 export function MonthlyTrend({ transactions, selectedYear }: Props) {
-    const [showAll, setShowAll] = React.useState(false)
-    
-    const today = new Date()
-    const currentMonth = today.getMonth()
-    const currentYear = today.getFullYear()
-    
-    // Last 6 months or all 12
-    const monthCount = showAll ? 12 : 6
-    const months = Array.from({ length: monthCount }, (_, i) => {
-        if (showAll) {
-            return { month: i + 1, year: selectedYear, label: MONTHS[i] }
-        }
-        const d = new Date(today.getFullYear(), today.getMonth() - (monthCount - 1) + i, 1)
-        return { month: d.getMonth() + 1, year: d.getFullYear(), label: MONTHS[d.getMonth()] }
-    })
-    
-    const data = months.map(({ month, year, label }) => {
-        const inc = transactions
-        .filter(t => t.type === 'income' && new Date(t.date).getMonth() + 1 === month && new Date(t.date).getFullYear() === year)
-        .reduce((s, t) => s + Number(t.amount), 0)
-        const exp = transactions
-        .filter(t => t.type === 'expense' && new Date(t.date).getMonth() + 1 === month && new Date(t.date).getFullYear() === year)
-        .reduce((s, t) => s + Number(t.amount), 0)
-        return { label, income: inc, expense: exp, net: inc - exp }
-    })
+    const [showAll, setShowAll] = useState(false)
+    const data = monthlyTrend(transactions, trendMonths(new Date(), showAll, selectedYear))
     
     const max = Math.max(...data.flatMap(d => [d.income, d.expense]), 1)
     

@@ -1,4 +1,5 @@
 import { View, Text, StyleSheet } from 'react-native'
+import { budgetHealth } from './calculations'
 
 interface Props {
     income: number
@@ -16,26 +17,7 @@ export function OverviewStats({ income, expenses, savings, budgetItems, budgetAm
     const expenseRatio = income > 0 ? ((expenses / income) * 100).toFixed(1) : '0.0'
     
     // Budget health
-    const expenseItems = budgetItems.filter(i => i.type === 'expense')
-    let totalPlanned = 0
-    let totalActual = 0
-    let overBudgetCount = 0
-    
-    expenseItems.forEach(item => {
-        const planned = budgetAmounts
-        .filter(a => a.budget_item_id === item.id)
-        .reduce((s, a) => s + a.amount, 0)
-        const actual = transactions
-        .filter(t => t.category_label === item.name && t.type === 'expense' && new Date(t.date).getFullYear() === year)
-        .reduce((s, t) => s + t.amount, 0)
-        totalPlanned += planned
-        totalActual += actual
-        if (actual > planned && planned > 0) overBudgetCount++
-    })
-    
-    const score = totalPlanned > 0
-    ? Math.max(0, Math.min(100, Math.round((1 - (totalActual - totalPlanned) / totalPlanned) * 100)))
-    : null
+    const { score, overBudgetCount } = budgetHealth(budgetItems, budgetAmounts, transactions, year)
     const scoreColor = score === null ? '#aaa' : score >= 80 ? '#27ae60' : score >= 60 ? '#f1c40f' : '#e74c3c'
     const scoreLabel = score === null ? 'No budget' : score >= 80 ? 'On Track' : score >= 60 ? 'Watch Out' : 'Over Budget'
     
