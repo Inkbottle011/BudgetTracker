@@ -8,6 +8,7 @@ import { RecentUpcoming } from './RecentUpcoming'
 import { MonthlyTrend } from './MonthlyTrend'
 import { TopSpendingCategories } from './TopSpendingCategories'
 import { CardBalances } from './CardBalances'
+import { SavingsBalances } from './SavingsBalances'
 
 export default function Dashboard() {
     const logic = useDashboardLogic()
@@ -26,6 +27,9 @@ export default function Dashboard() {
         
         {/* Linked credit cards (only shown once a card is linked) */}
         <CardBalances />
+
+        {/* Savings accounts and vaults, and this year's money in and out (left out of the balance above) */}
+        <SavingsBalances transactions={logic.forTotals} year={logic.currentYear} />
         
         {/* Stacked stats (left) + Monthly Trend (right) */}
         <View style={styles.overviewRow}>
