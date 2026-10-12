@@ -1,4 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { ThemeProvider } from '../../lib/theme'
 import SettingsScreen from '../settings'
 import { ToastContext } from '../../context/ToastContext'
 import { fake, auth, functions, supabase } from '../../test/fakeSupabase'
@@ -25,7 +27,7 @@ function twoFactor(on: boolean) {
 }
 
 async function renderSettings() {
-    await render(<ToastContext.Provider value={{ showToast }}><SettingsScreen /></ToastContext.Provider>)
+    await render(<ThemeProvider><ToastContext.Provider value={{ showToast }}><SettingsScreen /></ToastContext.Provider></ThemeProvider>)
     await screen.findByText('Two-factor sign-in')
 }
 
@@ -46,6 +48,21 @@ beforeEach(() => {
     jest.setSystemTime(new Date('2026-10-06T12:00:00Z'))
 })
 afterEach(() => jest.useRealTimers())
+
+describe('appearance', () => {
+    it('follows the device until you pick light or dark, and remembers your choice', async () => {
+        await AsyncStorage.clear()
+        await renderSettings()
+        expect(screen.getByText('Appearance')).toBeTruthy()
+        expect(screen.getByText("Match device follows your phone or computer's light or dark setting.")).toBeTruthy()
+        expect(screen.getByRole('button', { name: 'Match device' }).props.accessibilityState.selected).toBe(true)
+        await fireEvent.press(screen.getByRole('button', { name: 'Dark' }))
+        expect(screen.getByRole('button', { name: 'Dark' }).props.accessibilityState.selected).toBe(true)
+        expect(await AsyncStorage.getItem('appearance')).toBe('dark')
+        await fireEvent.press(screen.getByRole('button', { name: 'Light' }))
+        expect(await AsyncStorage.getItem('appearance')).toBe('light')
+    })
+})
 
 describe('two-factor sign-in', () => {
     it('sets up an authenticator app: QR code, key to type, then a code to confirm', async () => {
@@ -119,7 +136,7 @@ describe('linked banks', () => {
     it('asks for two-factor sign-in before linking a bank', async () => {
         await renderSettings()
         expect(screen.getByText('Turn on two-factor sign-in above to link a bank.')).toBeTruthy()
-        expect(screen.queryByText('+ Link a bank')).toBeNull()
+        expect(screen.queryByText('Link a bank')).toBeNull()
     })
 
     it('lists linked banks with their accounts and status', async () => {
@@ -141,7 +158,7 @@ describe('linked banks', () => {
         ;(openBankConnect as jest.Mock).mockResolvedValue({ publicToken: 'public-abc', institutionName: 'Chase' })
         invoke.mockResolvedValueOnce({ data: { connectionId: 'conn-1', added: 12, status: 'active' }, error: null })
         await renderSettings()
-        await fireEvent.press(await screen.findByText('+ Link a bank'))
+        await fireEvent.press(await screen.findByText('Link a bank'))
         // Suggests the day after your latest transaction (Oct 3)
         expect(screen.getByLabelText('Import transactions from').props.value).toBe('2026-10-04')
         await fireEvent.press(screen.getByText('Continue to your bank'))
@@ -154,7 +171,7 @@ describe('linked banks', () => {
     it('lets you go back as far as January 1, but no further', async () => {
         twoFactor(true)
         await renderSettings()
-        await fireEvent.press(await screen.findByText('+ Link a bank'))
+        await fireEvent.press(await screen.findByText('Link a bank'))
         expect(screen.getByText(/Banks share history back to Jan 1/)).toBeTruthy()
         await fireEvent.changeText(screen.getByLabelText('Import transactions from'), '2025-12-31')
         await fireEvent.press(screen.getByText('Continue to your bank'))
@@ -167,7 +184,7 @@ describe('linked banks', () => {
         ;(openBankConnect as jest.Mock).mockResolvedValue({ publicToken: 'public-abc', institutionName: 'Chase' })
         invoke.mockResolvedValueOnce({ data: { connectionId: 'conn-1', added: 40, toReview: 3, status: 'active' }, error: null })
         await renderSettings()
-        await fireEvent.press(await screen.findByText('+ Link a bank'))
+        await fireEvent.press(await screen.findByText('Link a bank'))
         await fireEvent.press(screen.getByText('Continue to your bank'))
         await waitFor(() => expect(showToast).toHaveBeenCalledWith(
             'Chase linked. Added 40 transactions. 3 might already be in the app: check them under Possible duplicates.'))
@@ -178,7 +195,7 @@ describe('linked banks', () => {
         ;(openBankConnect as jest.Mock).mockResolvedValue({ publicToken: 'public-abc', institutionName: 'Chase' })
         invoke.mockResolvedValueOnce({ data: { connectionId: 'conn-1', added: 0, status: 'pending' }, error: null })
         await renderSettings()
-        await fireEvent.press(await screen.findByText('+ Link a bank'))
+        await fireEvent.press(await screen.findByText('Link a bank'))
         await fireEvent.press(screen.getByText('Continue to your bank'))
         await waitFor(() => expect(showToast).toHaveBeenCalledWith(
             "Chase linked. Its transactions are still loading; they'll appear at the next sync, or tap Sync now in a few minutes."))
@@ -188,7 +205,7 @@ describe('linked banks', () => {
         twoFactor(true)
         ;(openBankConnect as jest.Mock).mockResolvedValue(null)
         await renderSettings()
-        await fireEvent.press(await screen.findByText('+ Link a bank'))
+        await fireEvent.press(await screen.findByText('Link a bank'))
         await fireEvent.press(screen.getByText('Continue to your bank'))
         expect(invoke).not.toHaveBeenCalled()
     })
@@ -198,7 +215,7 @@ describe('linked banks', () => {
         ;(openBankConnect as jest.Mock).mockResolvedValue({ publicToken: 'p', institutionName: 'Chase' })
         invoke.mockResolvedValueOnce({ data: null, error: { message: 'x', context: { json: async () => ({ error: 'PLAID_SECRET missing' }) } } })
         await renderSettings()
-        await fireEvent.press(await screen.findByText('+ Link a bank'))
+        await fireEvent.press(await screen.findByText('Link a bank'))
         await fireEvent.press(screen.getByText('Continue to your bank'))
         await waitFor(() => expect(showToast).toHaveBeenCalledWith('PLAID_SECRET missing', 'error'))
     })

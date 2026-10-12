@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react'
-import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet } from 'react-native'
+import { View, Text, TextInput, Image, StyleSheet } from 'react-native'
 import { twoFactorStatus, startTwoFactorSetup, verifyCode, turnOffTwoFactor } from '../lib/twoFactor'
 import { useToastContext } from '../context/ToastContext'
+import { useTheme, useStyles, Palette, light } from '../lib/theme'
+import { Section, Button } from './ui'
 
 /** Settings: turn two-factor sign-in on or off. Reports changes so other sections can react. */
 export function TwoFactorSection({ onChange }: { onChange: (on: boolean) => void }) {
+    const { c: C } = useTheme()
+    const styles = useStyles(makeStyles)
     const { showToast } = useToastContext()
     const [status, setStatus] = useState<{ on: boolean; factorId: string | null } | null>(null)
     const [setup, setSetup] = useState<{ factorId: string; qrCode: string; secret: string } | null>(null)
@@ -58,26 +62,28 @@ export function TwoFactorSection({ onChange }: { onChange: (on: boolean) => void
         setBusy(false)
     }
 
+    const badge = status && (
+        <View style={[styles.badge, status.on ? styles.badgeOn : styles.badgeOff]}>
+            <Text style={[styles.badgeText, { color: status.on ? C.good : C.muted }]}>{status.on ? 'On' : 'Off'}</Text>
+        </View>
+    )
+
     return (
-        <View style={styles.card}>
-            <View style={styles.header}>
-                <Text style={styles.title}>Two-factor sign-in</Text>
-                {status && <Text style={[styles.badge, status.on ? styles.on : styles.off]}>{status.on ? 'On' : 'Off'}</Text>}
-            </View>
+        <Section title="Two-factor sign-in" action={badge}>
             <Text style={styles.help}>
                 Asks for a code from an authenticator app (like Google Authenticator or 1Password) when you sign in. Required for linking banks.
             </Text>
 
             {status && !status.on && !setup && (
-                <TouchableOpacity style={styles.primary} onPress={begin} disabled={busy}>
-                    <Text style={styles.primaryText}>Set up two-factor sign-in</Text>
-                </TouchableOpacity>
+                <Button label="Set up two-factor sign-in" onPress={begin} loading={busy} style={styles.start} />
             )}
 
             {setup && (
                 <View style={styles.setup}>
                     <Text style={styles.step}>1. Scan this with your phone</Text>
-                    <Image accessibilityLabel="QR code for your authenticator app" source={{ uri: setup.qrCode }} style={styles.qr} />
+                    <View style={styles.qrFrame}>
+                        <Image accessibilityLabel="QR code for your authenticator app" source={{ uri: setup.qrCode }} style={styles.qr} />
+                    </View>
                     <View style={styles.howTo}>
                         <Text style={styles.howToLine}>
                             <Text style={styles.howToBold}>iPhone: </Text>
@@ -97,72 +103,71 @@ export function TwoFactorSection({ onChange }: { onChange: (on: boolean) => void
                     <Text style={styles.step}>2. Enter the 6-digit code it shows (it changes every 30 seconds)</Text>
                     <View style={styles.row}>
                         <TextInput
-                            style={styles.codeInput}
+                            accessibilityLabel="6-digit code"
+                            style={[styles.codeInput, !!error && { borderColor: C.bad }]}
                             placeholder="123456"
                             value={code}
                             onChangeText={t => { setCode(t); setError(null) }}
                             onSubmitEditing={confirm}
                             keyboardType="number-pad"
                             maxLength={7}
-                            placeholderTextColor="#bbb"
+                            placeholderTextColor={C.faint}
                         />
-                        <TouchableOpacity style={styles.primary} onPress={confirm} disabled={busy}>
-                            <Text style={styles.primaryText}>Confirm</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => { setSetup(null); setCode(''); setError(null) }}>
-                            <Text style={styles.link}>Cancel</Text>
-                        </TouchableOpacity>
+                        <Button label="Confirm" onPress={confirm} loading={busy} />
+                        <Button variant="ghost" label="Cancel" onPress={() => { setSetup(null); setCode(''); setError(null) }} />
                     </View>
                 </View>
             )}
 
             {status?.on && !confirmOff && (
-                <TouchableOpacity onPress={() => setConfirmOff(true)}>
-                    <Text style={styles.link}>Turn off</Text>
-                </TouchableOpacity>
+                <Button variant="secondary" small label="Turn off" onPress={() => setConfirmOff(true)} style={styles.start} />
             )}
             {confirmOff && (
                 <View style={styles.confirm}>
                     <Text style={styles.confirmText}>Turn off two-factor sign-in? Linked banks will stop syncing until you turn it back on.</Text>
                     <View style={styles.row}>
-                        <TouchableOpacity style={styles.danger} onPress={turnOff} disabled={busy}><Text style={styles.dangerText}>Yes, turn off</Text></TouchableOpacity>
-                        <TouchableOpacity onPress={() => setConfirmOff(false)}><Text style={styles.link}>Keep it on</Text></TouchableOpacity>
+                        <Button variant="danger" small label="Yes, turn off" onPress={turnOff} loading={busy} />
+                        <Button variant="ghost" small label="Keep it on" onPress={() => setConfirmOff(false)} />
                     </View>
                 </View>
             )}
 
             {error && <Text style={styles.error}>{error}</Text>}
-        </View>
+        </Section>
     )
 }
 
-export const settingsCardStyles = StyleSheet.create({
-    card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 16, borderWidth: 0.5, borderColor: '#e0e0e0' },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
-    title: { fontSize: 16, fontWeight: '700', color: '#2c3e50' },
-    help: { fontSize: 13, color: '#777', lineHeight: 18, marginBottom: 12 },
-    primary: { backgroundColor: '#2c3e50', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 9, alignSelf: 'flex-start' },
-    primaryText: { color: '#fff', fontWeight: '600', fontSize: 13 },
-    link: { color: '#3498db', fontWeight: '600', fontSize: 13 },
-    danger: { backgroundColor: '#fdedec', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
-    dangerText: { color: '#e74c3c', fontWeight: '600', fontSize: 13 },
-    row: { flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap' },
-    error: { color: '#e74c3c', fontSize: 13, marginTop: 10 },
-    confirm: { backgroundColor: '#fafafa', borderRadius: 8, padding: 12, marginTop: 4 },
-    confirmText: { fontSize: 13, color: '#555', marginBottom: 10 },
+/** Shared bits for the settings sections. */
+export const makeSettingsStyles = (C: Palette) => StyleSheet.create({
+    help: { fontSize: 14, color: C.muted, lineHeight: 20, marginBottom: 14 },
+    row: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
+    start: { alignSelf: 'flex-start' },
+    error: { color: C.bad, fontSize: 13, marginTop: 10, lineHeight: 18 },
+    confirm: { backgroundColor: C.surfaceAlt, borderRadius: 10, borderWidth: 1, borderColor: C.line, padding: 14, marginTop: 4 },
+    confirmText: { fontSize: 14, color: C.text, marginBottom: 12, lineHeight: 20 },
+    notice: { fontSize: 14, color: C.muted, lineHeight: 20 },
 })
 
-const styles = StyleSheet.create({
-    ...settingsCardStyles,
-    badge: { fontSize: 12, fontWeight: '700', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 10, overflow: 'hidden' },
-    on: { backgroundColor: '#eafaf1', color: '#1e8449' },
-    off: { backgroundColor: '#f2f3f4', color: '#7f8c8d' },
-    setup: { gap: 8 },
-    step: { fontSize: 13, color: '#2c3e50', fontWeight: '600', marginTop: 4 },
-    qr: { width: 180, height: 180, backgroundColor: '#fff' },
-    howTo: { backgroundColor: '#f4f8fb', borderRadius: 8, padding: 10, gap: 6 },
-    howToLine: { fontSize: 13, color: '#555', lineHeight: 18 },
-    howToBold: { fontWeight: '700', color: '#2c3e50' },
-    secret: { fontFamily: 'monospace', fontSize: 14, letterSpacing: 1, color: '#1a1a1a', backgroundColor: '#f8f9fa', padding: 8, borderRadius: 6, alignSelf: 'flex-start' },
-    codeInput: { backgroundColor: '#f8f9fa', borderRadius: 8, padding: 10, fontSize: 18, letterSpacing: 4, width: 140, borderWidth: 1, borderColor: '#e8e8e8', color: '#1a1a1a' },
+const makeStyles = (C: Palette) => StyleSheet.create({
+    ...makeSettingsStyles(C),
+    badge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
+    badgeOn: { backgroundColor: C.goodSoft },
+    badgeOff: { backgroundColor: C.track },
+    badgeText: { fontSize: 12, fontWeight: '600' },
+    setup: { gap: 10 },
+    step: { fontSize: 14, color: C.ink, fontWeight: '600', marginTop: 4 },
+    // The QR code needs a white quiet zone to scan, even in dark mode
+    qrFrame: { alignSelf: 'flex-start', backgroundColor: light.surface, padding: 10, borderRadius: 10, borderWidth: 1, borderColor: C.line },
+    qr: { width: 180, height: 180 },
+    howTo: { backgroundColor: C.primarySoft, borderRadius: 10, padding: 12, gap: 8 },
+    howToLine: { fontSize: 13, color: C.text, lineHeight: 19 },
+    howToBold: { fontWeight: '700', color: C.ink },
+    secret: {
+        fontFamily: 'monospace', fontSize: 14, letterSpacing: 1, color: C.ink, backgroundColor: C.surfaceAlt,
+        borderWidth: 1, borderColor: C.line, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, alignSelf: 'flex-start',
+    },
+    codeInput: {
+        backgroundColor: C.surfaceAlt, borderRadius: 10, borderWidth: 1, borderColor: C.line, color: C.ink,
+        paddingHorizontal: 12, paddingVertical: 8, fontSize: 18, letterSpacing: 4, width: 140,
+    },
 })

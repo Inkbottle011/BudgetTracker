@@ -1,10 +1,15 @@
 import { useState } from 'react'
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native'
+import { View, TextInput, StyleSheet } from 'react-native'
 import { supabase } from '../lib/supabase'
 import { verifySignInCode } from '../lib/twoFactor'
+import { useTheme, useStyles, Palette } from '../lib/theme'
+import { Button } from '../components/ui'
+import { AuthCard, FormMessage } from './auth'
 
 /** Shown after the password when two-factor sign-in is on. */
 export default function TwoFactorPrompt({ onDone }: { onDone: () => void }) {
+    const { c: C } = useTheme()
+    const styles = useStyles(makeStyles)
     const [code, setCode] = useState('')
     const [error, setError] = useState<string | null>(null)
     const [loading, setLoading] = useState(false)
@@ -23,45 +28,36 @@ export default function TwoFactorPrompt({ onDone }: { onDone: () => void }) {
     }
 
     return (
-        <View style={styles.container}>
-            <View style={styles.card}>
-                <Text style={styles.title}>Two-factor sign-in</Text>
-                <Text style={styles.subtitle}>Enter the 6-digit code from your authenticator app</Text>
-                {error && <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View>}
-                <TextInput
-                    style={styles.input}
-                    placeholder="123456"
-                    value={code}
-                    onChangeText={t => { setCode(t); setError(null) }}
-                    onSubmitEditing={verify}
-                    keyboardType="number-pad"
-                    autoComplete="one-time-code"
-                    textContentType="oneTimeCode"
-                    maxLength={7}
-                    autoFocus
-                    placeholderTextColor="#bbb"
-                />
-                <TouchableOpacity style={[styles.button, loading && { opacity: 0.6 }]} onPress={verify} disabled={loading}>
-                    {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Verify</Text>}
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => supabase.auth.signOut()} style={styles.link}>
-                    <Text style={styles.linkText}>Sign out</Text>
-                </TouchableOpacity>
+        <AuthCard title="Two-factor sign-in" subtitle="Enter the 6-digit code from your authenticator app.">
+            <TextInput
+                accessibilityLabel="6-digit code"
+                style={[styles.input, !!error && styles.inputError]}
+                placeholder="123456"
+                value={code}
+                onChangeText={t => { setCode(t); setError(null) }}
+                onSubmitEditing={verify}
+                keyboardType="number-pad"
+                autoComplete="one-time-code"
+                textContentType="oneTimeCode"
+                maxLength={7}
+                autoFocus
+                placeholderTextColor={C.faint}
+            />
+            {error ? <FormMessage tone="bad">{error}</FormMessage> : null}
+            <Button label="Verify" onPress={verify} loading={loading} style={styles.submit} />
+            <View style={styles.back}>
+                <Button variant="ghost" label="Sign out" onPress={() => { supabase.auth.signOut() }} />
             </View>
-        </View>
+        </AuthCard>
     )
 }
 
-const styles = StyleSheet.create({
-    container: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: '#f5f6fa' },
-    card: { backgroundColor: '#fff', borderRadius: 20, padding: 28, maxWidth: 420, width: '100%', alignSelf: 'center' },
-    title: { fontSize: 24, fontWeight: '700', color: '#2c3e50', textAlign: 'center', marginBottom: 6 },
-    subtitle: { fontSize: 14, color: '#888', textAlign: 'center', marginBottom: 20 },
-    input: { backgroundColor: '#f8f9fa', borderRadius: 10, padding: 14, fontSize: 24, letterSpacing: 8, textAlign: 'center', borderWidth: 1, borderColor: '#e8e8e8', color: '#1a1a1a' },
-    errorBox: { backgroundColor: '#fdedec', borderRadius: 8, padding: 12, marginBottom: 12 },
-    errorText: { color: '#e74c3c', fontSize: 13, textAlign: 'center' },
-    button: { backgroundColor: '#2c3e50', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 16 },
-    buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-    link: { marginTop: 18, alignItems: 'center' },
-    linkText: { color: '#3498db', fontWeight: '600' },
+const makeStyles = (C: Palette) => StyleSheet.create({
+    input: {
+        backgroundColor: C.surfaceAlt, borderRadius: 10, borderWidth: 1, borderColor: C.line, color: C.ink,
+        paddingVertical: 12, fontSize: 24, letterSpacing: 8, textAlign: 'center', marginBottom: 14,
+    },
+    inputError: { borderColor: C.bad },
+    submit: { minHeight: 46, marginTop: 2 },
+    back: { alignItems: 'center', marginTop: 14 },
 })

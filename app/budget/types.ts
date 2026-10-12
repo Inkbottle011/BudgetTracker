@@ -20,9 +20,22 @@ export interface BudgetAmount {
 
 export const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-export const SECTION_COLORS = {
-    income:     { header: '#2980b9', light: '#EBF5FB', border: '#2980b9', text: '#1a5276' },
-    expense:    { header: '#e74c3c', light: '#FDEDEC', border: '#e74c3c', text: '#922b21' },
-    savings:    { header: '#27ae60', light: '#EAFAF1', border: '#27ae60', text: '#1e8449' },
-    investment: { header: '#8e44ad', light: '#F5EEF8', border: '#8e44ad', text: '#6c3483' },
+export const MONTH_NAMES = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+]
+
+export const SECTIONS: BudgetType[] = ['income', 'expense', 'savings', 'investment']
+
+/** What each section is called on screen, and the noun used in "Add a … item". */
+export const SECTION_LABELS: Record<BudgetType, { title: string; noun: string; example: string }> = {
+    income:     { title: 'Income',      noun: 'income',     example: 'Paycheck' },
+    expense:    { title: 'Spending',    noun: 'spending',   example: 'Groceries' },
+    savings:    { title: 'Savings',     noun: 'savings',    example: 'Roth IRA' },
+    investment: { title: 'Investments', noun: 'investment', example: 'Index fund' },
+}
+
+/** The "fill right" button: from January it's every month, otherwise this month through December. */
+export function fillLabel(month: number): string {
+    return month === 1 ? 'Save for every month' : `Save for ${MONTHS[month - 1]} to Dec`
 }

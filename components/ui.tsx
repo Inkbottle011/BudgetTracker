@@ -1,5 +1,5 @@
 // Shared building blocks so every screen looks and behaves the same. Colors come from lib/theme.
-import { ReactNode } from 'react'
+import { ReactNode, RefObject } from 'react'
 import {
     View, Text, TextInput, TouchableOpacity, ActivityIndicator, ScrollView, StyleSheet,
     TextInputProps, ViewStyle, StyleProp, useWindowDimensions,
@@ -106,7 +106,13 @@ export function Button({ label, onPress, variant = 'primary', disabled, loading,
 }
 
 /** A labelled text box, with an optional hint or problem underneath. */
-export function Field({ label, error, hint, style, ...input }: TextInputProps & { label: string; error?: string | null; hint?: string }) {
+export function Field({ label, error, hint, style, inputRef, ...input }: TextInputProps & {
+    label: string
+    error?: string | null
+    hint?: string
+    /** To move the cursor into this field from code */
+    inputRef?: RefObject<TextInput | null>
+}) {
     const { c } = useTheme()
     const s = useStyles(c => ({
         wrap: { marginBottom: 14 },
@@ -119,7 +125,7 @@ export function Field({ label, error, hint, style, ...input }: TextInputProps & 
     return (
         <View style={s.wrap}>
             <Text style={s.label}>{label}</Text>
-            <TextInput accessibilityLabel={label} placeholderTextColor={c.faint} style={[s.input, !!error && s.inputError, style]} {...input} />
+            <TextInput ref={inputRef} accessibilityLabel={label} placeholderTextColor={c.faint} style={[s.input, !!error && s.inputError, style]} {...input} />
             {error ? <Text style={s.error}>{error}</Text> : hint ? <Text style={s.hint}>{hint}</Text> : null}
         </View>
     )
@@ -142,7 +148,12 @@ export function Chip({ label, selected, onPress, tone }: { label: string; select
 }
 
 /** Two to four options side by side, one selected. */
-export function Segmented<T extends string>({ value, onChange, options }: { value: T; onChange: (v: T) => void; options: { value: T; label: string }[] }) {
+export function Segmented<T extends string>({ value, onChange, options, style }: {
+    value: T
+    onChange: (v: T) => void
+    options: { value: T; label: string }[]
+    style?: StyleProp<ViewStyle>
+}) {
     const s = useStyles(c => ({
         wrap: { flexDirection: 'row' as const, backgroundColor: c.track, borderRadius: 10, padding: 3, alignSelf: 'flex-start' as const },
         btn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8 },
@@ -151,7 +162,7 @@ export function Segmented<T extends string>({ value, onChange, options }: { valu
         textOn: { color: c.ink },
     }))
     return (
-        <View style={s.wrap}>
+        <View style={[s.wrap, style]}>
             {options.map(o => (
                 <TouchableOpacity key={o.value} onPress={() => onChange(o.value)} style={[s.btn, value === o.value && s.on]}
                     accessibilityRole="button" accessibilityState={{ selected: value === o.value }}>

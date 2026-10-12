@@ -71,7 +71,7 @@ export function useBudgetLogic() {
                     return [...filtered, { id: '', user_id: session.user.id, budget_item_id: itemId, month: m, year, amount }]
                 })
             }
-            showToast('Filled right!')
+            showToast('Saved for the rest of the year')
         } else {
             const { error } = await supabase.from('budget_amounts').upsert({
                 user_id: session.user.id,

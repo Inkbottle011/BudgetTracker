@@ -38,9 +38,10 @@ async function renderScreen() {
 }
 
 const amountInput = () => screen.getByPlaceholderText('0.00')
-const addButton = () => screen.getAllByText('Add Transaction').at(-1)!
+const addButton = () => screen.getAllByText('Add transaction').at(-1)!
 
 beforeEach(() => {
+    jest.spyOn(require('react-native'), 'useWindowDimensions').mockReturnValue({ width: 1280, height: 800, scale: 1, fontScale: 1 })
     fake.reset()
     showToast.mockClear()
     useTransactionStore.setState({ transactions: [] })
@@ -49,7 +50,7 @@ beforeEach(() => {
     jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] })
     jest.setSystemTime(new Date(2026, 9, 5, 12))
 })
-afterEach(() => jest.useRealTimers())
+afterEach(() => { jest.useRealTimers(); jest.restoreAllMocks() })
 
 describe('splitting an expense', () => {
     async function startSplit(amount = '120') {

@@ -1,10 +1,22 @@
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Pressable } from 'react-native'
-import { TYPE_COLORS } from './types'
-import { listSummary } from './listLogic'
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Pressable } from 'react-native'
+import { Button, Chip, Field, TypeBadge, EmptyState } from '../../components/ui'
+import { useTheme, useStyles, Palette, tabular } from '../../lib/theme'
+import { todayString } from '../../lib/entry'
+import { formatMoney } from '../../lib/format'
+import { TRANSACTION_TYPES } from './types'
+import { listSummary, displayDate, amountText } from './listLogic'
 import { ImportModal } from './importModel'
 
 interface Props {
     rows: any[]
+    /** Computer layout (columns) or phone layout (stacked rows) */
+    wide: boolean
+    /** Whether there are any transactions at all, before search and filters */
+    hasTransactions: boolean
+    /** Whether a search or filter is narrowing the list */
+    filtering: boolean
+    /** The transaction open in the form, highlighted in the list */
+    activeId?: string | null
     selectMode: boolean
     selected: Set<string>
     confirmDelete: boolean
@@ -16,7 +28,6 @@ interface Props {
     filterTo: string
     sortCol: string
     sortDir: 'asc' | 'desc'
-    editMode: boolean
     onSearch: (v: string) => void
     onToggleFilters: () => void
     onFilterType: (v: string) => void
@@ -30,318 +41,240 @@ interface Props {
     onConfirmDelete: () => void
     onCancelConfirm: () => void
     onDelete: () => void
-    onEnterEdit: () => void
     page: number
     totalPages: number
     onPageChange: (p: number) => void
-    onExport: () => void    
-    duplicateMode: boolean
-    onEnterDuplicate: () => void
+    onExport: () => void
     showImport: boolean
     onImport: () => void
     onCloseImport: () => void
     onImported: () => void
 }
 
-const FILTER_TYPES = ['Income', 'Expense', 'Savings', 'Investment', 'Withdrawal', 'Transfer']
-const TYPE_BADGE_COLORS: Record<string, string> = {
-    income: '#2980b9',
-    expense: '#e74c3c',
-    savings: '#27ae60',
-    investment: '#8e44ad',
-}
-
 export function TransactionList({
-    rows, selectMode, selected, confirmDelete, deleting,
+    rows, wide, hasTransactions, filtering, activeId,
+    selectMode, selected, confirmDelete, deleting,
     search, showFilters, filterType, filterFrom, filterTo,
-    sortCol, sortDir, editMode,
+    sortCol, sortDir,
     page, totalPages, onPageChange,
     onSearch, onToggleFilters, onFilterType, onFilterFrom, onFilterTo, onClearFilters,
-    onSort, onRowPress, onEnterSelect, onExitSelect, onConfirmDelete, onCancelConfirm, 
-    onDelete, onEnterEdit, onExport, duplicateMode, onEnterDuplicate,
+    onSort, onRowPress, onEnterSelect, onExitSelect, onConfirmDelete, onCancelConfirm,
+    onDelete, onExport,
     showImport, onImport, onCloseImport, onImported,
 }: Props) {
+    const { c: C } = useTheme()
+    const styles = useStyles(makeStyles)
+    const today = todayString()
+    const summary = listSummary(rows)
+    const n = selected.size
+    const amountColor = (d: 'in' | 'out' | 'move') => (d === 'in' ? C.good : d === 'move' ? C.move : C.ink)
+
+    const sortHeader = (col: string, label: string, style: any) => (
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Sort by ${label.toLowerCase()}`} onPress={() => onSort(col)} style={style}>
+            <Text style={[styles.headText, sortCol === col && styles.headTextOn, col === 'amount' && { textAlign: 'right' }]}>
+                {label}{sortCol === col ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+            </Text>
+        </TouchableOpacity>
+    )
+
     return (
-        
-        <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.listHeader}>
-        <Text style={styles.sectionTitle}>Transactions</Text>
-        <View style={styles.headerActions}>
-        {selectMode ? (
-            <>
-            <Text style={styles.selectedCount}>{selected.size} selected</Text>
-            {selected.size > 0 && !confirmDelete && (
-                <TouchableOpacity style={styles.deleteBtn} onPress={onConfirmDelete}>
-                <Text style={styles.deleteBtnText}>Delete</Text>
-                </TouchableOpacity>
-            )}
-            {confirmDelete && (
-                <>
-                <Text style={styles.confirmText}>Are you sure?</Text>
-                <TouchableOpacity style={styles.deleteBtn} onPress={onDelete} disabled={deleting}>
-                <Text style={styles.deleteBtnText}>{deleting ? 'Deleting...' : 'Confirm'}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.cancelBtn} onPress={onCancelConfirm}>
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-                </TouchableOpacity>
-                </>
-            )}
-            <TouchableOpacity style={styles.cancelBtn} onPress={onExitSelect}>
-            <Text style={styles.cancelBtnText}>Exit</Text>
-            </TouchableOpacity>
-            </>
-        ) : (
-            <>
-            <TouchableOpacity style={styles.actionBtn} onPress={onEnterSelect}>
-            <Text style={styles.actionBtnText}>Delete</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-            style={[styles.actionBtn, editMode && { borderColor: '#e67e22' }]}
-            onPress={onEnterEdit}
-            >
-            <Text style={[styles.actionBtnText, editMode && { color: '#e67e22' }]}>
-            {editMode ? 'Click a Row...' : 'Edit'}
-            </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-            style={[styles.actionBtn, duplicateMode && { borderColor: '#8e44ad' }]}
-            onPress={onEnterDuplicate}
-            >
-            <Text style={[styles.actionBtnText, duplicateMode && { color: '#8e44ad' }]}>
-            {duplicateMode ? 'Click a Row...' : 'Duplicate'}
-            </Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn} onPress={onToggleFilters}>
-            <Text style={styles.actionBtnText}>{showFilters ? 'Hide Filters' : 'Filter'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn} onPress={onExport}>
-            <Text style={styles.actionBtnText}>Export CSV</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn} onPress={onImport}>
-            <Text style={styles.actionBtnText}>Import CSV</Text>
-            </TouchableOpacity>
-            </>
-        )}
-        </View>
-        </View>
-        {/* Search */}
-        <TextInput
-        style={styles.searchBar}
-        placeholder="Search by name, category, or details..."
-        value={search}
-        onChangeText={onSearch}
-        placeholderTextColor="#aaa"
-        />
-        
-        {/* Filters */}
-        {showFilters && (
-            <View style={styles.filterPanel}>
-            <View style={styles.filterRow}>
-            <Text style={styles.filterLabel}>Type:</Text>
-            {FILTER_TYPES.map(t => (
-                <TouchableOpacity
-                key={t}
-                style={[styles.filterChip, filterType === t && { backgroundColor: TYPE_COLORS[t].bg }]}
-                onPress={() => onFilterType(t)}
-                >
-                <Text style={[styles.filterChipText, filterType === t && { color: '#fff' }]}>{t}</Text>
-                </TouchableOpacity>
-            ))}
+        <View>
+            {/* Search and tools */}
+            <TextInput
+                accessibilityLabel="Search transactions"
+                style={styles.search}
+                placeholder="Search by name, category, or details..."
+                value={search}
+                onChangeText={onSearch}
+                placeholderTextColor={C.faint}
+            />
+            <View style={styles.tools}>
+                {selectMode ? (
+                    <>
+                        <Text style={styles.selectedCount}>{n} selected</Text>
+                        {confirmDelete ? (
+                            <>
+                                <Text style={styles.confirmText}>Are you sure?</Text>
+                                <Button small variant="danger" label={deleting ? 'Deleting...' : `Yes, delete ${n}`} onPress={onDelete} disabled={deleting} />
+                                <Button small variant="secondary" label="Cancel" onPress={onCancelConfirm} disabled={deleting} />
+                            </>
+                        ) : (
+                            <>
+                                {n > 0 && <Button small variant="danger" label={`Delete ${n}`} onPress={onConfirmDelete} />}
+                                <Button small variant="secondary" label="Cancel" onPress={onExitSelect} />
+                            </>
+                        )}
+                    </>
+                ) : (
+                    <>
+                        <Button small variant="secondary" label={showFilters ? 'Hide filters' : 'Filter'} onPress={onToggleFilters} />
+                        <Button small variant="secondary" label="Export CSV" onPress={onExport} />
+                        <Button small variant="secondary" label="Import CSV" onPress={onImport} />
+                        <Button small variant="secondary" label="Select" accessibilityLabel="Select transactions to delete" onPress={onEnterSelect} />
+                    </>
+                )}
             </View>
-            <View style={styles.filterRow}>
-            <Text style={styles.filterLabel}>From:</Text>
-            <TextInput style={styles.filterInput} placeholder="YYYY-MM-DD" value={filterFrom} onChangeText={onFilterFrom} placeholderTextColor="#aaa" />
-            <Text style={styles.filterLabel}>To:</Text>
-            <TextInput style={styles.filterInput} placeholder="YYYY-MM-DD" value={filterTo} onChangeText={onFilterTo} placeholderTextColor="#aaa" />
-            {(filterType || filterFrom || filterTo) && (
-                <TouchableOpacity style={styles.clearBtn} onPress={onClearFilters}>
-                <Text style={styles.clearBtnText}>Clear</Text>
-                </TouchableOpacity>
-            )}
-            </View>
-            </View>
-        )}
-        
-        {/* Table Header */}
-        <View style={styles.tableHeader}>
-        {selectMode && <View style={styles.colCheck} />}
-        <TouchableOpacity style={[styles.col, styles.colDate]} onPress={() => onSort('date')}>
-        <Text style={styles.headerText}>Date {sortCol === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.col, styles.colType]} onPress={() => onSort('type')}>
-        <Text style={styles.headerText}>Type {sortCol === 'type' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</Text>
-        </TouchableOpacity>
-        <Text style={[styles.col, styles.colCat, styles.headerText]}>Category</Text>
-        <Text style={[styles.col, styles.colName, styles.headerText]}>Name</Text>
-        <TouchableOpacity style={[styles.col, styles.colAmt]} onPress={() => onSort('amount')}>
-        <Text style={styles.headerText}>Amount {sortCol === 'amount' ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</Text>
-        </TouchableOpacity>
-        <Text style={[styles.col, styles.colDet, styles.headerText]}>Details</Text>
-        <Text style={[styles.col, styles.colBal, styles.headerText]}>Balance</Text>
-        </View>
-        
-        {/* Rows */}
-        <ScrollView scrollEventThrottle={16} keyboardShouldPersistTaps="handled">
-        {rows.length === 0 ? (
-            <Text style={styles.empty}>No transactions found.</Text>
-        ) : (
-            rows.map((t, i) => {
-                const isSelected = selected.has(t.id)
-                return (
-                    <Pressable
-                    key={t.id}
-                    style={({ pressed }) => [
-                        styles.tableRow,
-                        i % 2 === 0 ? styles.rowEven : styles.rowOdd,
-                        isSelected && styles.rowSelected,
-                        pressed && { opacity: 0.7 }
-                    ]}
-                    onPress={() => onRowPress(t)}
-                    >
-                    {selectMode && (
-                        <View style={styles.colCheck}>
-                        <View style={[styles.checkbox, isSelected && styles.checkboxChecked]}>
-                        {isSelected && <Text style={styles.checkmark}>✓</Text>}
+
+            {/* Filters */}
+            {showFilters && (
+                <View style={styles.filters} accessibilityLabel="Filters">
+                    <Text style={styles.label}>Type</Text>
+                    <View style={styles.chips}>
+                        {TRANSACTION_TYPES.map(t => (
+                            <Chip key={t} label={t} tone={t.toLowerCase()} selected={filterType === t} onPress={() => onFilterType(t)} />
+                        ))}
+                    </View>
+                    <View style={styles.dates}>
+                        <View style={styles.dateField}>
+                            <Field label="From" placeholder="YYYY-MM-DD" value={filterFrom} onChangeText={onFilterFrom} />
                         </View>
+                        <View style={styles.dateField}>
+                            <Field label="To" placeholder="YYYY-MM-DD" value={filterTo} onChangeText={onFilterTo} />
                         </View>
+                    </View>
+                    {(filterType || filterFrom || filterTo) && (
+                        <Button variant="ghost" label="Clear filters" onPress={onClearFilters} style={{ alignSelf: 'flex-start' }} />
                     )}
-                    <Text style={[styles.col, styles.colDate, styles.cellText]}>{t.date}</Text>
-                    <View style={[styles.col, styles.colType]}>
-                    <View style={[styles.typeBadge, { backgroundColor: TYPE_COLORS[t.type.charAt(0).toUpperCase() + t.type.slice(1)]?.bg || '#888' }]}>
-                    <Text style={styles.typeBadgeText}>{t.type.charAt(0).toUpperCase() + t.type.slice(1)}</Text>
+                </View>
+            )}
+
+            {/* Rows */}
+            <View style={styles.box}>
+                {wide && rows.length > 0 && (
+                    <View style={styles.head}>
+                        {selectMode && <View style={styles.checkCol} />}
+                        {sortHeader('date', 'Date', styles.dateCol)}
+                        <Text style={[styles.headText, styles.nameCol]}>Name</Text>
+                        {sortHeader('type', 'Type', styles.typeCol)}
+                        {sortHeader('amount', 'Amount', styles.amountCol)}
                     </View>
-                    </View>
-                    <Text style={[styles.col, styles.colCat, styles.cellText]}>{t.category_label || '—'}</Text>
-                    <View style={[styles.col, styles.colName, { flexDirection: 'row', alignItems: 'center', gap: 4, overflow: 'hidden' }]}>
-                    <Text style={styles.cellText} numberOfLines={1}>{t.name || '—'}</Text>
-                    {t.subscription_id ? (
-                        <View
-                        style={[styles.recurringBadge, { backgroundColor: TYPE_BADGE_COLORS[t.type] || '#888' }]}
-                        {...{ title: 'Added by a subscription' } as any}
+                )}
+
+                {rows.length === 0 && (
+                    hasTransactions || filtering ? (
+                        <EmptyState
+                            title="Nothing matches"
+                            body="Try a different search, or clear the filters."
+                            action={<Button small variant="secondary" label="Clear search and filters" onPress={() => { onSearch(''); onClearFilters() }} />}
+                        />
+                    ) : (
+                        <EmptyState title="No transactions yet" body="Add your first one, import a CSV, or link a bank in Settings." />
+                    )
+                )}
+
+                {rows.map((t, i) => {
+                    const isSelected = selected.has(t.id)
+                    const amount = amountText(t)
+                    const name = t.name || t.note || 'Transaction'
+                    const date = displayDate(t.date, today)
+                    const sub = wide
+                        ? [t.category_label, t.note && t.note !== name ? t.note : null, t.subscription_id ? 'From a subscription' : null]
+                        : [t.category_label, date]
+                    const subText = sub.filter(Boolean).join(' · ')
+                    return (
+                        <Pressable
+                            key={t.id}
+                            accessibilityRole={selectMode ? 'checkbox' : 'button'}
+                            accessibilityState={selectMode ? { checked: isSelected } : undefined}
+                            accessibilityHint={selectMode ? undefined : 'Opens it for editing'}
+                            onPress={() => onRowPress(t)}
+                            style={({ pressed }) => [
+                                styles.row,
+                                i > 0 && styles.rowLine,
+                                (isSelected || (!selectMode && activeId === t.id)) && styles.rowOn,
+                                pressed && styles.rowPressed,
+                            ]}
                         >
-                        <Text style={styles.recurringBadgeText}>S</Text>
-                        </View>
-                    ) : null}
-                    </View>
-                    <Text style={[styles.col, styles.colAmt, styles.cellText, { color: t.type === 'expense' ? '#e74c3c' : '#27ae60' }]}>
-                    {t.type === 'expense' ? '-' : '+'}${Number(t.amount).toFixed(2)}
-                    </Text>
-                    <Text style={[styles.col, styles.colDet, styles.cellText]}>{t.note || '—'}</Text>
-                    <Text style={[styles.col, styles.colBal, styles.cellText]}>${Number(t.balance).toFixed(2)}</Text>
-                    </Pressable>
-                )
-            })
-        )}
-        </ScrollView>
-        {/* Summary Bar */}
-        <View style={styles.summaryBar}>
-        <View style={styles.summaryItem}>
-        <Text style={styles.summaryLabel}>Showing</Text>
-        <Text style={styles.summaryValue}>{rows.length} transactions</Text>
-        </View>
-        <View style={styles.summaryItem}>
-        <Text style={styles.summaryLabel}>Income</Text>
-        <Text style={[styles.summaryValue, { color: '#27ae60' }]}>
-        +${listSummary(rows).income.toFixed(2)}
-        </Text>
-        </View>
-        <View style={styles.summaryItem}>
-        <Text style={styles.summaryLabel}>Spent</Text>
-        <Text style={[styles.summaryValue, { color: '#e74c3c' }]}>
-        -${listSummary(rows).spent.toFixed(2)}
-        </Text>
-        </View>
-        <View style={styles.summaryItem}>
-        <Text style={styles.summaryLabel}>Net</Text>
-        <Text style={[styles.summaryValue, { color: '#2c3e50', fontWeight: '700' }]}>
-        ${listSummary(rows).net.toFixed(2)}
-        </Text>
-        </View>
-        </View>
-        
-        {totalPages > 1 && (
-            <View style={styles.pagination}>
-            <TouchableOpacity
-            style={[styles.pageBtn, page === 0 && styles.pageBtnDisabled]}
-            onPress={() => onPageChange(page - 1)}
-            disabled={page === 0}
-            >
-            <Text style={styles.pageBtnText}>← Prev</Text>
-            </TouchableOpacity>
-            <Text style={styles.pageInfo}>Page {page + 1} of {totalPages}</Text>
-            <TouchableOpacity
-            style={[styles.pageBtn, page === totalPages - 1 && styles.pageBtnDisabled]}
-            onPress={() => onPageChange(page + 1)}
-            disabled={page === totalPages - 1}
-            >
-            <Text style={styles.pageBtnText}>Next →</Text>
-            </TouchableOpacity>
+                            {selectMode && (
+                                <View style={styles.checkCol}>
+                                    <View style={[styles.checkbox, isSelected && styles.checkboxOn]}>
+                                        {isSelected && <Text style={styles.checkmark}>✓</Text>}
+                                    </View>
+                                </View>
+                            )}
+                            {wide && <Text style={[styles.date, tabular, styles.dateCol]}>{date}</Text>}
+                            <View style={styles.nameCol}>
+                                <Text style={styles.name} numberOfLines={2}>{name}</Text>
+                                {subText ? <Text style={styles.sub} numberOfLines={1}>{subText}</Text> : null}
+                            </View>
+                            {wide && <View style={styles.typeCol}><TypeBadge type={t.type} /></View>}
+                            <Text style={[styles.amount, tabular, wide && styles.amountCol, { color: amountColor(amount.direction) }]}>
+                                {amount.text}
+                            </Text>
+                        </Pressable>
+                    )
+                })}
             </View>
-        )}
-        <ImportModal
-        visible={showImport}
-        onClose={onCloseImport}
-        onImported={onImported}
-        />
+
+            {/* Totals for what's shown */}
+            {rows.length > 0 && (
+                <View style={styles.summary}>
+                    <SummaryItem label="Showing" value={`${rows.length} transaction${rows.length === 1 ? '' : 's'}`} styles={styles} />
+                    <SummaryItem label="Income" value={formatMoney(summary.income, { sign: true })} color={C.good} styles={styles} />
+                    <SummaryItem label="Spent" value={formatMoney(-summary.spent)} styles={styles} />
+                    <SummaryItem label="Net" value={formatMoney(summary.net, { sign: true })} styles={styles} bold />
+                </View>
+            )}
+
+            {totalPages > 1 && (
+                <View style={styles.pagination}>
+                    <Button small variant="secondary" label="Previous" onPress={() => onPageChange(page - 1)} disabled={page === 0} />
+                    <Text style={styles.pageInfo}>Page {page + 1} of {totalPages}</Text>
+                    <Button small variant="secondary" label="Next" onPress={() => onPageChange(page + 1)} disabled={page === totalPages - 1} />
+                </View>
+            )}
+
+            <ImportModal visible={showImport} onClose={onCloseImport} onImported={onImported} />
         </View>
-        
     )
 }
 
-const styles = StyleSheet.create({
-    container: { flex: 3, borderRightWidth: 1, borderColor: '#e0e0e0', padding: 16 },
-    listHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-    headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    sectionTitle: { fontSize: 18, fontWeight: '700', color: '#2c3e50' },
-    actionBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#2980b9' },
-    actionBtnText: { fontSize: 13, color: '#2980b9', fontWeight: '600' },
-    selectedCount: { fontSize: 13, color: '#555', fontWeight: '500' },
-    deleteBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8, backgroundColor: '#e74c3c' },
-    deleteBtnText: { fontSize: 13, color: '#fff', fontWeight: '600' },
-    cancelBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#aaa' },
-    cancelBtnText: { fontSize: 13, color: '#555', fontWeight: '600' },
-    confirmText: { fontSize: 13, color: '#e74c3c', fontWeight: '500' },
-    searchBar: { backgroundColor: '#f8f9fa', borderRadius: 8, padding: 10, fontSize: 13, borderWidth: 1, borderColor: '#e8e8e8', color: '#1a1a1a', marginBottom: 10 },
-    filterPanel: { backgroundColor: '#fff', borderRadius: 8, padding: 10, marginBottom: 10, borderWidth: 1, borderColor: '#e8e8e8' },
-    filterRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6, flexWrap: 'wrap' },
-    filterLabel: { fontSize: 12, fontWeight: '600', color: '#555' },
-    filterChip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 16, borderWidth: 1, borderColor: '#ddd', backgroundColor: '#f8f9fa' },
-    filterChipText: { fontSize: 12, color: '#555' },
-    filterInput: { backgroundColor: '#f8f9fa', borderRadius: 6, padding: 6, fontSize: 12, borderWidth: 1, borderColor: '#e8e8e8', color: '#1a1a1a', width: 100 },
-    clearBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, backgroundColor: '#f0f0f0' },
-    clearBtnText: { fontSize: 12, color: '#e74c3c', fontWeight: '600' },
-    tableHeader: { flexDirection: 'row', backgroundColor: '#2980b9', padding: 8, borderRadius: 6, marginBottom: 4 },
-    headerText: { color: '#fff', fontWeight: '600', fontSize: 12 },
-    tableRow: { flexDirection: 'row', paddingVertical: 8, paddingHorizontal: 4, alignItems: 'center' },
-    rowEven: { backgroundColor: '#fff' },
-    rowOdd: { backgroundColor: '#f0f4f8' },
-    rowSelected: { backgroundColor: '#fdecea' },
-    colCheck: { width: 32, alignItems: 'center' },
-    checkbox: { width: 18, height: 18, borderRadius: 4, borderWidth: 2, borderColor: '#aaa', alignItems: 'center', justifyContent: 'center' },
-    checkboxChecked: { backgroundColor: '#e74c3c', borderColor: '#e74c3c' },
-    checkmark: { color: '#fff', fontSize: 11, fontWeight: '700' },
-    col: { paddingHorizontal: 4 },
-    colDate: { width: 90 },
-    colType: { width: 118 }, // fits the "Reimbursement" badge
-    colCat: { width: 100 },
-    colName: { width: 120 },
-    colAmt: { width: 80 },
-    colDet: { width: 100 },
-    colBal: { width: 80 },
-    cellText: { fontSize: 12, color: '#2c3e50' },
-    typeBadge: { borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start' },
-    typeBadgeText: { fontSize: 11, color: '#fff', fontWeight: '600' },
-    empty: { textAlign: 'center', color: '#aaa', marginTop: 40, fontSize: 13 },
-    summaryBar: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderColor: '#e0e0e0', paddingTop: 10, marginTop: 8, flexWrap: 'wrap', gap: 8 },
-    summaryItem: { alignItems: 'center', minWidth: 80 },
-    summaryLabel: { fontSize: 11, color: '#aaa', fontWeight: '500', marginBottom: 2 },
-    summaryValue: { fontSize: 13, fontWeight: '600', color: '#2c3e50' },
-    pagination: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingTop: 10, gap: 16 },
-    pageBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#2980b9' },
-    pageBtnDisabled: { borderColor: '#ddd' },
-    pageBtnText: { fontSize: 13, color: '#2980b9', fontWeight: '600' },
-    pageInfo: { fontSize: 13, color: '#555' },
-    recurringBadge: { borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2, alignItems: 'center', justifyContent: 'center' },
-    recurringBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+function SummaryItem({ label, value, color, bold, styles }: { label: string; value: string; color?: string; bold?: boolean; styles: ReturnType<typeof makeStyles> }) {
+    return (
+        <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>{label}</Text>
+            <Text style={[styles.summaryValue, tabular, color ? { color } : null, bold && { fontWeight: '700' }]}>{value}</Text>
+        </View>
+    )
+}
+
+const makeStyles = (C: Palette) => StyleSheet.create({
+    search: {
+        backgroundColor: C.surface, borderRadius: 10, borderWidth: 1, borderColor: C.line,
+        paddingHorizontal: 12, paddingVertical: 10, fontSize: 15, color: C.ink, marginBottom: 10,
+    },
+    tools: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 12 },
+    selectedCount: { fontSize: 14, fontWeight: '600', color: C.ink, marginRight: 4 },
+    confirmText: { fontSize: 14, color: C.bad, fontWeight: '500' },
+    filters: { backgroundColor: C.surface, borderRadius: 14, borderWidth: 1, borderColor: C.line, padding: 16, marginBottom: 12 },
+    label: { fontSize: 13, fontWeight: '600', color: C.text, marginBottom: 6 },
+    chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 14 },
+    dates: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },
+    dateField: { flex: 1, minWidth: 130 },
+    box: { backgroundColor: C.surface, borderRadius: 14, borderWidth: 1, borderColor: C.line, overflow: 'hidden' },
+    head: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderColor: C.line },
+    headText: { fontSize: 12, fontWeight: '600', color: C.muted },
+    headTextOn: { color: C.ink },
+    row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, minHeight: 56 },
+    rowLine: { borderTopWidth: 1, borderColor: C.line },
+    rowOn: { backgroundColor: C.primarySoft },
+    rowPressed: { backgroundColor: C.surfaceAlt },
+    checkCol: { width: 22, alignItems: 'center' },
+    checkbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: C.muted, alignItems: 'center', justifyContent: 'center' },
+    checkboxOn: { backgroundColor: C.primary, borderColor: C.primary },
+    checkmark: { color: C.onPrimary, fontSize: 12, fontWeight: '700', lineHeight: 14 },
+    dateCol: { width: 76 },
+    nameCol: { flex: 1, minWidth: 0 },
+    typeCol: { width: 124 }, // fits the "Reimbursement" badge
+    amountCol: { width: 112 },
+    date: { fontSize: 13, color: C.muted },
+    name: { fontSize: 15, color: C.ink, fontWeight: '500', lineHeight: 20 },
+    sub: { fontSize: 12, color: C.muted, marginTop: 2 },
+    amount: { fontSize: 15, fontWeight: '600', textAlign: 'right' },
+    summary: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12, paddingHorizontal: 4, paddingTop: 12 },
+    summaryItem: { minWidth: 72 },
+    summaryLabel: { fontSize: 12, color: C.muted, marginBottom: 2 },
+    summaryValue: { fontSize: 14, fontWeight: '600', color: C.ink },
+    pagination: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16, paddingTop: 14 },
+    pageInfo: { fontSize: 13, color: C.muted },
 })

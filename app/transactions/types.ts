@@ -5,15 +5,7 @@ export const TYPES = ['Income', 'Expense', 'Savings', 'Investment']
 // counted); subscriptions can be none of these
 export const TRANSACTION_TYPES = [...TYPES, 'Reimbursement', 'Withdrawal', 'Transfer']
 
-export const TYPE_COLORS: Record<string, { bg: string; text: string }> = {
-    Income:     { bg: '#2980b9', text: '#fff' },
-    Expense:    { bg: '#e74c3c', text: '#fff' },
-    Savings:    { bg: '#27ae60', text: '#fff' },
-    Investment: { bg: '#8e44ad', text: '#fff' },
-    Reimbursement: { bg: '#16a085', text: '#fff' },
-    Withdrawal: { bg: '#d68910', text: '#fff' },
-    Transfer:   { bg: '#7f8c8d', text: '#fff' },
-}
+// Type colors live in lib/theme.tsx (typeColors / <TypeBadge>), so they follow light and dark mode
 
 export const DEFAULT_CATEGORIES: Record<string, string[]> = {
     Income:     ['Salary', 'Freelance', 'Bonus', 'Other'],

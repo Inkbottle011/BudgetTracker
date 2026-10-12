@@ -49,7 +49,7 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     today: { fontSize: 13, color: C.primary, fontWeight: '600', marginLeft: 8 },
     segment: { flexDirection: 'row', backgroundColor: C.track, borderRadius: 9, padding: 3 },
     segBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 7 },
-    segOn: { backgroundColor: C.surface, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 2, shadowOffset: { width: 0, height: 1 } },
+    segOn: { backgroundColor: C.surface, shadowColor: C.shadow, shadowOpacity: 0.06, shadowRadius: 2, shadowOffset: { width: 0, height: 1 } },
     segText: { fontSize: 13, color: C.muted, fontWeight: '600' },
     segTextOn: { color: C.ink },
 })

@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native'
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { supabase } from '../lib/supabase'
 import {
@@ -10,10 +10,14 @@ import { PossibleDuplicates } from './PossibleDuplicates'
 import { bankLinkingAvailable, openBankConnect } from '../lib/bankConnect'
 import { parseDate, todayString } from '../lib/entry'
 import { useToastContext } from '../context/ToastContext'
-import { settingsCardStyles } from './TwoFactorSection'
+import { useTheme, useStyles, Palette, tabular } from '../lib/theme'
+import { Section, Button, Field } from './ui'
+import { makeSettingsStyles } from './TwoFactorSection'
 
 /** Settings: link banks (Plaid by default), see their status, sync now, unlink. */
 export function LinkedBanksSection({ twoFactorOn }: { twoFactorOn: boolean }) {
+    const { c: C } = useTheme()
+    const styles = useStyles(makeStyles)
     const { showToast } = useToastContext()
     const [banks, setBanks] = useState<LinkedBank[]>([])
     const [loading, setLoading] = useState(false)
@@ -102,16 +106,12 @@ export function LinkedBanksSection({ twoFactorOn }: { twoFactorOn: boolean }) {
         setBusy(null)
     }
 
+    const syncButton = banks.length > 0
+        ? <Button variant="secondary" small label="Sync now" onPress={syncNow} loading={busy === 'sync'} disabled={!!busy} />
+        : undefined
+
     return (
-        <View style={styles.card}>
-            <View style={styles.header}>
-                <Text style={styles.title}>Linked banks</Text>
-                {banks.length > 0 && (
-                    <TouchableOpacity onPress={syncNow} disabled={!!busy}>
-                        {busy === 'sync' ? <ActivityIndicator size="small" /> : <Text style={styles.link}>Sync now</Text>}
-                    </TouchableOpacity>
-                )}
-            </View>
+        <Section title="Linked banks" action={syncButton}>
             <Text style={styles.help}>
                 New transactions are added automatically every morning. Read-only: the app can see transactions but can't move money.
             </Text>
@@ -120,15 +120,13 @@ export function LinkedBanksSection({ twoFactorOn }: { twoFactorOn: boolean }) {
                 <Text style={styles.notice}>Turn on two-factor sign-in above to link a bank.</Text>
             ) : (
                 <>
-                    {loading && <ActivityIndicator style={{ marginVertical: 8 }} />}
+                    {loading && <ActivityIndicator color={C.primary} style={{ marginVertical: 8 }} />}
                     {banks.map(bank => (
                         <View key={bank.id} style={styles.bank}>
                             <View style={styles.bankTop}>
                                 <Text style={styles.bankName}>{bank.institution_name ?? 'Bank'}</Text>
                                 {confirmUnlink !== bank.id && (
-                                    <TouchableOpacity onPress={() => setConfirmUnlink(bank.id)} disabled={!!busy}>
-                                        <Text style={styles.unlink}>Unlink</Text>
-                                    </TouchableOpacity>
+                                    <Button variant="ghost" small label="Unlink" onPress={() => setConfirmUnlink(bank.id)} disabled={!!busy} />
                                 )}
                             </View>
                             {bank.accounts.map(a => (
@@ -136,13 +134,11 @@ export function LinkedBanksSection({ twoFactorOn }: { twoFactorOn: boolean }) {
                             ))}
                             <Text style={[styles.status, bank.status !== 'active' && styles.statusBad]}>{describeStatus(bank)}</Text>
                             {confirmUnlink === bank.id && (
-                                <View style={styles.confirm}>
+                                <View style={[styles.confirm, { marginTop: 10 }]}>
                                     <Text style={styles.confirmText}>Unlink {bank.institution_name ?? 'this bank'}? Transactions already imported stay.</Text>
                                     <View style={styles.row}>
-                                        <TouchableOpacity style={styles.danger} onPress={() => unlink(bank)} disabled={!!busy}>
-                                            <Text style={styles.dangerText}>Yes, unlink</Text>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity onPress={() => setConfirmUnlink(null)}><Text style={styles.link}>Cancel</Text></TouchableOpacity>
+                                        <Button variant="danger" small label="Yes, unlink" onPress={() => unlink(bank)} loading={busy === bank.id} disabled={!!busy} />
+                                        <Button variant="ghost" small label="Cancel" onPress={() => setConfirmUnlink(null)} />
                                     </View>
                                 </View>
                             )}
@@ -155,50 +151,43 @@ export function LinkedBanksSection({ twoFactorOn }: { twoFactorOn: boolean }) {
                         <Text style={styles.notice}>Link banks from the website version of the app.</Text>
                     ) : linking ? (
                         <View style={styles.linkBox}>
-                            <Text style={styles.label}>Import transactions from</Text>
-                            <TextInput
-                                accessibilityLabel="Import transactions from"
-                                style={styles.dateInput}
-                                value={startDate}
-                                onChangeText={setStartDate}
-                                placeholder="YYYY-MM-DD"
-                                placeholderTextColor="#aaa"
-                            />
+                            <View style={styles.dateField}>
+                                <Field
+                                    label="Import transactions from"
+                                    value={startDate}
+                                    onChangeText={setStartDate}
+                                    placeholder="YYYY-MM-DD"
+                                    autoCapitalize="none"
+                                />
+                            </View>
                             <Text style={styles.small}>
                                 Starts the day after your latest transaction. Banks share history back to Jan 1. If you go back further than
                                 your latest transaction, ones you already have are matched and skipped, and any we're unsure about are shown
                                 here for you to check.
                             </Text>
                             <View style={styles.row}>
-                                <TouchableOpacity style={styles.primary} onPress={continueToBank} disabled={!!busy}>
-                                    {busy === 'link' ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.primaryText}>Continue to your bank</Text>}
-                                </TouchableOpacity>
-                                <TouchableOpacity onPress={() => setLinking(false)}><Text style={styles.link}>Cancel</Text></TouchableOpacity>
+                                <Button label="Continue to your bank" onPress={continueToBank} loading={busy === 'link'} disabled={!!busy} />
+                                <Button variant="ghost" label="Cancel" onPress={() => setLinking(false)} />
                             </View>
                         </View>
                     ) : (
-                        <TouchableOpacity style={styles.primary} onPress={startLinking} disabled={!!busy}>
-                            <Text style={styles.primaryText}>+ Link a bank</Text>
-                        </TouchableOpacity>
+                        <Button label="Link a bank" onPress={startLinking} disabled={!!busy} style={styles.start} />
                     )}
                 </>
             )}
-        </View>
+        </Section>
     )
 }
 
-const styles = StyleSheet.create({
-    ...settingsCardStyles,
-    notice: { fontSize: 13, color: '#7f8c8d', fontStyle: 'italic' },
-    bank: { borderTopWidth: 0.5, borderColor: '#eee', paddingVertical: 10 },
-    bankTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    bankName: { fontSize: 15, fontWeight: '600', color: '#1a1a1a' },
-    unlink: { color: '#e74c3c', fontSize: 13, fontWeight: '600' },
-    account: { fontSize: 13, color: '#555', marginTop: 2 },
-    status: { fontSize: 12, color: '#1e8449', marginTop: 4 },
-    statusBad: { color: '#c0392b' },
-    linkBox: { gap: 6, marginTop: 8 },
-    label: { fontSize: 13, fontWeight: '600', color: '#2c3e50' },
-    dateInput: { backgroundColor: '#f8f9fa', borderRadius: 8, padding: 10, fontSize: 14, borderWidth: 1, borderColor: '#e8e8e8', width: 160, color: '#1a1a1a' },
-    small: { fontSize: 12, color: '#999', marginBottom: 6 },
+const makeStyles = (C: Palette) => StyleSheet.create({
+    ...makeSettingsStyles(C),
+    bank: { borderTopWidth: 1, borderColor: C.line, paddingVertical: 12 },
+    bankTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+    bankName: { fontSize: 15, fontWeight: '600', color: C.ink, flexShrink: 1 },
+    account: { fontSize: 13, color: C.text, marginTop: 2, ...tabular },
+    status: { fontSize: 12, color: C.good, marginTop: 4 },
+    statusBad: { color: C.bad },
+    linkBox: { marginTop: 8, borderTopWidth: 1, borderColor: C.line, paddingTop: 14 },
+    dateField: { maxWidth: 220 },
+    small: { fontSize: 13, color: C.muted, lineHeight: 18, marginTop: -4, marginBottom: 14 },
 })

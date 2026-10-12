@@ -1,5 +1,8 @@
 import { useMemo, useState } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native'
+import { Section, Button } from '../../components/ui'
+import { useTheme, useStyles, Palette, tabular } from '../../lib/theme'
+import { formatMoney } from '../../lib/format'
 import { supabase } from '../../lib/supabase'
 import { buildCategoryGuesser } from '../../lib/entry'
 import { groupUncategorized, categoriesFor, UncategorizedGroup } from '../../lib/categorize'
@@ -14,7 +17,7 @@ interface Props {
 }
 
 const SHOWN = 15
-const money = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+const money = (n: number) => formatMoney(n)
 const TYPES = ['income', 'expense', 'savings', 'investment']
 
 /**
@@ -23,6 +26,8 @@ const TYPES = ['income', 'expense', 'savings', 'investment']
  */
 export function UncategorizedPanel({ transactions, budgetCategories, onChanged }: Props) {
     const { showToast } = useToastContext()
+    const { c: C } = useTheme()
+    const styles = useStyles(makeStyles)
     const [open, setOpen] = useState(false)
     const [choosing, setChoosing] = useState<string | null>(null)
     const [busy, setBusy] = useState<string | null>(null)
@@ -84,47 +89,53 @@ export function UncategorizedPanel({ transactions, budgetCategories, onChanged }
 
     const shown = showAll ? groups : groups.slice(0, SHOWN)
 
-    return (
-        <View style={styles.card}>
-            <View style={styles.header}>
-                <Text style={styles.title}>
-                    {count} transaction{count === 1 ? '' : 's'} without a category ({groups.length} place{groups.length === 1 ? '' : 's'})
-                </Text>
-                <TouchableOpacity onPress={() => setOpen(o => !o)}>
-                    <Text style={styles.link}>{open ? 'Hide' : 'Review'}</Text>
-                </TouchableOpacity>
-            </View>
+    const title = `${count} transaction${count === 1 ? '' : 's'} without a category (${groups.length} place${groups.length === 1 ? '' : 's'})`
 
+    return (
+        <Section
+            title={title}
+            action={<Button small variant="secondary" label={open ? 'Hide' : 'Review'} onPress={() => setOpen(o => !o)} />}
+        >
+            {!open && <Text style={styles.help}>Categorize them so your budget counts them.</Text>}
             {open && (
                 <>
                     <Text style={styles.help}>Pick a category once per place; future transactions from it are categorized automatically.</Text>
                     {suggested.length > 0 && (
-                        <TouchableOpacity style={styles.primary} onPress={applyAll} disabled={!!busy}>
-                            {busy === 'all' ? <ActivityIndicator color="#fff" size="small" />
-                                : <Text style={styles.primaryText}>Apply all {suggested.length} suggestion{suggested.length === 1 ? '' : 's'}</Text>}
-                        </TouchableOpacity>
+                        <Button
+                            small
+                            label={`Apply all ${suggested.length} suggestion${suggested.length === 1 ? '' : 's'}`}
+                            onPress={applyAll}
+                            disabled={!!busy}
+                            loading={busy === 'all'}
+                            style={styles.applyAll}
+                        />
                     )}
                     {shown.map(g => {
                         const choices = categoriesFor(g.type, available)
                         return (
                             <View key={`${g.type}|${g.key}`} style={styles.row}>
                                 <View style={styles.rowTop}>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={styles.name} numberOfLines={1}>{g.name}</Text>
-                                        <Text style={styles.meta}>{g.count} × · {money(g.total)}</Text>
+                                    <View style={{ flex: 1, minWidth: 0 }}>
+                                        <Text style={styles.name} numberOfLines={2}>{g.name}</Text>
+                                        <Text style={[styles.meta, tabular]}>
+                                            {g.count} transaction{g.count === 1 ? '' : 's'} · {money(g.total)}
+                                        </Text>
                                     </View>
-                                    {busy === g.key ? <ActivityIndicator size="small" /> : (
+                                    {busy === g.key ? <ActivityIndicator size="small" color={C.primary} /> : (
                                         <View style={styles.actions}>
                                             {g.suggestion && (
-                                                <TouchableOpacity accessibilityLabel={`Use ${g.suggestion} for ${g.name}`} style={styles.suggest}
+                                                <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Use ${g.suggestion} for ${g.name}`} style={styles.suggest}
                                                     onPress={() => apply(g, g.suggestion!)} disabled={!!busy}>
                                                     <Text style={styles.suggestText}>{g.suggestion}</Text>
                                                 </TouchableOpacity>
                                             )}
-                                            <TouchableOpacity accessibilityLabel={`Choose a category for ${g.name}`}
-                                                onPress={() => setChoosing(c => (c === g.key ? null : g.key))} disabled={!!busy}>
-                                                <Text style={styles.link}>{g.suggestion ? 'Other…' : 'Choose…'}</Text>
-                                            </TouchableOpacity>
+                                            <Button
+                                                variant="ghost"
+                                                label={g.suggestion ? 'Other' : 'Choose'}
+                                                accessibilityLabel={`Choose a category for ${g.name}`}
+                                                onPress={() => setChoosing(c => (c === g.key ? null : g.key))}
+                                                disabled={!!busy}
+                                            />
                                         </View>
                                     )}
                                 </View>
@@ -132,7 +143,7 @@ export function UncategorizedPanel({ transactions, budgetCategories, onChanged }
                                     <View style={styles.chips}>
                                         {choices.length === 0 && <Text style={styles.meta}>No {g.type} categories yet. Add some on the Budget tab.</Text>}
                                         {choices.map(c => (
-                                            <TouchableOpacity key={c} accessibilityLabel={`Use ${c} for ${g.name}`} style={styles.chip}
+                                            <TouchableOpacity key={c} accessibilityRole="button" accessibilityLabel={`Use ${c} for ${g.name}`} style={styles.chip}
                                                 onPress={() => apply(g, c)} disabled={!!busy}>
                                                 <Text style={styles.chipText}>{c}</Text>
                                             </TouchableOpacity>
@@ -143,32 +154,30 @@ export function UncategorizedPanel({ transactions, budgetCategories, onChanged }
                         )
                     })}
                     {groups.length > SHOWN && (
-                        <TouchableOpacity onPress={() => setShowAll(v => !v)}>
-                            <Text style={[styles.link, { marginTop: 8 }]}>{showAll ? 'Show fewer' : `Show all ${groups.length} places`}</Text>
-                        </TouchableOpacity>
+                        <Button
+                            variant="ghost"
+                            label={showAll ? 'Show fewer' : `Show all ${groups.length} places`}
+                            onPress={() => setShowAll(v => !v)}
+                            style={{ alignSelf: 'flex-start', marginTop: 8 }}
+                        />
                     )}
                 </>
             )}
-        </View>
+        </Section>
     )
 }
 
-const styles = StyleSheet.create({
-    card: { backgroundColor: '#fff', borderRadius: 12, padding: 14, margin: 16, marginBottom: 0, borderWidth: 0.5, borderColor: '#e0e0e0', gap: 6 },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
-    title: { fontSize: 14, fontWeight: '700', color: '#2c3e50', flex: 1 },
-    help: { fontSize: 12, color: '#888' },
-    link: { color: '#3498db', fontWeight: '600', fontSize: 13 },
-    primary: { backgroundColor: '#2c3e50', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, alignSelf: 'flex-start', marginVertical: 4 },
-    primaryText: { color: '#fff', fontWeight: '600', fontSize: 13 },
-    row: { borderTopWidth: 0.5, borderColor: '#eee', paddingVertical: 8 },
+const makeStyles = (C: Palette) => StyleSheet.create({
+    help: { fontSize: 13, color: C.muted, lineHeight: 18 },
+    applyAll: { alignSelf: 'flex-start', marginTop: 10, marginBottom: 6 },
+    row: { borderTopWidth: 1, borderColor: C.line, paddingVertical: 10, marginTop: 4 },
     rowTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    name: { fontSize: 14, color: '#1a1a1a', fontWeight: '500' },
-    meta: { fontSize: 12, color: '#888', marginTop: 2 },
+    name: { fontSize: 14, color: C.ink, fontWeight: '500' },
+    meta: { fontSize: 12, color: C.muted, marginTop: 2 },
     actions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    suggest: { backgroundColor: '#eafaf1', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5 },
-    suggestText: { color: '#1e8449', fontWeight: '600', fontSize: 12 },
+    suggest: { backgroundColor: C.goodSoft, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
+    suggestText: { color: C.good, fontWeight: '600', fontSize: 13 },
     chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
-    chip: { borderWidth: 1, borderColor: '#d5dbe1', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 4 },
-    chipText: { fontSize: 12, color: '#2c3e50' },
+    chip: { borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
+    chipText: { fontSize: 13, color: C.text, fontWeight: '500' },
 })

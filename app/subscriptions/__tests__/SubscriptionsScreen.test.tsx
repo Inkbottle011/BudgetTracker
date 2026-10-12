@@ -17,6 +17,10 @@ const sub = (o: any) => ({
 
 const showToast = jest.fn()
 
+function setWidth(width: number) {
+    jest.spyOn(require('react-native'), 'useWindowDimensions').mockReturnValue({ width, height: 800, scale: 1, fontScale: 1 })
+}
+
 async function renderScreen() {
     await render(<ToastContext.Provider value={{ showToast }}><SubscriptionsScreen /></ToastContext.Provider>)
 }
@@ -37,47 +41,64 @@ beforeEach(() => {
         ],
     })
 })
-afterEach(() => jest.useRealTimers())
+afterEach(() => { jest.useRealTimers(); jest.restoreAllMocks() })
 
-it('groups subscriptions and shows the next charge', async () => {
+it('groups subscriptions in sentence case and shows the next charge', async () => {
     await renderScreen()
-    expect(await screen.findByText('Active · 3')).toBeTruthy()
-    expect(screen.getByText('Paused · 1')).toBeTruthy()
-    expect(screen.getByText('Ended · 1')).toBeTruthy()
-    expect(screen.getByText(/Next charge Oct 15, 2026/)).toBeTruthy()
+    expect(await screen.findByText('Active (3)')).toBeTruthy()
+    expect(screen.getByText('Paused (1)')).toBeTruthy()
+    expect(screen.getByText('Ended (1)')).toBeTruthy()
+    expect(screen.queryByText(/·\s*\d+$/)).toBeNull()
+    // This year's dates leave the year off
+    expect(screen.getByText('Next charge Oct 15')).toBeTruthy()
     expect(screen.getByText('Paused · no charges until resumed')).toBeTruthy()
+    expect(screen.getByText('Ended Mar 1')).toBeTruthy()
 })
 
-it('totals monthly spending, counting only active expenses', async () => {
+it('shows category or type with how often, and the amount per period', async () => {
+    fake.table('subscriptions', { data: [sub({ id: 'n', name: 'Netflix', amount: 15.99, category_label: 'Entertainment' })] })
     await renderScreen()
+    expect(await screen.findByText('Entertainment · Monthly')).toBeTruthy()
+    expect(screen.getAllByText('$15.99')).toHaveLength(2) // the row and the monthly total
+    expect(screen.getByText('/ month')).toBeTruthy()
+})
+
+it('totals per month and per year, counting only active subscriptions', async () => {
+    await renderScreen()
+    expect(await screen.findByText('Per month')).toBeTruthy()
+    expect(screen.getByText('Per year')).toBeTruthy()
     // Netflix 15.99 + Gym 10 x 52/12 = 59.32
-    expect(await screen.findByText('$59.32')).toBeTruthy()
+    expect(screen.getByText('$59.32')).toBeTruthy()
     expect(screen.getByText('$711.88')).toBeTruthy() // per year
-    expect(screen.getByText('$4333.33')).toBeTruthy() // income per month: 2000 x 26/12
+    expect(screen.getByText('+$4,333.33 coming in')).toBeTruthy() // income per month: 2000 x 26/12
+    expect(screen.getByText('+$52,000.00 coming in')).toBeTruthy()
 })
 
 it('shows an empty state with no subscriptions', async () => {
     fake.table('subscriptions', { data: [] })
     await renderScreen()
     expect(await screen.findByText('No subscriptions yet')).toBeTruthy()
+    expect(screen.getByText("Add things that repeat, like Spotify or rent, and they'll be added to your transactions on their dates.")).toBeTruthy()
 })
 
 it('shows a load error with a retry', async () => {
     fake.table('subscriptions', { data: null, error: { message: 'offline' } })
     await renderScreen()
     expect(await screen.findByText("Couldn't load subscriptions: offline")).toBeTruthy()
+    expect(screen.getByText('Try again')).toBeTruthy()
 })
 
 it('adds a subscription, accepting "$" amounts and US dates, then adds due charges', async () => {
     ;(supabase.rpc as jest.Mock).mockResolvedValue({ data: 2, error: null })
     await renderScreen()
-    await fireEvent.press(await screen.findByText('+ Add'))
+    await fireEvent.press(await screen.findByText('Add subscription'))
+    expect(screen.getByText('New subscription')).toBeTruthy()
     await fireEvent.changeText(screen.getByPlaceholderText('e.g. Netflix, Rent, Paycheck'), 'Spotify')
     await fireEvent.changeText(screen.getByPlaceholderText('0.00'), '$9.99')
     const [start] = screen.getAllByPlaceholderText('YYYY-MM-DD')
     await fireEvent.changeText(start, '9/3/2026')
-    expect(screen.getByText(/2 past charges from Sep 3, 2026 to today will be added/)).toBeTruthy()
-    await fireEvent.press(screen.getByText('Add Subscription'))
+    expect(screen.getByText(/2 past charges from Sep 3 to today will be added/)).toBeTruthy()
+    await fireEvent.press(screen.getByText('Add subscription'))
     expect(fake.arg('subscriptions', 'insert')).toMatchObject({
         name: 'Spotify', amount: 9.99, frequency: 'monthly', start_date: '2026-09-03', end_date: null, type: 'expense',
     })
@@ -87,15 +108,37 @@ it('adds a subscription, accepting "$" amounts and US dates, then adds due charg
 
 it('validates the form', async () => {
     await renderScreen()
-    await fireEvent.press(await screen.findByText('+ Add'))
+    await fireEvent.press(await screen.findByText('Add subscription'))
     await fireEvent.changeText(screen.getByPlaceholderText('0.00'), 'free')
     const [, end] = screen.getAllByPlaceholderText('YYYY-MM-DD')
     await fireEvent.changeText(end, '2020-01-01')
-    await fireEvent.press(screen.getByText('Add Subscription'))
+    await fireEvent.press(screen.getByText('Add subscription'))
     expect(screen.getByText('Give it a name, e.g. Netflix')).toBeTruthy()
     expect(screen.getByText('Enter an amount, like 15.99')).toBeTruthy()
     expect(screen.getByText('Must be on or after the first charge')).toBeTruthy()
     expect(fake.arg('subscriptions', 'insert')).toBeUndefined()
+})
+
+it('tapping a subscription opens it for editing', async () => {
+    await renderScreen()
+    await fireEvent.press(await screen.findByLabelText('Edit Netflix'))
+    expect(screen.getByText('Edit subscription')).toBeTruthy()
+    expect(screen.getByDisplayValue('Netflix')).toBeTruthy()
+    expect(screen.getByDisplayValue('15.99')).toBeTruthy()
+    await fireEvent.changeText(screen.getByDisplayValue('15.99'), '17.99')
+    await fireEvent.press(screen.getByText('Save changes'))
+    expect(fake.arg('subscriptions', 'update')).toMatchObject({ name: 'Netflix', amount: 17.99 })
+    expect(showToast).toHaveBeenCalledWith('Subscription updated')
+})
+
+it('on a computer, the form sits beside the list', async () => {
+    setWidth(1200)
+    await renderScreen()
+    await fireEvent.press(await screen.findByLabelText('Edit Netflix'))
+    expect(screen.getByText('Edit subscription')).toBeTruthy()
+    expect(screen.getByText('Active (3)')).toBeTruthy()
+    await fireEvent.press(screen.getByLabelText('Close form'))
+    expect(screen.queryByText('Edit subscription')).toBeNull()
 })
 
 it('pauses a subscription', async () => {
@@ -116,12 +159,17 @@ it('resuming skips the charges missed while paused', async () => {
 it('asks before cancelling or deleting', async () => {
     await renderScreen()
     await screen.findByText('Netflix')
-    await fireEvent.press(screen.getAllByText('Delete')[0])
+    await fireEvent.press(screen.getByLabelText('Delete Netflix'))
     expect(screen.getByText('Delete? Past charges stay in transactions.')).toBeTruthy()
-    await fireEvent.press(screen.getByText('No'))
+    await fireEvent.press(screen.getByText('Keep it'))
     expect(fake.calls('subscriptions').some(c => c.ops.some(o => o.method === 'delete'))).toBe(false)
 
-    await fireEvent.press(screen.getAllByText('Cancel')[0])
-    await fireEvent.press(screen.getByText('Yes'))
+    await fireEvent.press(screen.getByLabelText('Cancel Netflix'))
+    expect(screen.getByText('Cancel? No more charges will be added.')).toBeTruthy()
+    await fireEvent.press(screen.getByText('Yes, cancel it'))
     expect(fake.arg('subscriptions', 'update')).toEqual({ status: 'cancelled' })
+
+    await fireEvent.press(screen.getByLabelText('Delete Gym'))
+    await fireEvent.press(screen.getByText('Yes, delete'))
+    expect(fake.calls('subscriptions').some(c => c.ops.some(o => o.method === 'delete'))).toBe(true)
 })

@@ -1,4 +1,6 @@
-// Transactions list: running balance, search/filter, sort and CSV export, as plain functions.
+// Transactions list: search/filter, sort, CSV export and how dates and amounts read, as plain functions.
+import { formatMoney } from '../../lib/format'
+import { activityDirection } from '../dashboard/summary'
 
 interface Tx {
     id: string
@@ -8,23 +10,6 @@ interface Tx {
     name?: string | null
     note?: string | null
     category_label?: string | null
-}
-
-/**
- * Adds a running balance to each transaction and returns them newest first.
- * Matches the dashboard: income, money paid back to you and money taken out of savings add;
- * expenses and money put into savings subtract. Investments and transfers don't change it.
- */
-export function withRunningBalance<T extends Tx>(list: T[]): (T & { balance: number })[] {
-    const oldestFirst = list
-        .map((t, i) => ({ t, i }))
-        .sort((a, b) => a.t.date.localeCompare(b.t.date) || a.i - b.i)
-    let balance = 0
-    return oldestFirst.map(({ t }) => {
-        if (t.type === 'income' || t.type === 'reimbursement' || t.type === 'withdrawal') balance += Number(t.amount)
-        else if (t.type === 'expense' || t.type === 'savings') balance -= Number(t.amount)
-        return { ...t, balance: Math.round(balance * 100) / 100 }
-    }).reverse()
 }
 
 export interface ListFilters {
@@ -58,12 +43,12 @@ export function sortTransactions<T extends Tx>(list: T[], col: string, dir: 'asc
     })
 }
 
-export function toCSV(rows: (Tx & { balance: number })[]): string {
-    const headers = ['Date', 'Type', 'Category', 'Name', 'Amount', 'Details', 'Balance']
+export function toCSV(rows: Tx[]): string {
+    const headers = ['Date', 'Type', 'Category', 'Name', 'Amount', 'Details']
     const quote = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
     return [
         headers.join(','),
-        ...rows.map(t => [t.date, t.type, t.category_label, t.name, t.amount, t.note, t.balance].map(quote).join(',')),
+        ...rows.map(t => [t.date, t.type, t.category_label, t.name, t.amount, t.note].map(quote).join(',')),
     ].join('\n')
 }
 
@@ -74,4 +59,21 @@ export function listSummary(rows: Tx[]): { income: number; spent: number; net: n
     const income = sum('income')
     const spent = sum('expense') - sum('reimbursement')
     return { income: round(income), spent: round(spent), net: round(income - spent) }
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/** "Oct 6", or "Dec 24, 2025" when it isn't this year. `today` is 'YYYY-MM-DD'. */
+export function displayDate(date: string, today: string): string {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(date))
+    if (!m || +m[2] < 1 || +m[2] > 12) return String(date)
+    const short = `${MONTHS[+m[2] - 1]} ${+m[3]}`
+    return m[1] === today.slice(0, 4) ? short : `${short}, ${m[1]}`
+}
+
+/** How an amount reads: "+$20.00" for money in, "-$5.00" for money out, "$100.00" for a transfer. */
+export function amountText(t: { type: string; amount: number | string }): { text: string; direction: 'in' | 'out' | 'move' } {
+    const direction = activityDirection(t.type)
+    const abs = formatMoney(Math.abs(Number(t.amount) || 0))
+    return { text: direction === 'in' ? `+${abs}` : direction === 'out' ? `-${abs}` : abs, direction }
 }

@@ -25,14 +25,14 @@ beforeEach(() => {
 it('shows the sign-in screen when signed out', async () => {
     auth.getSession.mockResolvedValueOnce({ data: { session: null } } as any)
     await render(<App />)
-    expect(await screen.findByText('Sign in to continue')).toBeTruthy()
+    expect(await screen.findByText('Track what comes in, what goes out, and what you save.')).toBeTruthy()
 })
 
 it('when signed in, adds due subscription charges before showing the app', async () => {
     auth.getSession.mockResolvedValue({ data: { session } } as any)
     await render(<App />)
     await waitFor(() => expect(supabase.rpc).toHaveBeenCalledWith('generate_subscription_transactions', expect.any(Object)))
-    expect(await screen.findByText('💰 Budget Tracker')).toBeTruthy()
+    expect(await screen.findByLabelText('Account menu')).toBeTruthy()
     expect(screen.getAllByText('Subscriptions').length).toBeGreaterThan(0)
 })
 
@@ -41,7 +41,7 @@ it('still opens the app if adding charges fails (for example, the database is pa
     ;(supabase.rpc as jest.Mock).mockResolvedValueOnce({ data: null, error: { message: 'paused' } })
     jest.spyOn(console, 'warn').mockImplementation(() => {})
     await render(<App />)
-    expect(await screen.findByText('💰 Budget Tracker')).toBeTruthy()
+    expect(await screen.findByLabelText('Account menu')).toBeTruthy()
 })
 
 it('exchanges the code from an email link for a session', async () => {
@@ -70,18 +70,18 @@ it('opens the reset-password screen from a password reset link', async () => {
     const fire = captureAuthListener()
     auth.getSession.mockResolvedValueOnce({ data: { session: null } } as any)
     await render(<App />)
-    await screen.findByText('Sign in to continue')
+    await screen.findByText('Track what comes in, what goes out, and what you save.')
     await fire('PASSWORD_RECOVERY', session)
-    expect(await screen.findByText('Choose a new password for your account')).toBeTruthy()
+    expect(await screen.findByText('Choose a new password')).toBeTruthy()
 })
 
 it('returns to sign-in after signing out', async () => {
     const fire = captureAuthListener()
     auth.getSession.mockResolvedValue({ data: { session } } as any)
     await render(<App />)
-    await screen.findByText('💰 Budget Tracker')
+    await screen.findByLabelText('Account menu')
     await fire('SIGNED_OUT', null)
-    expect(await screen.findByText('Sign in to continue')).toBeTruthy()
+    expect(await screen.findByText('Track what comes in, what goes out, and what you save.')).toBeTruthy()
 })
 
 describe('two-factor sign-in', () => {
@@ -91,14 +91,28 @@ describe('two-factor sign-in', () => {
         auth.getSession.mockResolvedValue({ data: { session } } as any)
         mfa.getAuthenticatorAssuranceLevel.mockResolvedValue({ data: { currentLevel: 'aal1', nextLevel: 'aal2' }, error: null })
         await render(<App />)
-        expect(await screen.findByText('Enter the 6-digit code from your authenticator app')).toBeTruthy()
-        expect(screen.queryByText('💰 Budget Tracker')).toBeNull()
+        expect(await screen.findByText('Enter the 6-digit code from your authenticator app.')).toBeTruthy()
+        expect(screen.queryByLabelText('Account menu')).toBeNull()
     })
 
     it('goes straight in when two-factor is off or the code was already entered', async () => {
         auth.getSession.mockResolvedValue({ data: { session } } as any)
         mfa.getAuthenticatorAssuranceLevel.mockResolvedValue({ data: { currentLevel: 'aal2', nextLevel: 'aal2' }, error: null })
         await render(<App />)
-        expect(await screen.findByText('💰 Budget Tracker')).toBeTruthy()
+        expect(await screen.findByLabelText('Account menu')).toBeTruthy()
+    })
+})
+
+describe('appearance', () => {
+    it('uses the light or dark choice saved in Settings, even on the sign-in screen', async () => {
+        const AsyncStorage = require('@react-native-async-storage/async-storage')
+        const { dark } = require('../lib/theme')
+        const { StyleSheet } = require('react-native')
+        await AsyncStorage.setItem('appearance', 'dark')
+        auth.getSession.mockResolvedValueOnce({ data: { session: null } } as any)
+        await render(<App />)
+        const title = await screen.findByText('Budget Tracker')
+        await waitFor(() => expect(StyleSheet.flatten(title.props.style).color).toBe(dark.ink))
+        await AsyncStorage.clear()
     })
 })

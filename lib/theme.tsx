@@ -28,6 +28,7 @@ export const light = {
     warnSoft: '#fdf3dc',
     move: '#7b8794',        // transfers between your own accounts
     shadow: '#000000',
+    scrim: 'rgba(0,0,0,0.35)',  // dims the page behind menus and sheets
 }
 
 export type Palette = typeof light
@@ -56,6 +57,7 @@ export const dark: Palette = {
     warnSoft: '#3b2e12',
     move: '#8f9cab',
     shadow: '#000000',
+    scrim: 'rgba(0,0,0,0.6)',
 }
 
 const TYPE_HUES: Record<string, { light: [string, string]; dark: [string, string] }> = {

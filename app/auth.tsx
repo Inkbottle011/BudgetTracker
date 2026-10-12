@@ -1,7 +1,9 @@
-import { useState } from 'react'
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native'
+import { ReactNode, useState } from 'react'
+import { View, Text, ScrollView, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native'
 import * as Linking from 'expo-linking'
 import { supabase } from '../lib/supabase'
+import { useTheme, useStyles, Palette } from '../lib/theme'
+import { Button, Field, Segmented } from '../components/ui'
 
 // Only blame the password when Supabase actually says the credentials are wrong.
 // Anything else (server errors, network problems) shows the real reason.
@@ -12,7 +14,91 @@ function signInErrorMessage(error: { code?: string; status?: number; message: st
     return `Sign-in failed: ${error.message}`
 }
 
+/** The small app mark: a rounded square with a "B". */
+export function BrandMark({ size = 28 }: { size?: number }) {
+    const { c } = useTheme()
+    return (
+        <View style={{ width: size, height: size, borderRadius: size * 0.3, backgroundColor: c.primary, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ color: c.onPrimary, fontWeight: '800', fontSize: size * 0.55 }}>B</Text>
+        </View>
+    )
+}
+
+/** A centered card on the page background, used by the sign-in, reset and code screens. */
+export function AuthCard({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
+    const styles = useStyles(makeCardStyles)
+    return (
+        <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+                <View style={styles.card}>
+                    <View style={styles.brand}>
+                        <BrandMark size={40} />
+                    </View>
+                    <Text style={styles.title} accessibilityRole="header">{title}</Text>
+                    {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+                    {children}
+                </View>
+            </ScrollView>
+        </KeyboardAvoidingView>
+    )
+}
+
+/** A message under a form: problems in red, good news in green. */
+export function FormMessage({ tone, children }: { tone: 'bad' | 'good'; children: string }) {
+    const styles = useStyles(makeCardStyles)
+    return (
+        <View style={[styles.message, tone === 'bad' ? styles.messageBad : styles.messageGood]} accessibilityLiveRegion="polite">
+            <Text style={[styles.messageText, tone === 'bad' ? styles.messageTextBad : styles.messageTextGood]}>{children}</Text>
+        </View>
+    )
+}
+
+/** A password box with a Show/Hide switch beside its label. */
+export function PasswordField({ label, value, onChangeText, placeholder, error, hint, shown, onToggle, onSubmitEditing }: {
+    label: string
+    value: string
+    onChangeText: (t: string) => void
+    placeholder: string
+    error?: string | null
+    hint?: string
+    shown: boolean
+    onToggle?: () => void
+    onSubmitEditing?: () => void
+}) {
+    return (
+        <View>
+            <Field
+                label={label}
+                value={value}
+                onChangeText={onChangeText}
+                placeholder={placeholder}
+                secureTextEntry={!shown}
+                autoCapitalize="none"
+                autoCorrect={false}
+                error={error}
+                hint={hint}
+                onSubmitEditing={onSubmitEditing}
+            />
+            {onToggle && (
+                <View style={{ position: 'absolute', top: -4, right: 0 }}>
+                    <Button
+                        variant="ghost"
+                        small
+                        label={shown ? 'Hide' : 'Show'}
+                        accessibilityLabel={shown ? 'Hide password' : 'Show password'}
+                        onPress={onToggle}
+                    />
+                </View>
+            )}
+        </View>
+    )
+}
+
+type Mode = 'signin' | 'signup'
+
 export default function AuthScreen({ initialError }: { initialError?: string | null }) {
+    const { c } = useTheme()
+    const styles = useStyles(makeStyles)
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [showPassword, setShowPassword] = useState(false)
@@ -22,7 +108,7 @@ export default function AuthScreen({ initialError }: { initialError?: string | n
     const [errors, setErrors] = useState<{ email?: string; password?: string; general?: string }>(initialError ? { general: initialError } : {})
     const [success, setSuccess] = useState<string | null>(null)
     const [passwordStrength, setPasswordStrength] = useState(0)
-    
+
     function getPasswordStrength(pwd: string): number {
         let strength = 0
         if (pwd.length >= 8) strength++
@@ -31,13 +117,13 @@ export default function AuthScreen({ initialError }: { initialError?: string | n
         if (/[^A-Za-z0-9]/.test(pwd)) strength++
         return strength
     }
-    
+
     function validate() {
         const newErrors: { email?: string; password?: string } = {}
-        
+
         if (!email) newErrors.email = 'Email is required'
         else if (!/\S+@\S+\.\S+/.test(email)) newErrors.email = 'Enter a valid email address'
-        
+
         if (isForgot) {
             // Only the email is needed to request a reset link
         } else if (!password) {
@@ -50,11 +136,11 @@ export default function AuthScreen({ initialError }: { initialError?: string | n
         } else {
             if (password.length < 6) newErrors.password = 'Password must be at least 6 characters'
         }
-        
+
         setErrors(newErrors)
         return Object.keys(newErrors).length === 0
     }
-    
+
     async function handleAuth() {
         if (!validate()) return
         setLoading(true)
@@ -92,7 +178,7 @@ export default function AuthScreen({ initialError }: { initialError?: string | n
             setLoading(false)
         }
     }
-    
+
     function openForgot(show: boolean) {
         setIsForgot(show)
         setIsLogin(true)
@@ -101,151 +187,124 @@ export default function AuthScreen({ initialError }: { initialError?: string | n
         setPassword('')
         setPasswordStrength(0)
     }
-    
-    function switchMode() {
-        setIsLogin(!isLogin)
+
+    function switchMode(mode: Mode) {
+        if ((mode === 'signin') === isLogin) return
+        setIsLogin(mode === 'signin')
         setErrors({})
         setSuccess(null)
-        setEmail('')
         setPassword('')
         setPasswordStrength(0)
     }
-    
+
     const strengthLabel = passwordStrength <= 1 ? 'Weak' : passwordStrength === 2 ? 'Fair' : passwordStrength === 3 ? 'Good' : 'Strong'
-    const strengthColor = passwordStrength <= 1 ? '#e74c3c' : passwordStrength === 2 ? '#e67e22' : passwordStrength === 3 ? '#f1c40f' : '#27ae60'
-    
+    const strengthColor = passwordStrength <= 1 ? c.bad : passwordStrength === 2 ? c.warn : passwordStrength === 3 ? c.primary : c.good
+    const submitLabel = isForgot ? 'Send reset link' : isLogin ? 'Sign in' : 'Create account'
+
     return (
-        <View style={styles.container}>
-        <View style={styles.card}>
-        <Text style={styles.title}>Budget Tracker</Text>
-        <Text style={styles.subtitle}>
-        {isForgot ? "Enter your email and we'll send you a reset link" : isLogin ? 'Sign in to continue' : 'Create your account'}
-        </Text>
-        
-        {errors.general && (
-            <View style={styles.generalError}>
-            <Text style={styles.generalErrorText}>{errors.general}</Text>
-            </View>
-        )}
-        
-        {success && (
-            <View style={styles.successBanner}>
-            <Text style={styles.successText}>{success}</Text>
-            </View>
-        )}
-        
-        <Text style={styles.label}>Email</Text>
-        <TextInput
-        style={[styles.input, errors.email ? styles.inputError : null]}
-        placeholder="you@example.com"
-        value={email}
-        onChangeText={(t) => { setEmail(t); setErrors(e => ({ ...e, email: undefined })) }}
-        autoCapitalize="none"
-        keyboardType="email-address"
-        placeholderTextColor="#aaa"
-        />
-        {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
-        
-        {!isForgot && (<>
-        <Text style={styles.label}>Password</Text>
-        <View style={[styles.passwordContainer, errors.password ? styles.inputError : null]}>
-        <TextInput
-        style={styles.passwordInput}
-        placeholder={isLogin ? 'Your password' : 'Min. 8 chars, uppercase, number, symbol'}
-        value={password}
-        onChangeText={(t) => {
-            setPassword(t)
-            setPasswordStrength(getPasswordStrength(t))
-            setErrors(e => ({ ...e, password: undefined }))
-        }}
-        secureTextEntry={!showPassword}
-        placeholderTextColor="#aaa"
-        />
-        <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeButton}>
-        <Text style={styles.eyeText}>{showPassword ? 'Hide' : 'Show'}</Text>
-        </TouchableOpacity>
-        </View>
-        {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
-        
-        {!isLogin && password.length > 0 && (
-            <View style={styles.strengthContainer}>
-            <View style={styles.strengthBar}>
-            <View style={[styles.strengthFill, {
-                width: `${passwordStrength * 25}%`,
-                backgroundColor: strengthColor
-            }]} />
-            </View>
-            <Text style={[styles.strengthText, { color: strengthColor }]}>{strengthLabel}</Text>
-            </View>
-        )}
-        
-        {!isLogin && (
-            <Text style={styles.hint}>Use at least 8 characters with uppercase, number, and special character</Text>
-        )}
-        
-        {isLogin && (
-            <TouchableOpacity onPress={() => openForgot(true)} style={styles.forgotButton}>
-            <Text style={styles.forgotText}>Forgot password?</Text>
-            </TouchableOpacity>
-        )}
-        </>)}
-        
-        <TouchableOpacity
-        style={[styles.button, loading && styles.buttonDisabled]}
-        onPress={handleAuth}
-        disabled={loading}
+        <AuthCard
+            title={isForgot ? 'Reset your password' : 'Budget Tracker'}
+            subtitle={isForgot
+                ? "Enter your email and we'll send you a link to choose a new password."
+                : 'Track what comes in, what goes out, and what you save.'}
         >
-        {loading
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.buttonText}>{isForgot ? 'Send Reset Link' : isLogin ? 'Sign In' : 'Create Account'}</Text>
-        }
-        </TouchableOpacity>
-        
-        {isForgot ? (
-            <TouchableOpacity onPress={() => openForgot(false)} style={styles.toggleButton}>
-            <Text style={styles.toggleLink}>Back to Sign In</Text>
-            </TouchableOpacity>
-        ) : (
-            <TouchableOpacity onPress={switchMode} style={styles.toggleButton}>
-            <Text style={styles.toggleText}>
-            {isLogin ? "Don't have an account? " : 'Already have an account? '}
-            <Text style={styles.toggleLink}>{isLogin ? 'Sign Up' : 'Sign In'}</Text>
-            </Text>
-            </TouchableOpacity>
-        )}
-        </View>
-        </View>
+            {!isForgot && (
+                <View style={styles.switch}>
+                    <Segmented<Mode>
+                        value={isLogin ? 'signin' : 'signup'}
+                        onChange={switchMode}
+                        options={[{ value: 'signin', label: 'Sign in' }, { value: 'signup', label: 'Create account' }]}
+                    />
+                </View>
+            )}
+
+            <Field
+                label="Email"
+                placeholder="you@example.com"
+                value={email}
+                onChangeText={(t) => { setEmail(t); setErrors(e => ({ ...e, email: undefined })) }}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
+                autoComplete="email"
+                error={errors.email}
+                onSubmitEditing={isForgot ? handleAuth : undefined}
+            />
+
+            {!isForgot && (
+                <>
+                    <PasswordField
+                        label="Password"
+                        placeholder={isLogin ? 'Your password' : 'Min. 8 chars, uppercase, number, symbol'}
+                        value={password}
+                        onChangeText={(t) => {
+                            setPassword(t)
+                            setPasswordStrength(getPasswordStrength(t))
+                            setErrors(e => ({ ...e, password: undefined }))
+                        }}
+                        error={errors.password}
+                        hint={!isLogin && password.length === 0 ? 'Use at least 8 characters with an uppercase letter, a number and a symbol.' : undefined}
+                        shown={showPassword}
+                        onToggle={() => setShowPassword(s => !s)}
+                        onSubmitEditing={handleAuth}
+                    />
+
+                    {!isLogin && password.length > 0 && (
+                        <View style={styles.strength}>
+                            <View style={styles.strengthTrack}>
+                                <View style={[styles.strengthFill, { width: `${passwordStrength * 25}%`, backgroundColor: strengthColor }]} />
+                            </View>
+                            <Text style={[styles.strengthText, { color: strengthColor }]}>{strengthLabel}</Text>
+                        </View>
+                    )}
+
+                    {isLogin && (
+                        <View style={styles.forgot}>
+                            <Button variant="ghost" small label="Forgot password?" onPress={() => openForgot(true)} />
+                        </View>
+                    )}
+                </>
+            )}
+
+            {errors.general ? <FormMessage tone="bad">{errors.general}</FormMessage> : null}
+            {success ? <FormMessage tone="good">{success}</FormMessage> : null}
+
+            <Button label={submitLabel} onPress={handleAuth} loading={loading} style={styles.submit} />
+
+            {isForgot && (
+                <View style={styles.back}>
+                    <Button variant="ghost" label="Back to sign in" onPress={() => openForgot(false)} />
+                </View>
+            )}
+        </AuthCard>
     )
 }
 
-const styles = StyleSheet.create({
-    container: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: '#f5f6fa' },
-    card: { backgroundColor: '#fff', borderRadius: 20, padding: 28, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 12, elevation: 4 },
-    title: { fontSize: 28, fontWeight: '700', color: '#2c3e50', textAlign: 'center', marginBottom: 6 },
-    subtitle: { fontSize: 15, color: '#888', textAlign: 'center', marginBottom: 24 },
-    label: { fontSize: 13, fontWeight: '600', color: '#555', marginBottom: 6 },
-    input: { backgroundColor: '#f8f9fa', borderRadius: 10, padding: 14, fontSize: 15, marginBottom: 4, borderWidth: 1, borderColor: '#e8e8e8', color: '#1a1a1a' },
-    inputError: { borderColor: '#e74c3c' },
-    passwordContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8f9fa', borderRadius: 10, borderWidth: 1, borderColor: '#e8e8e8', marginBottom: 4 },
-    passwordInput: { flex: 1, padding: 14, fontSize: 15, color: '#1a1a1a' },
-    eyeButton: { paddingHorizontal: 14 },
-    eyeText: { fontSize: 13, color: '#3498db', fontWeight: '600' },
-    errorText: { color: '#e74c3c', fontSize: 12, marginBottom: 12, marginLeft: 2 },
-    hint: { color: '#aaa', fontSize: 12, marginBottom: 12, marginLeft: 2 },
-    generalError: { backgroundColor: '#fdedec', borderRadius: 8, padding: 12, marginBottom: 16 },
-    generalErrorText: { color: '#e74c3c', fontSize: 13, textAlign: 'center' },
-    successBanner: { backgroundColor: '#eafaf1', borderRadius: 8, padding: 12, marginBottom: 16 },
-    successText: { color: '#27ae60', fontSize: 13, textAlign: 'center', fontWeight: '600' },
-    strengthContainer: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8, marginTop: 2 },
-    strengthBar: { flex: 1, height: 4, backgroundColor: '#e0e0e0', borderRadius: 2, overflow: 'hidden' },
+const makeCardStyles = (C: Palette) => StyleSheet.create({
+    page: { flex: 1, backgroundColor: C.page },
+    scroll: { flexGrow: 1, justifyContent: 'center', padding: 16, paddingVertical: 32 },
+    card: {
+        width: '100%', maxWidth: 420, alignSelf: 'center', backgroundColor: C.surface,
+        borderRadius: 14, borderWidth: 1, borderColor: C.line, padding: 24,
+    },
+    brand: { alignItems: 'center', marginBottom: 14 },
+    title: { fontSize: 24, fontWeight: '700', color: C.ink, textAlign: 'center' },
+    subtitle: { fontSize: 14, color: C.muted, textAlign: 'center', marginTop: 6, marginBottom: 22, lineHeight: 20 },
+    message: { borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 12 },
+    messageBad: { backgroundColor: C.badSoft },
+    messageGood: { backgroundColor: C.goodSoft },
+    messageText: { fontSize: 13, lineHeight: 18 },
+    messageTextBad: { color: C.bad },
+    messageTextGood: { color: C.good, fontWeight: '600' },
+})
+
+const makeStyles = (C: Palette) => StyleSheet.create({
+    switch: { alignSelf: 'center', marginBottom: 20 },
+    strength: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: -6, marginBottom: 12 },
+    strengthTrack: { flex: 1, height: 4, backgroundColor: C.track, borderRadius: 2, overflow: 'hidden' },
     strengthFill: { height: 4, borderRadius: 2 },
-    strengthText: { fontSize: 12, fontWeight: '600', minWidth: 40 },
-    button: { backgroundColor: '#2c3e50', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 8 },
-    buttonDisabled: { opacity: 0.6 },
-    buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-    forgotButton: { alignSelf: 'flex-end', marginBottom: 8, marginTop: 4 },
-    forgotText: { fontSize: 13, color: '#3498db', fontWeight: '600' },
-    toggleButton: { marginTop: 20, alignItems: 'center' },
-    toggleText: { fontSize: 14, color: '#888' },
-    toggleLink: { color: '#3498db', fontWeight: '600' },
+    strengthText: { fontSize: 12, fontWeight: '600', minWidth: 44, textAlign: 'right' },
+    forgot: { alignItems: 'flex-end', marginTop: -8, marginBottom: 12 },
+    submit: { minHeight: 46, marginTop: 4 },
+    back: { alignItems: 'center', marginTop: 14 },
 })

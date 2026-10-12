@@ -6,13 +6,16 @@ jest.mock('../../lib/supabase', () => require('../../test/fakeSupabase').module)
 
 const email = () => screen.getByPlaceholderText('you@example.com')
 const password = () => screen.getByPlaceholderText(/Your password|Min\. 8 chars/)
+// The mode switch at the top and the button under the form share a name; the form button comes last
+const submit = (name: string) => screen.getAllByRole('button', { name }).pop()!
+const modeTab = (name: string) => screen.getAllByRole('button', { name })[0]
 
 beforeEach(() => fake.reset())
 
 describe('signing in', () => {
     it('asks for an email and password before contacting the server', async () => {
         await render(<AuthScreen />)
-        await fireEvent.press(screen.getByText('Sign In'))
+        await fireEvent.press(submit('Sign in'))
         expect(screen.getByText('Email is required')).toBeTruthy()
         expect(screen.getByText('Password is required')).toBeTruthy()
         expect(auth.signInWithPassword).not.toHaveBeenCalled()
@@ -22,7 +25,7 @@ describe('signing in', () => {
         await render(<AuthScreen />)
         await fireEvent.changeText(email(), 'not-an-email')
         await fireEvent.changeText(password(), 'secret1')
-        await fireEvent.press(screen.getByText('Sign In'))
+        await fireEvent.press(submit('Sign in'))
         expect(screen.getByText('Enter a valid email address')).toBeTruthy()
     })
 
@@ -30,7 +33,7 @@ describe('signing in', () => {
         await render(<AuthScreen />)
         await fireEvent.changeText(email(), 'me@example.com')
         await fireEvent.changeText(password(), 'secret1')
-        await fireEvent.press(screen.getByText('Sign In'))
+        await fireEvent.press(submit('Sign in'))
         expect(auth.signInWithPassword).toHaveBeenCalledWith({ email: 'me@example.com', password: 'secret1' })
     })
 
@@ -44,8 +47,23 @@ describe('signing in', () => {
         await render(<AuthScreen />)
         await fireEvent.changeText(email(), 'me@example.com')
         await fireEvent.changeText(password(), 'secret1')
-        await fireEvent.press(screen.getByText('Sign In'))
+        await fireEvent.press(submit('Sign in'))
         expect(await screen.findByText(message)).toBeTruthy()
+    })
+
+    it('says what the app is for', async () => {
+        await render(<AuthScreen />)
+        expect(screen.getByText('Budget Tracker')).toBeTruthy()
+        expect(screen.getByText('Track what comes in, what goes out, and what you save.')).toBeTruthy()
+    })
+
+    it('can show the password while typing it', async () => {
+        await render(<AuthScreen />)
+        expect(password().props.secureTextEntry).toBe(true)
+        await fireEvent.press(screen.getByLabelText('Show password'))
+        expect(password().props.secureTextEntry).toBe(false)
+        await fireEvent.press(screen.getByLabelText('Hide password'))
+        expect(password().props.secureTextEntry).toBe(true)
     })
 
     it('shows an error passed in from an expired email link', async () => {
@@ -57,7 +75,7 @@ describe('signing in', () => {
 describe('signing up', () => {
     async function openSignUp() {
         await render(<AuthScreen />)
-        await fireEvent.press(screen.getByText('Sign Up'))
+        await fireEvent.press(modeTab('Create account'))
     }
 
     it.each([
@@ -69,7 +87,7 @@ describe('signing up', () => {
         await openSignUp()
         await fireEvent.changeText(email(), 'new@example.com')
         await fireEvent.changeText(password(), pw)
-        await fireEvent.press(screen.getByText('Create Account'))
+        await fireEvent.press(submit('Create account'))
         expect(screen.getByText(message)).toBeTruthy()
         expect(auth.signUp).not.toHaveBeenCalled()
     })
@@ -86,10 +104,10 @@ describe('signing up', () => {
         await openSignUp()
         await fireEvent.changeText(email(), 'new@example.com')
         await fireEvent.changeText(password(), 'Abcdefg1!')
-        await fireEvent.press(screen.getByText('Create Account'))
+        await fireEvent.press(submit('Create account'))
         expect(auth.signUp).toHaveBeenCalledWith({ email: 'new@example.com', password: 'Abcdefg1!' })
         expect(await screen.findByText('Account created! Check your email to confirm before signing in.')).toBeTruthy()
-        expect(screen.getByText('Sign In')).toBeTruthy()
+        expect(submit('Sign in')).toBeTruthy()
     })
 })
 
@@ -102,12 +120,12 @@ describe('forgot password', () => {
     it('only asks for an email', async () => {
         await openForgot()
         expect(screen.queryByPlaceholderText('Your password')).toBeNull()
-        expect(screen.getByText('Send Reset Link')).toBeTruthy()
+        expect(screen.getByText('Send reset link')).toBeTruthy()
     })
 
     it('needs a valid email', async () => {
         await openForgot()
-        await fireEvent.press(screen.getByText('Send Reset Link'))
+        await fireEvent.press(screen.getByText('Send reset link'))
         expect(screen.getByText('Email is required')).toBeTruthy()
         expect(auth.resetPasswordForEmail).not.toHaveBeenCalled()
     })
@@ -115,7 +133,7 @@ describe('forgot password', () => {
     it('sends a reset email that links back to the app', async () => {
         await openForgot()
         await fireEvent.changeText(email(), 'me@example.com')
-        await fireEvent.press(screen.getByText('Send Reset Link'))
+        await fireEvent.press(screen.getByText('Send reset link'))
         expect(auth.resetPasswordForEmail).toHaveBeenCalledWith('me@example.com', { redirectTo: 'budgettracker://' })
         expect(await screen.findByText(/If an account exists for me@example.com/)).toBeTruthy()
     })
@@ -124,7 +142,7 @@ describe('forgot password', () => {
         auth.resetPasswordForEmail.mockResolvedValueOnce({ data: {}, error: { message: 'Email rate limit exceeded' } } as any)
         await openForgot()
         await fireEvent.changeText(email(), 'me@example.com')
-        await fireEvent.press(screen.getByText('Send Reset Link'))
+        await fireEvent.press(screen.getByText('Send reset link'))
         expect(await screen.findByText('Email rate limit exceeded')).toBeTruthy()
     })
 
@@ -132,15 +150,15 @@ describe('forgot password', () => {
         auth.resetPasswordForEmail.mockRejectedValueOnce(new Error('Network request failed'))
         await openForgot()
         await fireEvent.changeText(email(), 'me@example.com')
-        await fireEvent.press(screen.getByText('Send Reset Link'))
+        await fireEvent.press(screen.getByText('Send reset link'))
         expect(await screen.findByText('Something went wrong: Network request failed')).toBeTruthy()
-        expect(screen.getByText('Send Reset Link')).toBeTruthy()
+        expect(screen.getByText('Send reset link')).toBeTruthy()
     })
 
     it('goes back to sign in', async () => {
         await openForgot()
-        await fireEvent.press(screen.getByText('Back to Sign In'))
-        expect(screen.getByText('Sign In')).toBeTruthy()
+        await fireEvent.press(screen.getByText('Back to sign in'))
+        expect(submit('Sign in')).toBeTruthy()
         expect(screen.getByPlaceholderText('Your password')).toBeTruthy()
     })
 })
