@@ -73,8 +73,11 @@ describe('appearance', () => {
         await fireEvent.press(screen.getByRole('button', { name: 'Lots' }))
         await fireEvent.press(screen.getByRole('button', { name: 'Purple' }))
         expect(screen.getByRole('button', { name: 'Purple' }).props.accessibilityState.selected).toBe(true)
+        await fireEvent.press(screen.getByRole('switch', { name: 'Shooting stars' }))
+        expect(screen.getByRole('switch', { name: 'Shooting stars' }).props.accessibilityState.checked).toBe(false)
+        expect(screen.getByRole('switch', { name: 'Planets' }).props.accessibilityState.checked).toBe(true)
         await waitFor(async () => expect(JSON.parse((await AsyncStorage.getItem('background'))!))
-            .toEqual({ scene: 'nebula', speed: 'lively', amount: 'lots', tint: 'purple' }))
+            .toEqual({ scene: 'nebula', speed: 'lively', amount: 'lots', tint: 'purple', shootingStars: false, planets: true }))
 
         // Turned off, the other choices go away
         await fireEvent.press(screen.getByRole('button', { name: 'None' }))

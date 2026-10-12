@@ -11,10 +11,14 @@ export interface BackgroundSettings {
     speed: Speed
     amount: Amount
     tint: Tint
+    shootingStars: boolean   // now and then one streaks across (Stars and Nebula)
+    planets: boolean         // one or two planets drifting slowly far away (Stars and Nebula)
 }
 
 export const BACKGROUND_KEY = 'background'
-export const DEFAULT_BACKGROUND: BackgroundSettings = { scene: 'stars', speed: 'calm', amount: 'some', tint: 'blue' }
+export const DEFAULT_BACKGROUND: BackgroundSettings = {
+    scene: 'stars', speed: 'calm', amount: 'some', tint: 'blue', shootingStars: true, planets: true,
+}
 
 export const SCENES: { value: Scene; label: string }[] = [
     { value: 'off', label: 'None' },
@@ -51,6 +55,8 @@ export function parseBackground(raw: string | null): BackgroundSettings {
         speed: allowed(SPEEDS, saved.speed) ? saved.speed : DEFAULT_BACKGROUND.speed,
         amount: allowed(AMOUNTS, saved.amount) ? saved.amount : DEFAULT_BACKGROUND.amount,
         tint: allowed(TINTS, saved.tint) ? saved.tint : DEFAULT_BACKGROUND.tint,
+        shootingStars: typeof saved.shootingStars === 'boolean' ? saved.shootingStars : DEFAULT_BACKGROUND.shootingStars,
+        planets: typeof saved.planets === 'boolean' ? saved.planets : DEFAULT_BACKGROUND.planets,
     }
 }
 
@@ -61,6 +67,9 @@ export interface SkyColors {
     glows: string[]    // the soft clouds in the Nebula scene
     glowAlpha: number  // how strong the clouds are
     starAlpha: number  // how bright the stars are
+    planets: string[]  // planet colors
+    bandAlpha: number  // how strong the Milky Way band is
+    planetShadow: number // how dark the night side of a planet is, 0 to 1
 }
 
 // [stars, glows] for each tint. Dark: bright stars on a night sky. Light: soft colored specks on a pale
@@ -93,10 +102,16 @@ export function skyColors(scheme: 'light' | 'dark', tint: Tint): SkyColors {
     const t = TINT_COLORS[tint] ?? TINT_COLORS.blue
     if (scheme === 'dark') {
         const [stars, glows] = t.dark
-        return { top: '#060a14', bottom: '#0e1428', stars, glows, glowAlpha: 0.42, starAlpha: 0.9 }
+        return {
+            top: '#060a14', bottom: '#0e1428', stars, glows, glowAlpha: 0.42, starAlpha: 0.9, bandAlpha: 0.07, planetShadow: 0.65,
+            planets: ['#c98b5a', '#7fa7d9', '#d9b77f', '#9fc7a8'],
+        }
     }
     const [stars, glows] = t.light
-    return { top: '#f2f5fa', bottom: '#e6eaf3', stars, glows, glowAlpha: 0.6, starAlpha: 0.7 }
+    return {
+        top: '#f2f5fa', bottom: '#e6eaf3', stars, glows, glowAlpha: 0.6, starAlpha: 0.7, bandAlpha: 0.12, planetShadow: 0.3,
+        planets: ['#d9a882', '#a9c2e3', '#e3cfa5', '#b9d6c0'],
+    }
 }
 
 /** The swatch shown in Settings for a tint. */

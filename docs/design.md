@@ -18,7 +18,8 @@ One look across every screen, in light and dark. To change it, edit the values i
 ## Moving background (`lib/background.ts`, `lib/spaceScene.ts`, `components/SpaceBackground.tsx`)
 
 A starry sky behind every page, chosen in Settings: Stars, Warp or Nebula (or None), with speed, how many
-stars, and color. It's saved on each device. When it's on, `backdrop` from `useTheme()` is see-through so
+stars, color, and optional shooting stars and planets. Stars and Nebula also have bright sparkling
+stars and a faint Milky Way band of star dust (painted once, then reused each frame). It's saved on each device. When it's on, `backdrop` from `useTheme()` is see-through so
 the sky shows; sections and cards stay solid so text is easy to read. Page backgrounds should use
 `backdrop`, not `c.page`. It holds still if the device is set to reduce motion, and runs at about 30
 frames a second. New colors go in `TINTS` and `TINT_COLORS` in `lib/background.ts`.

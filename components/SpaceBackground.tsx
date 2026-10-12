@@ -5,7 +5,7 @@ import { createElement, useEffect, useMemo, useRef } from 'react'
 import { View, StyleSheet, Platform, useWindowDimensions } from 'react-native'
 import { useTheme } from '../lib/theme'
 import { skyColors, type BackgroundSettings, type SkyColors } from '../lib/background'
-import { createScene, stepScene, drawScene, seededRandom, type SceneState } from '../lib/spaceScene'
+import { createScene, stepScene, drawScene, drawBackdrop, seededRandom, type SceneState } from '../lib/spaceScene'
 
 const FRAME_MS = 33   // about 30 frames a second: smooth enough, and easy on the battery
 
@@ -40,16 +40,26 @@ function AnimatedSky({ settings, sky }: { settings: BackgroundSettings; sky: Sky
         let last = 0
 
         const size = () => ({ w: canvas.clientWidth || window.innerWidth, h: canvas.clientHeight || window.innerHeight })
+        const dpr = () => Math.min(window.devicePixelRatio || 1, 2)
         const fit = (w: number, h: number) => {
-            const dpr = Math.min(window.devicePixelRatio || 1, 2)
-            canvas.width = Math.round(w * dpr)
-            canvas.height = Math.round(h * dpr)
-            ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+            canvas.width = Math.round(w * dpr())
+            canvas.height = Math.round(h * dpr())
+            ctx.setTransform(dpr(), 0, 0, dpr(), 0, 0)
         }
         const build = () => {
             const { w, h } = size()
             fit(w, h)
             scene = createScene(settings, sky, w, h)
+            // The sky, Milky Way and star dust never move: paint them once and reuse them every frame
+            const still = document.createElement('canvas')
+            still.width = canvas.width
+            still.height = canvas.height
+            const sctx = still.getContext('2d')
+            if (sctx) {
+                sctx.setTransform(dpr(), 0, 0, dpr(), 0, 0)
+                drawBackdrop(sctx, scene)
+                scene.backdrop = still
+            }
             drawScene(ctx, scene)
         }
 
@@ -84,7 +94,7 @@ function AnimatedSky({ settings, sky }: { settings: BackgroundSettings; sky: Sky
             window.removeEventListener('resize', onResize)
             motion?.removeEventListener?.('change', start)
         }
-    }, [settings.scene, settings.speed, settings.amount, sky])
+    }, [settings.scene, settings.speed, settings.amount, settings.shootingStars, settings.planets, sky])
 
     return createElement('canvas', { ref, style: { width: '100%', height: '100%', display: 'block' } })
 }
@@ -93,7 +103,7 @@ function AnimatedSky({ settings, sky }: { settings: BackgroundSettings; sky: Sky
 function StillSky({ settings, sky }: { settings: BackgroundSettings; sky: SkyColors }) {
     const { width, height } = useWindowDimensions()
     const scene = useMemo(() => createScene({ ...settings, scene: settings.scene === 'warp' ? 'stars' : settings.scene },
-        sky, width, height, seededRandom(42)), [settings.scene, settings.amount, sky, width, height])
+        sky, width, height, seededRandom(42)), [settings.scene, settings.amount, settings.planets, sky, width, height])
     return (
         <>
             <View style={[StyleSheet.absoluteFill, { backgroundColor: sky.bottom, opacity: 0.6, top: '50%' }]} />
@@ -101,6 +111,12 @@ function StillSky({ settings, sky }: { settings: BackgroundSettings; sky: SkyCol
                 <View key={`g${i}`} style={{
                     position: 'absolute', left: g.x - g.r / 2, top: g.y - g.r / 2, width: g.r, height: g.r,
                     borderRadius: g.r / 2, backgroundColor: g.color, opacity: sky.glowAlpha * 0.5,
+                }} />
+            ))}
+            {scene.planets.map((p, i) => (
+                <View key={`p${i}`} style={{
+                    position: 'absolute', left: p.x - p.r, top: p.y - p.r, width: p.r * 2, height: p.r * 2,
+                    borderRadius: p.r, backgroundColor: p.color, opacity: sky.starAlpha,
                 }} />
             ))}
             {scene.stars.map((st, i) => (

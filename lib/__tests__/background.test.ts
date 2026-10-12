@@ -1,17 +1,17 @@
 import { parseBackground, DEFAULT_BACKGROUND, skyColors, TINTS } from '../background'
-import { createScene, stepScene, drawScene, starCount, seededRandom } from '../spaceScene'
+import { createScene, stepScene, drawScene, drawBackdrop, starCount, seededRandom } from '../spaceScene'
 
 describe('saved background settings', () => {
     it('starts with slow drifting blue stars', () => {
-        expect(parseBackground(null)).toEqual({ scene: 'stars', speed: 'calm', amount: 'some', tint: 'blue' })
+        expect(parseBackground(null)).toEqual({ scene: 'stars', speed: 'calm', amount: 'some', tint: 'blue', shootingStars: true, planets: true })
         expect(DEFAULT_BACKGROUND.scene).toBe('stars')
     })
 
     it('reads what was saved, keeping defaults for anything missing or broken', () => {
         expect(parseBackground(JSON.stringify({ scene: 'warp', tint: 'rose' })))
-            .toEqual({ scene: 'warp', speed: 'calm', amount: 'some', tint: 'rose' })
+            .toMatchObject({ scene: 'warp', speed: 'calm', amount: 'some', tint: 'rose' })
         expect(parseBackground(JSON.stringify({ scene: 'lava', speed: 'lively', amount: 12 })))
-            .toEqual({ scene: 'stars', speed: 'lively', amount: 'some', tint: 'blue' })
+            .toMatchObject({ scene: 'stars', speed: 'lively', amount: 'some', tint: 'blue' })
         expect(parseBackground('not json')).toEqual(DEFAULT_BACKGROUND)
     })
 
@@ -99,9 +99,66 @@ describe('the moving scene', () => {
             },
             set: () => true,
         })
-        const s = createScene(settings(), sky, 300, 200, seededRandom(1))
+        const s = createScene(settings({ planets: false }), sky, 300, 200, seededRandom(1))
         drawScene(ctx, s)
         expect(calls[0]).toBe('fillRect')
         expect(calls.filter(c => c === 'arc').length).toBe(s.stars.length)
+    })
+})
+
+describe('extra details', () => {
+    it('shooting stars and planets are on unless you turn them off', () => {
+        expect(parseBackground(null)).toMatchObject({ shootingStars: true, planets: true })
+        expect(parseBackground(JSON.stringify({ planets: false, shootingStars: 'yes' }))).toMatchObject({ shootingStars: true, planets: false })
+    })
+
+    it('some stars are big bright ones', () => {
+        const s = createScene(settings({ amount: 'lots' }), sky, 1200, 800, seededRandom(11))
+        const bright = s.stars.filter(st => st.bright).length
+        expect(bright).toBeGreaterThan(0)
+        expect(bright).toBeLessThan(s.stars.length / 10)
+    })
+
+    it('has a planet or two drifting slowly, unless turned off or flying at warp speed', () => {
+        const s = createScene(settings(), sky, 1200, 800, seededRandom(12))
+        expect(s.planets.length).toBeGreaterThanOrEqual(1)
+        expect(s.planets.length).toBeLessThanOrEqual(2)
+        const x = s.planets[0].x
+        stepScene(s, 4, seededRandom(1))
+        expect(s.planets[0].x).toBeLessThan(x)
+        expect(x - s.planets[0].x).toBeLessThan(20)
+        expect(createScene(settings({ planets: false }), sky, 1200, 800, seededRandom(12)).planets).toEqual([])
+        expect(createScene(settings({ scene: 'warp' }), sky, 1200, 800, seededRandom(12)).planets).toEqual([])
+    })
+
+    it('a shooting star flashes by now and then, and is gone a moment later', () => {
+        const s = createScene(settings(), sky, 1200, 800, seededRandom(13))
+        const rand = seededRandom(14)
+        let seen = 0
+        for (let i = 0; i < 30 * 60; i++) { stepScene(s, 1 / 30, rand); if (s.meteors.length) seen++ }   // a minute
+        expect(seen).toBeGreaterThan(0)
+        expect(seen).toBeLessThan(30 * 60 / 4)   // not most of the time
+        const off = createScene(settings({ shootingStars: false }), sky, 1200, 800, seededRandom(13))
+        for (let i = 0; i < 30 * 60; i++) stepScene(off, 1 / 30, rand)
+        expect(off.meteors).toEqual([])
+    })
+
+    it('paints the still parts (sky, Milky Way, star dust) once, then reuses them each frame', () => {
+        const calls: string[] = []
+        const gradient = { addColorStop: () => {} }
+        const ctx: any = new Proxy({}, {
+            get: (_t, prop: string) => {
+                if (prop === 'createLinearGradient' || prop === 'createRadialGradient') return () => gradient
+                return () => { calls.push(prop) }
+            },
+            set: () => true,
+        })
+        const s = createScene(settings(), sky, 600, 400, seededRandom(1))
+        drawBackdrop(ctx, s)
+        expect(calls.filter(c => c === 'fillRect').length).toBeGreaterThan(s.stars.length)   // sky, band and dust
+        calls.length = 0
+        s.backdrop = { fake: 'image' }
+        drawScene(ctx, s)
+        expect(calls[0]).toBe('drawImage')
     })
 })

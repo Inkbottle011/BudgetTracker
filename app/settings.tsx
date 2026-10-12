@@ -63,14 +63,37 @@ function BackgroundSection() {
                             })}
                         </View>
                     </View>
+                    {background.scene !== 'warp' && (
+                        <View style={styles.option}>
+                            <Text style={styles.label}>Extras</Text>
+                            <View style={styles.toggles}>
+                                <Toggle label="Shooting stars" on={background.shootingStars} onChange={shootingStars => setBackground({ shootingStars })} />
+                                <Toggle label="Planets" on={background.planets} onChange={planets => setBackground({ planets })} />
+                            </View>
+                        </View>
+                    )}
                 </View>
             )}
             <Text style={styles.help}>
                 {on
-                    ? 'Stars drift slowly, Warp flies through them, Nebula adds drifting clouds. It holds still if your device is set to reduce motion.'
+                    ? 'Stars drift slowly past a faint Milky Way, Warp flies through them, Nebula adds drifting clouds. It holds still if your device is set to reduce motion.'
                     : 'Choose a scene to show a moving starry sky behind your pages.'}
             </Text>
         </Section>
+    )
+}
+
+/** A labelled on/off switch. */
+function Toggle({ label, on, onChange }: { label: string; on: boolean; onChange: (on: boolean) => void }) {
+    const styles = useStyles(makeStyles)
+    return (
+        <TouchableOpacity accessibilityRole="switch" accessibilityLabel={label} accessibilityState={{ checked: on }}
+            onPress={() => onChange(!on)} style={styles.toggle} hitSlop={4}>
+            <View style={[styles.track, on && styles.trackOn]}>
+                <View style={[styles.knob, on && styles.knobOn]} />
+            </View>
+            <Text style={styles.toggleText}>{label}</Text>
+        </TouchableOpacity>
     )
 }
 
@@ -83,4 +106,11 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     swatchRing: { width: 34, height: 34, borderRadius: 17, borderWidth: 2, borderColor: 'transparent', alignItems: 'center', justifyContent: 'center' },
     swatchRingOn: { borderColor: C.primary },
     swatch: { width: 24, height: 24, borderRadius: 12 },
+    toggles: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
+    toggle: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    toggleText: { fontSize: 13, color: C.text },
+    track: { width: 36, height: 20, borderRadius: 10, backgroundColor: C.track, padding: 2, justifyContent: 'center' },
+    trackOn: { backgroundColor: C.primary },
+    knob: { width: 16, height: 16, borderRadius: 8, backgroundColor: C.surface },
+    knobOn: { alignSelf: 'flex-end' },
 })
