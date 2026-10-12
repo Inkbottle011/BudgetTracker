@@ -14,6 +14,7 @@ export function useIsWide(breakpoint = 900) {
 /** A scrolling page with comfortable margins and a readable maximum width. */
 export function Page({ children, maxWidth = 1180 }: { children: ReactNode; maxWidth?: number }) {
     const wide = useIsWide()
+    const { backdrop } = useTheme()
     const s = useStyles(c => ({
         page: { flex: 1, backgroundColor: c.page },
         content: { padding: 28, alignItems: 'center' as const },
@@ -21,7 +22,7 @@ export function Page({ children, maxWidth = 1180 }: { children: ReactNode; maxWi
         inner: { width: '100%' as const },
     }))
     return (
-        <ScrollView style={s.page} contentContainerStyle={[s.content, !wide && s.narrow]} keyboardShouldPersistTaps="handled">
+        <ScrollView style={[s.page, { backgroundColor: backdrop }]} contentContainerStyle={[s.content, !wide && s.narrow]} keyboardShouldPersistTaps="handled">
             <View style={[s.inner, { maxWidth }]}>{children}</View>
         </ScrollView>
     )

@@ -62,6 +62,25 @@ describe('appearance', () => {
         await fireEvent.press(screen.getByRole('button', { name: 'Light' }))
         expect(await AsyncStorage.getItem('appearance')).toBe('light')
     })
+
+    it('lets you pick a moving background, how fast and how many stars, and its color, or turn it off', async () => {
+        await AsyncStorage.clear()
+        await renderSettings()
+        expect(screen.getByText('Moving background')).toBeTruthy()
+        expect(screen.getByRole('button', { name: 'Stars' }).props.accessibilityState.selected).toBe(true)
+        await fireEvent.press(screen.getByRole('button', { name: 'Nebula' }))
+        await fireEvent.press(screen.getByRole('button', { name: 'Lively' }))
+        await fireEvent.press(screen.getByRole('button', { name: 'Lots' }))
+        await fireEvent.press(screen.getByRole('button', { name: 'Purple' }))
+        expect(screen.getByRole('button', { name: 'Purple' }).props.accessibilityState.selected).toBe(true)
+        await waitFor(async () => expect(JSON.parse((await AsyncStorage.getItem('background'))!))
+            .toEqual({ scene: 'nebula', speed: 'lively', amount: 'lots', tint: 'purple' }))
+
+        // Turned off, the other choices go away
+        await fireEvent.press(screen.getByRole('button', { name: 'None' }))
+        expect(screen.queryByRole('button', { name: 'Lively' })).toBeNull()
+        expect(screen.queryByRole('button', { name: 'Purple' })).toBeNull()
+    })
 })
 
 describe('two-factor sign-in', () => {

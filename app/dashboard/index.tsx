@@ -7,12 +7,13 @@ import { AccountsRow } from './AccountsRow'
 import { BudgetList } from './BudgetList'
 import { MonthlyTrend } from './MonthlyTrend'
 import { ActivityList } from './ActivityList'
-import { useStyles, Palette } from '../../lib/theme'
+import { useStyles, useTheme, Palette } from '../../lib/theme'
 
 const WIDE = 900
 
 export default function Dashboard() {
     const styles = useStyles(makeStyles)
+    const { backdrop } = useTheme()
     const logic = useDashboardLogic()
     const navigation = useNavigation<any>()
     const { width } = useWindowDimensions()
@@ -37,7 +38,7 @@ export default function Dashboard() {
     )
 
     return (
-        <ScrollView style={styles.page} contentContainerStyle={[styles.content, !wide && styles.contentNarrow]}>
+        <ScrollView style={[styles.page, { backgroundColor: backdrop }]} contentContainerStyle={[styles.content, !wide && styles.contentNarrow]}>
             <View style={styles.inner}>
                 <PeriodHeader
                     title={logic.title}

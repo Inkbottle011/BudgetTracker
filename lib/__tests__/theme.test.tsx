@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react-nativ
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as RN from 'react-native'
 import { ThemeProvider, useTheme, light, dark, typeColors, APPEARANCE_KEY } from '../theme'
+import { BACKGROUND_KEY } from '../background'
 
 function Probe() {
     const { c, scheme, preference, setPreference } = useTheme()
@@ -62,4 +63,42 @@ it('every color exists in both themes, and each transaction type has readable co
             expect(tc.bg).toMatch(/^#/)
         }
     }
+})
+
+describe('moving background', () => {
+    function BgProbe() {
+        const { background, setBackground, backdrop } = useTheme()
+        return (
+            <>
+                <Text>{`${background.scene}:${background.tint}:${backdrop}`}</Text>
+                <TouchableOpacity onPress={() => setBackground({ scene: 'warp', tint: 'rose' })}><Text>warp</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => setBackground({ scene: 'off' })}><Text>off</Text></TouchableOpacity>
+            </>
+        )
+    }
+
+    it('starts on, so pages are see-through and the sky shows behind them', async () => {
+        await render(<ThemeProvider><BgProbe /></ThemeProvider>)
+        expect(await screen.findByText('stars:blue:transparent')).toBeTruthy()
+    })
+
+    it('can be changed or turned off, and remembers it', async () => {
+        await render(<ThemeProvider><BgProbe /></ThemeProvider>)
+        await fireEvent.press(screen.getByText('warp'))
+        expect(screen.getByText('warp:rose:transparent')).toBeTruthy()
+        await fireEvent.press(screen.getByText('off'))
+        expect(screen.getByText(`off:rose:${light.page}`)).toBeTruthy()
+        await waitFor(async () => expect(JSON.parse((await AsyncStorage.getItem(BACKGROUND_KEY))!)).toMatchObject({ scene: 'off', tint: 'rose' }))
+    })
+
+    it('uses the remembered background next time', async () => {
+        await AsyncStorage.setItem(BACKGROUND_KEY, JSON.stringify({ scene: 'nebula', tint: 'teal' }))
+        await render(<ThemeProvider><BgProbe /></ThemeProvider>)
+        expect(await screen.findByText('nebula:teal:transparent')).toBeTruthy()
+    })
+
+    it('keeps the plain page color outside a provider', async () => {
+        await render(<BgProbe />)
+        expect(screen.getByText(`off:blue:${light.page}`)).toBeTruthy()
+    })
 })

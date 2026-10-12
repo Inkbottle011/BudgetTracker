@@ -15,6 +15,14 @@ One look across every screen, in light and dark. To change it, edit the values i
 - `panel` is the one dark summary panel (dashboard). Nothing else uses a solid dark or colored block.
 - Never hard-code a hex color in a screen; use the palette so dark mode works.
 
+## Moving background (`lib/background.ts`, `lib/spaceScene.ts`, `components/SpaceBackground.tsx`)
+
+A starry sky behind every page, chosen in Settings: Stars, Warp or Nebula (or None), with speed, how many
+stars, and color. It's saved on each device. When it's on, `backdrop` from `useTheme()` is see-through so
+the sky shows; sections and cards stay solid so text is easy to read. Page backgrounds should use
+`backdrop`, not `c.page`. It holds still if the device is set to reduce motion, and runs at about 30
+frames a second. New colors go in `TINTS` and `TINT_COLORS` in `lib/background.ts`.
+
 ## Type and spacing
 - Page titles 26 bold; section titles 18 bold; body 14 to 15; secondary 12 to 13.
 - Sentence case everywhere. No ALL-CAPS labels, no emoji in the interface.

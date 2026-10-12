@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, ReactNode } from 'react'
 import { useColorScheme } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { BACKGROUND_KEY, BackgroundSettings, DEFAULT_BACKGROUND, parseBackground } from './background'
 
 export const light = {
     page: '#f3f5f7',        // behind everything
@@ -86,33 +87,55 @@ interface ThemeValue {
     scheme: 'light' | 'dark'
     preference: Preference
     setPreference: (p: Preference) => void
+    /** The moving space background chosen in Settings */
+    background: BackgroundSettings
+    setBackground: (change: Partial<BackgroundSettings>) => void
+    /** Behind each page: see-through when the moving background is on, so it shows; otherwise c.page */
+    backdrop: string
 }
 
-const ThemeContext = createContext<ThemeValue>({ c: light, scheme: 'light', preference: 'system', setPreference: () => {} })
+const ThemeContext = createContext<ThemeValue>({
+    c: light, scheme: 'light', preference: 'system', setPreference: () => {},
+    background: { ...DEFAULT_BACKGROUND, scene: 'off' }, setBackground: () => {}, backdrop: light.page,
+})
 
 /** Light or dark: follows the device unless you pick one in Settings. Your choice is remembered. */
 export function ThemeProvider({ children }: { children: ReactNode }) {
     const device = useColorScheme()
     const [preference, setPref] = useState<Preference>('system')
+    const [background, setBg] = useState<BackgroundSettings>(DEFAULT_BACKGROUND)
 
     useEffect(() => {
         AsyncStorage.getItem(APPEARANCE_KEY)
             .then(v => { if (v === 'light' || v === 'dark' || v === 'system') setPref(v) })
             .catch(() => {})
+        AsyncStorage.getItem(BACKGROUND_KEY)
+            .then(v => { if (v) setBg(parseBackground(v)) })
+            .catch(() => {})
     }, [])
 
     const value = useMemo<ThemeValue>(() => {
         const scheme = preference === 'system' ? (device === 'dark' ? 'dark' : 'light') : preference
+        const c = scheme === 'dark' ? dark : light
         return {
-            c: scheme === 'dark' ? dark : light,
+            c,
             scheme,
             preference,
             setPreference: (p: Preference) => {
                 setPref(p)
                 AsyncStorage.setItem(APPEARANCE_KEY, p).catch(() => {})
             },
+            background,
+            setBackground: (change: Partial<BackgroundSettings>) => {
+                setBg(prev => {
+                    const next = { ...prev, ...change }
+                    AsyncStorage.setItem(BACKGROUND_KEY, JSON.stringify(next)).catch(() => {})
+                    return next
+                })
+            },
+            backdrop: background.scene === 'off' ? c.page : 'transparent',
         }
-    }, [preference, device])
+    }, [preference, device, background])
 
     return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
 }

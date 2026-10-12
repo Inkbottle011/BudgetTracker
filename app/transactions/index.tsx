@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { View, ScrollView, Modal, StyleSheet } from 'react-native'
 import { Page, PageTitle, Button, useIsWide } from '../../components/ui'
-import { useStyles, Palette } from '../../lib/theme'
+import { useStyles, useTheme, Palette } from '../../lib/theme'
 import { useTransactionLogic } from './useTransactionLogic'
 import { TransactionList } from './TransactionList'
 import { TransactionForm } from './TransactionForm'
@@ -16,6 +16,7 @@ export default function TransactionsScreen() {
     const logic = useTransactionLogic()
     const wide = useIsWide()
     const styles = useStyles(makeStyles)
+    const { backdrop } = useTheme()
     const [addOpen, setAddOpen] = useState(false)
 
     const sheetOpen = !wide && (addOpen || !!logic.editingTransaction)
@@ -106,7 +107,7 @@ export default function TransactionsScreen() {
 
     if (wide) {
         return (
-            <View style={styles.screen}>
+            <View style={[styles.screen, { backgroundColor: backdrop }]}>
                 <View style={styles.columns}>
                     <ScrollView style={styles.listColumn} contentContainerStyle={styles.columnContent} keyboardShouldPersistTaps="handled">
                         <PageTitle title="Transactions" />
@@ -121,7 +122,7 @@ export default function TransactionsScreen() {
     }
 
     return (
-        <View style={styles.screen}>
+        <View style={[styles.screen, { backgroundColor: backdrop }]}>
             <Page>
                 <PageTitle
                     title="Transactions"

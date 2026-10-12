@@ -27,8 +27,9 @@ export function BrandMark({ size = 28 }: { size?: number }) {
 /** A centered card on the page background, used by the sign-in, reset and code screens. */
 export function AuthCard({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
     const styles = useStyles(makeCardStyles)
+    const { backdrop } = useTheme()
     return (
-        <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={[styles.page, { backgroundColor: backdrop }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
                 <View style={styles.card}>
                     <View style={styles.brand}>

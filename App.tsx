@@ -23,6 +23,8 @@ import { useToast } from './hooks/useToast'
 import { useToastContext } from './context/ToastContext'
 import { ThemeProvider, useTheme, useStyles, Palette } from './lib/theme'
 import { Button } from './components/ui'
+import { SpaceBackground } from './components/SpaceBackground'
+import { tabScreenLayout } from './components/TabScreenLayout'
 
 const Tab = createBottomTabNavigator()
 
@@ -116,21 +118,22 @@ const TAB_ICONS: Record<string, [string, string]> = {
 
 /** The tabs and screens, colored from the theme. */
 function MainApp({ userEmail }: { userEmail: string }) {
-  const { c, scheme } = useTheme()
+  const { c, scheme, backdrop } = useTheme()
   const navTheme = useMemo(() => {
     const base = scheme === 'dark' ? DarkTheme : DefaultTheme
     return {
       ...base,
       dark: scheme === 'dark',
-      colors: { ...base.colors, background: c.page, card: c.surface, text: c.ink, border: c.line, primary: c.primary, notification: c.bad },
+      colors: { ...base.colors, background: backdrop, card: c.surface, text: c.ink, border: c.line, primary: c.primary, notification: c.bad },
     }
-  }, [c, scheme])
+  }, [c, scheme, backdrop])
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.page }}>
+    <View style={{ flex: 1, backgroundColor: backdrop }}>
       <AppHeader userEmail={userEmail} />
       <NavigationContainer theme={navTheme}>
         <Tab.Navigator
+          screenLayout={tabScreenLayout}
           screenOptions={({ route }) => ({
             headerShown: false,
             tabBarIcon: ({ focused, color, size }) => {
@@ -141,7 +144,7 @@ function MainApp({ userEmail }: { userEmail: string }) {
             tabBarInactiveTintColor: c.muted,
             tabBarStyle: { backgroundColor: c.surface, borderTopColor: c.line, borderTopWidth: 1 },
             tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
-            sceneStyle: { backgroundColor: c.page },
+            sceneStyle: { backgroundColor: backdrop },
           })}
         >
           <Tab.Screen name="Dashboard" component={Dashboard} />
@@ -157,9 +160,9 @@ function MainApp({ userEmail }: { userEmail: string }) {
 
 /** A quiet spinner on the page background while the app gets ready. */
 function Waiting() {
-  const { c } = useTheme()
+  const { c, backdrop } = useTheme()
   return (
-    <View style={{ flex: 1, backgroundColor: c.page, alignItems: 'center', justifyContent: 'center' }}>
+    <View style={{ flex: 1, backgroundColor: backdrop, alignItems: 'center', justifyContent: 'center' }}>
       <ActivityIndicator color={c.primary} />
     </View>
   )
@@ -175,7 +178,10 @@ export default function App() {
   return (
     <ThemeProvider>
       <ThemedStatusBar />
-      <AppContent />
+      <View style={{ flex: 1 }}>
+        <SpaceBackground />
+        <AppContent />
+      </View>
     </ThemeProvider>
   )
 }
