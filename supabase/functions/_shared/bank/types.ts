@@ -13,7 +13,8 @@ export interface BankAccount {
 export interface BankTransaction {
     externalId: string        // the provider's id, so the same transaction is never saved twice
     providerAccountId: string
-    date: string              // YYYY-MM-DD
+    date: string              // YYYY-MM-DD: the day of the purchase when the bank says, otherwise the day it posted
+    postedDate?: string       // the day the bank posted it, only when different from date
     amount: number            // positive = money in, negative = money out
     description: string
     pending: boolean

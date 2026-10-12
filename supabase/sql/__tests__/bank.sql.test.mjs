@@ -260,4 +260,9 @@ describe('transfers between your own accounts', () => {
         const { connection } = await serverLinks(ALICE)
         assert.deepEqual(await h.one(`select transfers_checked from bank_connections where id = $1`, [connection]), { transfers_checked: false })
     })
+
+    it('linked banks start out needing the one-time purchase-date fix', async () => {
+        const { connection } = await serverLinks(ALICE)
+        assert.deepEqual(await h.one(`select dates_checked from bank_connections where id = $1`, [connection]), { dates_checked: false })
+    })
 })

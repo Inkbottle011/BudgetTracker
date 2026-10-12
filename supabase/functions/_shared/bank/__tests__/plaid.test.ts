@@ -122,6 +122,25 @@ describe('Plaid specifics', () => {
         expect(calls[0].body).toMatchObject({ start_date: '2026-09-28', end_date: TODAY, options: { account_ids: ['acc_checking'], offset: 0 } })
     })
 
+    it('dates each transaction on the day of the purchase, not the day the bank posted it', async () => {
+        const json = (b: any) => ({ ok: true, status: 200, json: async () => b, text: async () => JSON.stringify(b) })
+        const fetchImpl = async () => json({
+            total_transactions: 2,
+            accounts: [],
+            transactions: [
+                // Bought on Saturday, posted Monday
+                { transaction_id: 't_weekend', account_id: 'acc_card', date: '2026-10-05', authorized_date: '2026-10-03', name: 'DINER', merchant_name: null, amount: 18.5, pending: false },
+                // Some banks don't say when it was bought
+                { transaction_id: 't_plain', account_id: 'acc_card', date: '2026-10-05', authorized_date: null, name: 'GAS', merchant_name: null, amount: 30, pending: false },
+            ],
+        })
+        const p = createPlaidProvider({ fetch: fetchImpl as any, clientId: 'client-1', secret: 'secret-1', env: 'sandbox', today: () => TODAY })
+        const [weekend, plain] = await p.listTransactions(FAKE_BANK.goodToken, 'acc_card', '2026-10-01')
+        expect(weekend).toMatchObject({ externalId: 't_weekend', date: '2026-10-03', postedDate: '2026-10-05', amount: -18.5 })
+        expect(plain.date).toBe('2026-10-05')
+        expect(plain.postedDate).toBeUndefined()
+    })
+
     it('says when transactions are still loading right after linking', async () => {
         const err = await make({ notReady: true }).provider.listTransactions(FAKE_BANK.goodToken, 'acc_checking', '2026-09-01').catch(e => e)
         expect(err).toBeInstanceOf(ProviderError)
