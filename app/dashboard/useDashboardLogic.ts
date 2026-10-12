@@ -2,88 +2,88 @@ import { useState, useCallback } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
 import { supabase } from '../../lib/supabase'
 import { useTransactionStore } from '../../store/useTransactionStore'
+import { BankAccountRow } from '../../lib/bank'
+import { todayString } from '../../lib/entry'
 import { Subscription, fetchSubscriptions, upcomingCharges } from '../../lib/subscriptions'
+import { attributeReimbursements } from './calculations'
 import {
-    MONTHS, inPeriod, overview, attributeReimbursements, plannedAmount, actualAmount, spendingByCategory, periodLabel,
-} from './calculations'
+    Period, periodRange, shiftAnchor, periodTitle, periodElapsed, daysLeftAfterToday,
+    periodSummary, budgetRows, goalRows, accountsSummary,
+} from './summary'
 
-export { MONTHS }
-
-export const SECTION_COLORS: Record<string, any> = {
-    income:     { header: '#2980b9', light: '#EBF5FB', text: '#1a5276' },
-    expense:    { header: '#e74c3c', light: '#FDEDEC', text: '#922b21' },
-    savings:    { header: '#27ae60', light: '#EAFAF1', text: '#1e8449' },
-    investment: { header: '#8e44ad', light: '#F5EEF8', text: '#6c3483' },
-}
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
 export function useDashboardLogic() {
     const { transactions, setTransactions } = useTransactionStore()
     const [budgetItems, setBudgetItems] = useState<any[]>([])
     const [budgetAmounts, setBudgetAmounts] = useState<any[]>([])
     const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
-    
-    const currentYear = new Date().getFullYear()
-    const currentMonth = new Date().getMonth() + 1
-    
-    // Analysis period selector
-    const [view, setView] = useState<'month' | 'year'>('year')
-    const [selectedMonth, setSelectedMonth] = useState(currentMonth)
-    const [selectedYear, setSelectedYear] = useState(currentYear)
-    const [chartType, setChartType] = useState<'bar' | 'pie'>('bar')
-    
+    const [accounts, setAccounts] = useState<BankAccountRow[]>([])
+
+    const today = todayString()
+    const [view, setView] = useState<Period>('month')
+    const [anchor, setAnchor] = useState(today)
+
     // Refresh whenever the tab is opened, so changes made on other tabs show up
-    useFocusEffect(useCallback(() => { fetchAll() }, [selectedYear]))
-    
+    useFocusEffect(useCallback(() => { fetchAll() }, []))
+
     async function fetchAll() {
         const { data: { session } } = await supabase.auth.getSession()
         if (!session) return
-        
-        const { data: txData } = await supabase
-        .from('transactions')
-        .select('*')
-        .order('date', { ascending: false })
+
+        const { data: txData } = await supabase.from('transactions').select('*').order('date', { ascending: false })
         if (txData) setTransactions(txData)
-        
+
         fetchSubscriptions().then(setSubscriptions).catch(() => {})
-            
-        const { data: items } = await supabase
-        .from('budget_items')
-        .select('*')
-        .order('created_at')
+
+        const { data: items } = await supabase.from('budget_items').select('*').order('created_at')
         if (items) setBudgetItems(items)
-            
-        const { data: amounts } = await supabase
-        .from('budget_amounts')
-        .select('*')
-        .eq('year', selectedYear)
+
+        // Every year's plan, so a week spanning New Year still has one
+        const { data: amounts } = await supabase.from('budget_amounts').select('*')
         if (amounts) setBudgetAmounts(amounts)
-        }
-    
-    // Overview: always the current year; balance is all-time
-    // For totals, paybacks count in the month of the expense they pay back
+
+        // Linked bank balances (none until a bank is linked)
+        const { data: accts } = await supabase.from('bank_accounts')
+            .select('id, name, last_four, type, subtype, balance_current, balance_available, balance_updated_at')
+        setAccounts(accts ?? [])
+    }
+
+    // Paybacks count in the period of the expense they pay back
     const forTotals = attributeReimbursements(transactions)
-    const { income: overviewIncome, expenses: overviewExpenses, savings: overviewSavings, balance } = overview(forTotals, currentYear)
-    
-    // Analysis period
-    const periodTransactions = forTotals.filter(t => inPeriod(t, view, selectedYear, selectedMonth))
-    const period = periodLabel(view, selectedYear, selectedMonth)
-    
-    // Upcoming: subscription charges in the next 30 days
-    const upcoming = upcomingCharges(subscriptions, 30)
-    
-    const getPlanned = (itemId: string) => plannedAmount(budgetAmounts, itemId, view, selectedMonth)
-    const getActual = (itemName: string, itemType: string) => actualAmount(periodTransactions, itemName, itemType)
-    const getSpendingByCategory = () => spendingByCategory(periodTransactions)
-    
+
+    const range = periodRange(view, anchor)
+    const title = periodTitle(view, range, today)
+    const isCurrent = today >= range.start && today < range.end
+    const summary = periodSummary(forTotals, range)
+    const budget = budgetRows(budgetItems, budgetAmounts, forTotals, range)
+    const goals = goalRows(budgetItems, budgetAmounts, forTotals, range)
+
+    const monthName = MONTH_NAMES[+range.start.slice(5, 7) - 1]
+    const heading = view === 'day' ? (title === 'Today' ? 'Spent today' : `Spent on ${title}`)
+        : view === 'week' ? (isCurrent ? 'Spent this week' : `Spent ${title}`)
+        : view === 'month' ? `Spent in ${monthName}` : `Spent in ${range.start.slice(0, 4)}`
+    const budgetTitle = view === 'day' ? (title === 'Today' ? 'Budget for today' : `Budget for ${title}`)
+        : view === 'week' ? (isCurrent ? 'Budget this week' : `Budget for ${title}`)
+        : view === 'month' ? `Budget for ${monthName}` : `Budget for ${range.start.slice(0, 4)}`
+
+    const upcoming = upcomingCharges(subscriptions, 30).slice(0, 6).map(c => ({
+        id: c.id, name: c.name, date: c.nextDate, type: c.type, amount: c.amount, sub: c.recurring,
+    }))
+    const recent = transactions.slice(0, 8)
+
+    const bank = accountsSummary(accounts)
+    const updatedAt = accounts.map(a => a.balance_updated_at).filter(Boolean).sort().at(-1) ?? null
+
     return {
-        transactions, forTotals, budgetItems, budgetAmounts,
-        currentYear,
-        balance, overviewIncome, overviewExpenses, overviewSavings,
-        view, setView,
-        selectedMonth, setSelectedMonth,
-        selectedYear, setSelectedYear,
-        period, chartType, setChartType,
-        upcoming, periodTransactions,
-        getPlanned, getActual, getSpendingByCategory,
+        transactions, forTotals, view, title, heading, budgetTitle, isCurrent,
+        anchor, selectedYear: +range.start.slice(0, 4),
+        setView: (v: Period) => setView(v),
+        prev: () => setAnchor(a => shiftAnchor(view, a, -1)),
+        next: () => setAnchor(a => shiftAnchor(view, a, 1)),
+        goToday: () => setAnchor(today),
+        summary, plannedTotal: budget.totalPlanned,
+        elapsed: periodElapsed(range, today), daysLeft: daysLeftAfterToday(range, today),
+        budget, goals, upcoming, recent, bank, updatedAt,
     }
 }

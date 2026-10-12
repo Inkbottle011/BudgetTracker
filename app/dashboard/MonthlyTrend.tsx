@@ -19,7 +19,7 @@ export function MonthlyTrend({ transactions, selectedYear }: Props) {
     return (
         <View style={styles.container}>
         <View style={styles.header}>
-        <Text style={styles.title}>Monthly Trend</Text>
+        <Text style={styles.title}>Monthly trend</Text>
         <View style={styles.headerRight}>
         <View style={styles.legend}>
         <View style={styles.legendItem}>
@@ -83,9 +83,9 @@ import React from 'react'
 const money = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 const styles = StyleSheet.create({
-    container: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 16, borderWidth: 0.5, borderColor: '#e0e0e0' },
+    container: { backgroundColor: '#fff', borderRadius: 14, padding: 20, marginBottom: 16 },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-    title: { fontSize: 16, fontWeight: '700', color: '#2c3e50' },
+    title: { fontSize: 18, fontWeight: '700', color: '#1d2b3a' },
     headerRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     legend: { flexDirection: 'row', gap: 12 },
     legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
