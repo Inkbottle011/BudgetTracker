@@ -7,11 +7,12 @@ import { AccountsRow } from './AccountsRow'
 import { BudgetList } from './BudgetList'
 import { MonthlyTrend } from './MonthlyTrend'
 import { ActivityList } from './ActivityList'
-import { C } from './theme'
+import { useStyles, Palette } from '../../lib/theme'
 
 const WIDE = 900
 
 export default function Dashboard() {
+    const styles = useStyles(makeStyles)
     const logic = useDashboardLogic()
     const navigation = useNavigation<any>()
     const { width } = useWindowDimensions()
@@ -72,7 +73,7 @@ export default function Dashboard() {
     )
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (C: Palette) => StyleSheet.create({
     page: { flex: 1, backgroundColor: C.page },
     content: { padding: 28, alignItems: 'center' },
     contentNarrow: { padding: 16 },

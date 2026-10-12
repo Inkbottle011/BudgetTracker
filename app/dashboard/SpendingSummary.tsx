@@ -1,5 +1,6 @@
+import { useTheme, useStyles, Palette } from '../../lib/theme'
 import { View, Text, StyleSheet } from 'react-native'
-import { C, tabular, money, dollars } from './theme'
+import { tabular, money, dollars } from './theme'
 
 interface Props {
     heading: string               // "Spent in October", "Spent this week"…
@@ -18,6 +19,8 @@ interface Props {
  * you'd be if you spent evenly, plus what came in, what you saved and what's left.
  */
 export function SpendingSummary({ heading, spent, planned, elapsed, income, saved, left, remainingDays, wide }: Props) {
+    const { c: C } = useTheme()
+    const styles = useStyles(makeStyles)
     const hasPlan = planned > 0
     const share = hasPlan ? spent / planned : 0
     const expected = planned * elapsed
@@ -59,6 +62,8 @@ export function SpendingSummary({ heading, spent, planned, elapsed, income, save
 }
 
 function Figure({ label, value, signed }: { label: string; value: number; signed?: boolean }) {
+    const { c: C } = useTheme()
+    const styles = useStyles(makeStyles)
     const color = signed ? (value >= 0 ? '#8fe0b4' : '#ffb4a8') : '#ffffff'
     return (
         <View style={styles.figure}>
@@ -68,7 +73,7 @@ function Figure({ label, value, signed }: { label: string; value: number; signed
     )
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (C: Palette) => StyleSheet.create({
     panel: { backgroundColor: C.panel, borderRadius: 16, padding: 20, gap: 20, marginBottom: 16 },
     panelWide: { flexDirection: 'row', alignItems: 'stretch', padding: 24 },
     main: { flex: 1, minWidth: 0 },

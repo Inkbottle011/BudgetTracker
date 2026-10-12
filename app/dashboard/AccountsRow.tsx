@@ -1,8 +1,9 @@
 import { useState } from 'react'
+import { useTheme, useStyles, Palette } from '../../lib/theme'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { HIGH_CARD_USAGE, updatedAgo } from '../../lib/bank'
 import { AccountGroup } from './summary'
-import { C, tabular, money } from './theme'
+import { tabular, money } from './theme'
 
 interface Props {
     cash: AccountGroup
@@ -17,6 +18,8 @@ const LABELS: Record<Key, string> = { cash: 'Checking', savings: 'Savings', card
 
 /** Balances from your linked banks. Tap a group to see its accounts. */
 export function AccountsRow({ cash, savings, cards, updatedAt, wide }: Props) {
+    const { c: C } = useTheme()
+    const styles = useStyles(makeStyles)
     const [open, setOpen] = useState<Key | null>(null)
     const groups = ([['cash', cash], ['savings', savings], ['cards', cards]] as [Key, AccountGroup][]).filter(([, g]) => g.accounts.length > 0)
     if (!groups.length) return null
@@ -62,12 +65,12 @@ export function AccountsRow({ cash, savings, cards, updatedAt, wide }: Props) {
     )
 }
 
-const styles = StyleSheet.create({
-    box: { backgroundColor: C.surface, borderRadius: 14, marginBottom: 20, overflow: 'hidden' },
+const makeStyles = (C: Palette) => StyleSheet.create({
+    box: { backgroundColor: C.surface, borderRadius: 14, marginBottom: 20, overflow: 'hidden', borderWidth: 1, borderColor: C.line },
     tiles: { flexDirection: 'row' },
     tilesNarrow: { flexDirection: 'column' },
     tile: { flex: 1, paddingVertical: 14, paddingHorizontal: 18 },
-    tileOpen: { backgroundColor: '#f7f9fb' },
+    tileOpen: { backgroundColor: C.surfaceAlt },
     dividerLeft: { borderLeftWidth: 1, borderColor: C.line },
     dividerTop: { borderTopWidth: 1, borderColor: C.line },
     tileLabel: { fontSize: 13, color: C.muted, fontWeight: '600' },

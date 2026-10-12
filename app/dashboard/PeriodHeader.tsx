@@ -1,5 +1,6 @@
+import { useTheme, useStyles, Palette } from '../../lib/theme'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
-import { C } from './theme'
+
 import { Period } from './summary'
 
 const VIEWS: { key: Period; label: string }[] = [
@@ -17,6 +18,8 @@ interface Props {
 
 /** The one period picker: everything on the dashboard follows it. */
 export function PeriodHeader({ title, view, onPrev, onNext, onView, onToday }: Props) {
+    const { c: C } = useTheme()
+    const styles = useStyles(makeStyles)
     return (
         <View style={styles.row}>
             <View style={styles.titleGroup}>
@@ -37,14 +40,14 @@ export function PeriodHeader({ title, view, onPrev, onNext, onView, onToday }: P
     )
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (C: Palette) => StyleSheet.create({
     row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 },
     titleGroup: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     title: { fontSize: 26, fontWeight: '700', color: C.ink, minWidth: 90 },
     arrow: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
     arrowText: { fontSize: 26, lineHeight: 28, color: C.muted },
-    today: { fontSize: 13, color: C.plan, fontWeight: '600', marginLeft: 8 },
-    segment: { flexDirection: 'row', backgroundColor: '#e6eaee', borderRadius: 9, padding: 3 },
+    today: { fontSize: 13, color: C.primary, fontWeight: '600', marginLeft: 8 },
+    segment: { flexDirection: 'row', backgroundColor: C.track, borderRadius: 9, padding: 3 },
     segBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 7 },
     segOn: { backgroundColor: C.surface, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 2, shadowOffset: { width: 0, height: 1 } },
     segText: { fontSize: 13, color: C.muted, fontWeight: '600' },

@@ -1,5 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react-native'
 import { MonthlyTrend } from '../MonthlyTrend'
+import { light } from '../../../lib/theme'
 
 describe('MonthlyTrend', () => {
     beforeEach(() => { jest.useFakeTimers(); jest.setSystemTime(new Date(2026, 9, 15)) })
@@ -35,7 +36,7 @@ describe('MonthlyTrend', () => {
         await render(<MonthlyTrend transactions={list} selectedYear={2026} />)
         await fireEvent(screen.getByLabelText('Aug'), 'hoverIn')
         const flat = (el: any) => Object.assign({}, ...[el.props.style].flat(Infinity).filter(Boolean))
-        expect(flat(screen.getByLabelText('Aug')).backgroundColor).toBe('#eef4fb')
+        expect(flat(screen.getByLabelText('Aug')).backgroundColor).toBe(light.primarySoft)
         expect(flat(screen.getByLabelText('Sep')).opacity).toBe(0.45)
     })
 

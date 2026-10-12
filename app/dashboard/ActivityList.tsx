@@ -1,12 +1,15 @@
+import { useTheme, useStyles, Palette } from '../../lib/theme'
 import { View, Text, StyleSheet } from 'react-native'
 import { shortDate } from '../../lib/bank'
 import { activityDirection } from './summary'
-import { C, tabular, money } from './theme'
+import { tabular, money } from './theme'
 
 interface Item { id: string; name?: string | null; category_label?: string | null; date: string; type: string; amount: number | string; sub?: string }
 
 /** A short list of transactions: upcoming bills or recent activity. */
 export function ActivityList({ title, items, empty }: { title: string; items: Item[]; empty: string }) {
+    const { c: C } = useTheme()
+    const styles = useStyles(makeStyles)
     return (
         <View style={styles.section}>
             <Text style={styles.title}>{title}</Text>
@@ -31,8 +34,8 @@ export function ActivityList({ title, items, empty }: { title: string; items: It
     )
 }
 
-const styles = StyleSheet.create({
-    section: { backgroundColor: C.surface, borderRadius: 14, padding: 20, marginBottom: 16 },
+const makeStyles = (C: Palette) => StyleSheet.create({
+    section: { backgroundColor: C.surface, borderRadius: 14, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: C.line },
     title: { fontSize: 18, fontWeight: '700', color: C.ink, marginBottom: 6 },
     empty: { fontSize: 14, color: C.muted, marginTop: 4 },
     row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 9 },

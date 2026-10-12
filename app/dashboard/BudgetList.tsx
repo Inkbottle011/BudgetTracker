@@ -1,6 +1,7 @@
+import { useTheme, useStyles, Palette } from '../../lib/theme'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { BudgetRow } from './summary'
-import { C, tabular, money } from './theme'
+import { tabular, money } from './theme'
 
 interface Props {
     title: string
@@ -13,6 +14,8 @@ interface Props {
 
 /** Every spending category against its plan, then income and savings goals. */
 export function BudgetList({ title, rows, uncategorized, goals, onCategorize, onEditBudget }: Props) {
+    const { c: C } = useTheme()
+    const styles = useStyles(makeStyles)
     const visible = rows.filter(r => r.planned > 0 || r.spent > 0)
     return (
         <View style={styles.section}>
@@ -85,12 +88,12 @@ export function BudgetList({ title, rows, uncategorized, goals, onCategorize, on
     )
 }
 
-const styles = StyleSheet.create({
-    section: { backgroundColor: C.surface, borderRadius: 14, padding: 20, marginBottom: 16 },
+const makeStyles = (C: Palette) => StyleSheet.create({
+    section: { backgroundColor: C.surface, borderRadius: 14, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: C.line },
     head: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 },
     title: { fontSize: 18, fontWeight: '700', color: C.ink },
     subTitle: { fontSize: 15, fontWeight: '700', color: C.ink, marginTop: 20, marginBottom: 2 },
-    link: { fontSize: 13, color: C.plan, fontWeight: '600' },
+    link: { fontSize: 13, color: C.primary, fontWeight: '600' },
     empty: { fontSize: 14, color: C.muted, lineHeight: 20, marginVertical: 8 },
     row: { paddingVertical: 10 },
     rowTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 },
@@ -100,7 +103,7 @@ const styles = StyleSheet.create({
     fill: { height: 6, backgroundColor: C.ink, borderRadius: 3 },
     fillOver: { backgroundColor: C.bad },
     fillUnplanned: { backgroundColor: C.faint },
-    fillGoal: { backgroundColor: C.plan },
+    fillGoal: { backgroundColor: C.primary },
     detail: { fontSize: 12, color: C.muted, marginTop: 5 },
     uncat: { borderTopWidth: 1, borderColor: C.line, marginTop: 6, paddingTop: 14 },
 })
