@@ -5,6 +5,7 @@ import { LinkedBanksSection } from '../components/LinkedBanksSection'
 import { Page, PageTitle, Section, Segmented } from '../components/ui'
 import { useTheme, useStyles, Palette, Preference } from '../lib/theme'
 import { SCENES, SPEEDS, AMOUNTS, TINTS, tintSwatch, Scene, Speed, Amount } from '../lib/background'
+import { THEME_LIST, Theme } from '../lib/themes'
 
 const APPEARANCE: { value: Preference; label: string }[] = [
     { value: 'system', label: 'Match device' },
@@ -13,20 +14,49 @@ const APPEARANCE: { value: Preference; label: string }[] = [
 ]
 
 export default function SettingsScreen() {
-    const { preference, setPreference } = useTheme()
+    const { preference, setPreference, themeId, setThemeId, scheme } = useTheme()
     const styles = useStyles(makeStyles)
     const [twoFactorOn, setTwoFactorOn] = useState(false)
     return (
         <Page maxWidth={720}>
             <PageTitle title="Settings" />
             <Section title="Appearance">
+                <Text style={styles.groupLabel}>Theme</Text>
+                <View style={styles.themes}>
+                    {THEME_LIST.map(t => (
+                        <ThemeChoice key={t.id} theme={t} mode={scheme} selected={themeId === t.id} onPress={() => setThemeId(t.id)} />
+                    ))}
+                </View>
+                <Text style={[styles.groupLabel, styles.groupGap]}>Light or dark</Text>
                 <Segmented<Preference> value={preference} onChange={setPreference} options={APPEARANCE} />
-                <Text style={styles.help}>Match device follows your phone or computer's light or dark setting.</Text>
+                <Text style={styles.help}>Match device follows your phone or computer's light or dark setting. Picking a theme also sets the moving background's color.</Text>
             </Section>
             <BackgroundSection />
             <TwoFactorSection onChange={setTwoFactorOn} />
             <LinkedBanksSection twoFactorOn={twoFactorOn} />
         </Page>
+    )
+}
+
+/** A small preview of a theme: its top bar, a button and a budget bar, with its name. */
+function ThemeChoice({ theme, mode, selected, onPress }: { theme: Theme; mode: 'light' | 'dark'; selected: boolean; onPress: () => void }) {
+    const styles = useStyles(makeStyles)
+    const p = theme[mode]
+    return (
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={`${theme.name} theme`} accessibilityState={{ selected }}
+            onPress={onPress} style={[styles.themeCard, selected && styles.themeCardOn]}>
+            <View style={[styles.preview, { backgroundColor: p.page, borderColor: p.line }]}>
+                <View style={[styles.previewBar, { backgroundColor: p.bar }]} />
+                <View style={styles.previewBody}>
+                    <View style={[styles.previewPanel, { backgroundColor: p.panel }]} />
+                    <View style={[styles.previewTrack, { backgroundColor: p.track }]}>
+                        <View style={[styles.previewFill, { backgroundColor: p.paceMark }]} />
+                    </View>
+                    <View style={[styles.previewButton, { backgroundColor: p.primary }]} />
+                </View>
+            </View>
+            <Text style={[styles.themeName, selected && styles.themeNameOn]}>{theme.name}</Text>
+        </TouchableOpacity>
     )
 }
 
@@ -99,6 +129,20 @@ function Toggle({ label, on, onChange }: { label: string; on: boolean; onChange:
 
 const makeStyles = (C: Palette) => StyleSheet.create({
     help: { fontSize: 13, color: C.muted, marginTop: 10, lineHeight: 18 },
+    groupLabel: { fontSize: 13, fontWeight: '600', color: C.text, marginBottom: 8 },
+    groupGap: { marginTop: 18 },
+    themes: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+    themeCard: { width: 104, borderRadius: 12, borderWidth: 2, borderColor: 'transparent', padding: 4, alignItems: 'center', gap: 6 },
+    themeCardOn: { borderColor: C.primary },
+    preview: { width: '100%', height: 64, borderRadius: 8, borderWidth: 1, overflow: 'hidden' },
+    previewBar: { height: 12 },
+    previewBody: { flex: 1, padding: 6, gap: 4 },
+    previewPanel: { height: 14, borderRadius: 3 },
+    previewTrack: { height: 4, borderRadius: 2, overflow: 'hidden' },
+    previewFill: { height: 4, width: '60%' },
+    previewButton: { height: 8, width: 30, borderRadius: 4 },
+    themeName: { fontSize: 13, color: C.text, fontWeight: '500', paddingBottom: 2 },
+    themeNameOn: { color: C.ink, fontWeight: '700' },
     options: { marginTop: 14, gap: 12 },
     option: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 12 },
     label: { fontSize: 13, fontWeight: '600', color: C.text, width: 80 },

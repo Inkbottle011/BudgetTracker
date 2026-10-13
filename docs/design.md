@@ -1,19 +1,25 @@
 # How the app looks
 
-One look across every screen, in light and dark. To change it, edit the values in
-`lib/theme.tsx`; every screen reads its colors from there.
+One look across every screen, in light and dark, in five color themes you pick in Settings
+(Night sky by default, Ocean, Forest, Sunset, Classic). The themes are in `lib/themes.ts`;
+every screen reads its colors from `useTheme()`, so nothing else needs editing.
 
-## Colors (`lib/theme.tsx`)
+## Colors (`lib/themes.ts`)
 - `page` behind everything; `surface` for sections, cards and sheets; `surfaceAlt` for inputs and
   selected rows; `line` for borders and dividers; `track` for empty bars and switches.
 - Text: `ink` for headings and numbers, `text` for body, `muted` for secondary, `faint` for hints.
-- `primary` for buttons, links and selected things (`primarySoft` behind selected items).
-- Money: `good` for money in / under budget, `bad` for over budget and errors, `move` (grey) for
-  transfers between your own accounts. Each has a `…Soft` background.
-- Transaction types use `typeColors(type, c)` (soft background + colored text), shown with
-  `<TypeBadge>`.
-- `panel` is the one dark summary panel (dashboard). Nothing else uses a solid dark or colored block.
-- Never hard-code a hex color in a screen; use the palette so dark mode works.
+- `primary` for buttons, links and selected things (`primarySoft` behind selected items). In Forest
+  and Sunset it is wood brown and orange, so a button never looks like money in or out.
+- `bar` fills the top bar and the tab bar (`onBar` / `onBarMuted` for what's on it), the same on
+  every page. `panel` is the dashboard's summary panel.
+- Money means the same in every theme: `good` / `incomeMark` green for money in, `bad` / `spendMark`
+  red for money out and over budget, `saved` / `savedMark` violet for savings, `warn` / `warnMark`
+  amber for getting close to a limit, `move` grey for transfers between your own accounts. The
+  `…Mark` colors are for bars and charts (checked for color-blind separation); the others for text.
+- Budget bars: `paceMark` (the theme's color) on track, amber from 85% of the plan, red when over.
+- Transaction types use `typeColors(type, c)` (soft background + colored text), shown with `<TypeBadge>`.
+- Never hard-code a hex color in a screen; use the palette so themes and dark mode work.
+- To add a theme, copy one in `lib/themes.ts`, change its colors and add it to `THEME_LIST`.
 
 ## Moving background (`lib/background.ts`, `lib/spaceScene.ts`, `components/SpaceBackground.tsx`)
 

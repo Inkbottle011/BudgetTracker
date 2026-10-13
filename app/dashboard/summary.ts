@@ -162,3 +162,11 @@ export function activityDirection(type: string): 'in' | 'out' | 'move' {
     if (type === 'transfer') return 'move'
     return type === 'income' || type === 'reimbursement' || type === 'withdrawal' ? 'in' : 'out'
 }
+
+export type BudgetTone = 'unplanned' | 'onTrack' | 'close' | 'over'
+/** How a category is doing against its plan: under 85% is on track, up to 100% is close, then over. */
+export function budgetTone(spent: number, planned: number): BudgetTone {
+    if (planned <= 0) return 'unplanned'
+    if (spent > planned) return 'over'
+    return spent / planned >= 0.85 ? 'close' : 'onTrack'
+}

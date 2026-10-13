@@ -5,6 +5,7 @@ import { verifySignInCode } from '../lib/twoFactor'
 import { useTheme, useStyles, Palette } from '../lib/theme'
 import { Button } from '../components/ui'
 import { AuthCard, FormMessage } from './auth'
+import { FindYourCode } from '../components/FindYourCode'
 
 /** Shown after the password when two-factor sign-in is on. */
 export default function TwoFactorPrompt({ onDone }: { onDone: () => void }) {
@@ -45,6 +46,7 @@ export default function TwoFactorPrompt({ onDone }: { onDone: () => void }) {
             />
             {error ? <FormMessage tone="bad">{error}</FormMessage> : null}
             <Button label="Verify" onPress={verify} loading={loading} style={styles.submit} />
+            <FindYourCode />
             <View style={styles.back}>
                 <Button variant="ghost" label="Sign out" onPress={() => { supabase.auth.signOut() }} />
             </View>

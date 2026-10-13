@@ -1,4 +1,4 @@
-import { periodRange, shiftAnchor, periodTitle, inRange, plannedForRange, periodElapsed, daysLeftAfterToday, periodSummary, budgetRows, goalRows, accountsSummary, activityDirection } from '../summary'
+import { periodRange, shiftAnchor, periodTitle, inRange, plannedForRange, periodElapsed, daysLeftAfterToday, periodSummary, budgetRows, goalRows, accountsSummary, activityDirection, budgetTone } from '../summary'
 
 const tx = (date: string, type: string, amount: number, category_label = '', name = '') => ({ id: `${date}${type}${amount}${name}`, date, type, amount, category_label, name })
 
@@ -171,4 +171,16 @@ describe('activityDirection', () => {
         ['expense', 'out'], ['savings', 'out'], ['investment', 'out'],
         ['transfer', 'move'],
     ])('%p is %p', (type, dir) => expect(activityDirection(type)).toBe(dir))
+})
+
+describe('budgetTone', () => {
+    it('says how a category is doing, for coloring its bar', () => {
+        expect(budgetTone(0, 0)).toBe('unplanned')
+        expect(budgetTone(40, 0)).toBe('unplanned')
+        expect(budgetTone(40, 100)).toBe('onTrack')
+        expect(budgetTone(84, 100)).toBe('onTrack')
+        expect(budgetTone(85, 100)).toBe('close')
+        expect(budgetTone(100, 100)).toBe('close')
+        expect(budgetTone(100.01, 100)).toBe('over')
+    })
 })

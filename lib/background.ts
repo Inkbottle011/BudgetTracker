@@ -4,7 +4,7 @@
 export type Scene = 'off' | 'stars' | 'warp' | 'nebula'
 export type Speed = 'calm' | 'normal' | 'lively'
 export type Amount = 'few' | 'some' | 'lots'
-export type Tint = 'blue' | 'purple' | 'teal' | 'rose' | 'gold'
+export type Tint = 'blue' | 'purple' | 'teal' | 'green' | 'rose' | 'gold'
 
 export interface BackgroundSettings {
     scene: Scene
@@ -40,6 +40,7 @@ export const TINTS: { value: Tint; label: string }[] = [
     { value: 'blue', label: 'Blue' },
     { value: 'purple', label: 'Purple' },
     { value: 'teal', label: 'Teal' },
+    { value: 'green', label: 'Green' },
     { value: 'rose', label: 'Rose' },
     { value: 'gold', label: 'Gold' },
 ]
@@ -86,6 +87,10 @@ const TINT_COLORS: Record<Tint, { dark: [string[], string[]]; light: [string[], 
     teal: {
         dark: [['#ffffff', '#d2fbf4', '#7fe3d3'], ['#0f6b6b', '#13a19a', '#0b4a55']],
         light: [['#3d8f88', '#6bb3ab', '#2b6f6a'], ['#c3ece6', '#d6f3ef', '#b0e3dc']],
+    },
+    green: {
+        dark: [['#ffffff', '#dcf7e4', '#94e0ae'], ['#1f6b3e', '#2f9156', '#16502e']],
+        light: [['#4a8a5e', '#78ad88', '#336e47'], ['#c6e8cf', '#d8f0de', '#b3dfc0']],
     },
     rose: {
         dark: [['#ffffff', '#ffd9e6', '#ff9ec0'], ['#8a2252', '#c23a74', '#5a1a3d']],

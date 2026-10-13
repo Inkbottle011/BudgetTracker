@@ -15,6 +15,7 @@ interface Props {
 
 type Key = 'cash' | 'savings' | 'cards'
 const LABELS: Record<Key, string> = { cash: 'Checking', savings: 'Savings', cards: 'Owed on cards' }
+const DOT: Record<Key, (C: Palette) => string> = { cash: C => C.primary, savings: C => C.savedMark, cards: C => C.spendMark }
 
 /** Balances from your linked banks. Tap a group to see its accounts. */
 export function AccountsRow({ cash, savings, cards, updatedAt, wide }: Props) {
@@ -32,8 +33,11 @@ export function AccountsRow({ cash, savings, cards, updatedAt, wide }: Props) {
                     <TouchableOpacity key={key} onPress={() => setOpen(o => (o === key ? null : key))}
                         accessibilityRole="button" accessibilityState={{ expanded: open === key }} accessibilityLabel={`${LABELS[key]}, show accounts`}
                         style={[styles.tile, i > 0 && (wide ? styles.dividerLeft : styles.dividerTop), open === key && styles.tileOpen]}>
-                        <Text style={styles.tileLabel}>{LABELS[key]}</Text>
-                        <Text style={[styles.tileValue, tabular, key === 'cards' && g.total > 0 && { color: C.bad }]}>{money(g.total)}</Text>
+                        <View style={styles.labelRow}>
+                            <View style={[styles.dot, { backgroundColor: DOT[key](C) }]} />
+                            <Text style={styles.tileLabel}>{LABELS[key]}</Text>
+                        </View>
+                        <Text style={[styles.tileValue, tabular, key === 'savings' && { color: C.saved }, key === 'cards' && g.total > 0 && { color: C.bad }]}>{money(g.total)}</Text>
                         <Text style={styles.tileMeta}>{g.accounts.length} account{g.accounts.length === 1 ? '' : 's'} {open === key ? '▴' : '▾'}</Text>
                     </TouchableOpacity>
                 ))}
@@ -73,6 +77,8 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     tileOpen: { backgroundColor: C.surfaceAlt },
     dividerLeft: { borderLeftWidth: 1, borderColor: C.line },
     dividerTop: { borderTopWidth: 1, borderColor: C.line },
+    labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    dot: { width: 8, height: 8, borderRadius: 4 },
     tileLabel: { fontSize: 13, color: C.muted, fontWeight: '600' },
     tileValue: { fontSize: 22, fontWeight: '700', color: C.ink, marginTop: 2 },
     tileMeta: { fontSize: 12, color: C.faint, marginTop: 2 },
