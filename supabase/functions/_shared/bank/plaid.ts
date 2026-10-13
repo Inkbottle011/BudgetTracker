@@ -104,10 +104,15 @@ export function createPlaidProvider({ fetch, clientId, secret, env, today = () =
                 })
                 const batch: any[] = data?.transactions ?? []
                 for (const t of batch) {
+                    // Card charges made on a weekend post on the next business day. Plaid's
+                    // authorized_date is the day of the purchase itself, so use that when the bank gives it.
+                    const posted = String(t.date).slice(0, 10)
+                    const bought = t.authorized_date ? String(t.authorized_date).slice(0, 10) : posted
                     all.push({
                         externalId: t.transaction_id,
                         providerAccountId: t.account_id,
-                        date: String(t.date).slice(0, 10),
+                        date: bought,
+                        ...(bought !== posted ? { postedDate: posted } : {}),
                         amount: -Number(t.amount),           // Plaid: positive = money out
                         description: t.name ?? t.merchant_name ?? '',
                         pending: !!t.pending,

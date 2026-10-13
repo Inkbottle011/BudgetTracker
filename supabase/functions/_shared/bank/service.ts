@@ -102,7 +102,10 @@ export async function syncConnection(deps: BankDeps, connectionId: string) {
         // The one-time transfer check re-reads everything from the start date, so card payments that
         // older versions dropped come back (as transfers) and can pair with the payment from checking
         const fullCheck = !conn.transfers_checked
-        const since = fullCheck || lastSynced < conn.sync_from ? conn.sync_from : lastSynced
+        // One-time: move weekend card charges saved on the day they posted to the day of the purchase.
+        // (Only once the database has the dates_checked column, so nothing breaks before setup runs.)
+        const dateCheck = conn.dates_checked === false
+        const since = fullCheck || dateCheck || lastSynced < conn.sync_from ? conn.sync_from : lastSynced
 
         const { data: accounts } = await deps.db.from('bank_accounts').select('*').eq('connection_id', conn.id)
         const { data: allAccounts } = await deps.db.from('bank_accounts').select('id, type, subtype').eq('user_id', conn.user_id)
@@ -110,6 +113,8 @@ export async function syncConnection(deps: BankDeps, connectionId: string) {
         const accountInfo = new Map<string, AccountInfo>((allAccounts ?? []).map((a: any) => [a.id, { type: a.type, subtype: a.subtype ?? null }]))
         // Which way money went, straight from the bank, for re-sorting transfers saved before (one-time check)
         const fetchedMoneyIn = new Map<string, boolean>()
+        // Purchase date and posted date, for transactions where the bank gives both
+        const purchaseDates = new Map<string, { date: string; posted: string }>()
 
         const { data: history } = await deps.db.from('transactions').select('*')
             .eq('user_id', conn.user_id).not('category_label', 'is', null).neq('category_label', '')
@@ -137,6 +142,7 @@ export async function syncConnection(deps: BankDeps, connectionId: string) {
         for (const acc of (accounts ?? []).filter((a: any) => a.connection_id === conn.id)) {
             const txs = await deps.provider.listTransactions(token, acc.provider_account_id, since)
             if (acc.type !== 'credit') for (const t of txs) fetchedMoneyIn.set(t.externalId, t.amount > 0)
+            for (const t of txs) if (t.postedDate && t.postedDate !== t.date) purchaseDates.set(t.externalId, { date: t.date, posted: t.postedDate })
             await saveBalance(deps, token, acc)
             const r = convertBankTransactions(txs, { id: acc.id, type: acc.type, providerAccountId: acc.provider_account_id }, {
                 userId: conn.user_id, provider: conn.provider, syncFrom: conn.sync_from,
@@ -147,6 +153,8 @@ export async function syncConnection(deps: BankDeps, connectionId: string) {
             r.moneyIn.forEach(id => moneyIn.add(id))
             for (const k of Object.keys(skipped) as (keyof typeof skipped)[]) skipped[k] += r.skipped[k]
         }
+
+        if (dateCheck && purchaseDates.size) await fixPurchaseDates(deps, conn, purchaseDates)
 
         // Money moving between your own accounts is saved as 'transfer' so it isn't counted twice.
         // The first time (transfers_checked false) this also fixes transfers imported before.
@@ -173,7 +181,10 @@ export async function syncConnection(deps: BankDeps, connectionId: string) {
         }
 
         await deps.db.from('bank_connections')
-            .update({ status: 'active', last_error: null, last_synced_at: new Date().toISOString(), transfers_checked: true }).eq('id', conn.id)
+            .update({
+                status: 'active', last_error: null, last_synced_at: new Date().toISOString(), transfers_checked: true,
+                ...(dateCheck ? { dates_checked: true } : {}),
+            }).eq('id', conn.id)
         return { added, toReview, transfers, skipped, status: 'active' as const }
     } catch (e) {
         // Just linked and the bank's data is still loading: not a problem, try again later
@@ -197,6 +208,29 @@ async function loadAll(query: () => any, pageSize = 1000) {
         if (error) throw new Error(error.message)
         all.push(...(data ?? []))
         if (!data || data.length < pageSize) return all
+    }
+}
+
+/**
+ * Transactions imported before purchase dates were used are dated the day the bank posted them
+ * (a Saturday charge shows on Monday). Moves each to the day of the purchase, but only if it's still
+ * on the posted date, so a date you changed yourself stays as you set it.
+ */
+async function fixPurchaseDates(deps: BankDeps, conn: any, purchaseDates: Map<string, { date: string; posted: string }>) {
+    const saved = await loadAll(() => deps.db.from('transactions').select('id, external_id, date')
+        .eq('user_id', conn.user_id).eq('provider', conn.provider).not('external_id', 'is', null).gte('date', conn.sync_from).order('date'))
+    const byDate = new Map<string, string[]>()   // new date -> ids
+    for (const t of saved) {
+        const d = purchaseDates.get(t.external_id)
+        if (!d || String(t.date).slice(0, 10) !== d.posted) continue
+        if (!byDate.has(d.date)) byDate.set(d.date, [])
+        byDate.get(d.date)!.push(t.id)
+    }
+    for (const [date, ids] of byDate) {
+        for (let i = 0; i < ids.length; i += 200) {
+            const { error } = await deps.db.from('transactions').update({ date }).eq('user_id', conn.user_id).in('id', ids.slice(i, i + 200))
+            if (error) throw new Error(`Couldn't fix purchase dates: ${error.message}`)
+        }
     }
 }
 

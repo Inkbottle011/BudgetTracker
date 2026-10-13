@@ -431,6 +431,73 @@ describe('syncConnection', () => {
     })
 })
 
+describe('weekend purchase dates, fixed once for transactions imported before', () => {
+    // Card charges from the weekend: the bank now gives the purchase date, and the day it posted
+    const weekendBank = () => fakeProvider({
+        name: 'plaid',
+        listTransactions: jest.fn(async (_t: string, accountId: string) => accountId === 'acc_card'
+            ? [
+                { externalId: 'sat', providerAccountId: 'acc_card', date: '2026-09-12', postedDate: '2026-09-14', amount: -20, description: 'Diner', pending: false },
+                { externalId: 'sun', providerAccountId: 'acc_card', date: '2026-09-13', postedDate: '2026-09-14', amount: -8, description: 'Coffee', pending: false },
+                { externalId: 'edited', providerAccountId: 'acc_card', date: '2026-09-19', postedDate: '2026-09-21', amount: -5, description: 'Snack', pending: false },
+                { externalId: 'tue', providerAccountId: 'acc_card', date: '2026-09-15', amount: -3, description: 'Gum', pending: false },
+            ]
+            : []),
+    } as any)
+    const savedRows = [
+        { id: 'r-sat', external_id: 'sat', date: '2026-09-14' },
+        { id: 'r-sun', external_id: 'sun', date: '2026-09-14' },
+        { id: 'r-edited', external_id: 'edited', date: '2026-09-20' },   // you changed this one yourself
+        { id: 'r-tue', external_id: 'tue', date: '2026-09-15' },
+    ]
+    async function database(datesChecked: boolean) {
+        const token = await encryptToken('token_good', KEY)
+        await databaseWithConnection()
+        fake.table('bank_connections', call => {
+            if (call.ops.some(o => ['update', 'delete', 'upsert'].includes(o.method))) return { data: { id: 'conn-1' }, error: null }
+            return { data: [{ id: 'conn-1', user_id: 'user-1', provider: 'plaid', encrypted_token: token, status: 'active',
+                sync_from: '2026-09-01', last_synced_at: '2026-10-05T08:00:00Z', transfers_checked: true, dates_checked: datesChecked }], error: null }
+        })
+        fake.table('transactions', call => {
+            const upsert = call.ops.find(o => o.method === 'upsert')
+            if (upsert) return { data: upsert.args[0].map((_: any, i: number) => ({ id: `new-${i}` })), error: null }
+            if (call.ops.some(o => o.method === 'update')) return { data: null, error: null }
+            if (call.ops.some(o => o.method === 'select' && String(o.args[0]).includes('external_id, date'))) return { data: savedRows, error: null }
+            return { data: [], error: null }
+        })
+    }
+    const dateUpdates = () => ops('transactions', 'update')
+        .filter(u => 'date' in u.args[0])
+        .map(u => [u.args[0].date, u.call.ops.find(o => o.method === 'in')!.args[1].slice().sort()])
+
+    it('moves weekend charges saved on the day they posted to the day you bought them', async () => {
+        await database(false)
+        const provider = weekendBank()
+        await syncConnection(deps(provider), 'conn-1')
+        // Re-reads the whole history, once
+        expect((provider.listTransactions as jest.Mock).mock.calls[0][2]).toBe('2026-09-01')
+        expect(dateUpdates().sort()).toEqual([['2026-09-12', ['r-sat']], ['2026-09-13', ['r-sun']]])
+        // Only your own rows
+        const u = ops('transactions', 'update').find(x => 'date' in x.args[0])!
+        expect(u.call.ops.find(o => o.method === 'eq' && o.args[0] === 'user_id')!.args[1]).toBe('user-1')
+        expect(ops('bank_connections', 'update').some(x => x.args[0].dates_checked === true)).toBe(true)
+    })
+
+    it('leaves a date you changed yourself alone', async () => {
+        await database(false)
+        await syncConnection(deps(weekendBank()), 'conn-1')
+        expect(dateUpdates().flatMap(([, ids]) => ids)).not.toContain('r-edited')
+    })
+
+    it('does nothing more after the first time', async () => {
+        await database(true)
+        const provider = weekendBank()
+        await syncConnection(deps(provider), 'conn-1')
+        expect((provider.listTransactions as jest.Mock).mock.calls[0][2]).toBe('2026-09-28')
+        expect(dateUpdates()).toEqual([])
+    })
+})
+
 describe('balances', () => {
     it('saves each account\'s balance on every sync', async () => {
         await databaseWithConnection()

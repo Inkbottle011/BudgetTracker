@@ -39,6 +39,10 @@ create index if not exists bank_connections_user_id_idx on public.bank_connectio
 -- Whether transfers already imported from this bank have been found and marked (done once, on the next sync)
 alter table public.bank_connections add column if not exists transfers_checked boolean not null default false;
 
+-- Whether bank transactions imported before have been moved to the day of the purchase (done once, on
+-- the next sync). Card charges made on a weekend used to show on the Monday they posted.
+alter table public.bank_connections add column if not exists dates_checked boolean not null default false;
+
 -- 2. Accounts inside each linked bank ------------------------------------------
 create table if not exists public.bank_accounts (
   id                   uuid primary key default gen_random_uuid(),
