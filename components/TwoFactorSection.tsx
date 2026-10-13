@@ -1,9 +1,43 @@
 import { useEffect, useState } from 'react'
-import { View, Text, TextInput, Image, StyleSheet } from 'react-native'
+import { View, Text, TextInput, Image, StyleSheet, Platform } from 'react-native'
 import { twoFactorStatus, startTwoFactorSetup, verifyCode, turnOffTwoFactor } from '../lib/twoFactor'
 import { useToastContext } from '../context/ToastContext'
 import { useTheme, useStyles, Palette, light } from '../lib/theme'
-import { Section, Button } from './ui'
+import { Section, Button, Segmented } from './ui'
+
+type Phone = 'iphone' | 'android'
+const PHONES: { value: Phone; label: string }[] = [{ value: 'iphone', label: 'iPhone' }, { value: 'android', label: 'Android' }]
+
+/** Best guess at the kind of phone, so the right steps show first. */
+function guessPhone(): Phone {
+    if (Platform.OS === 'android') return 'android'
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent ?? '' : ''
+    return /android/i.test(ua) ? 'android' : 'iphone'
+}
+
+// The steps for each kind of phone
+const STEPS: Record<Phone, { app: string; scan: string[]; key: string; later: string }> = {
+    iphone: {
+        app: "Nothing to install: use the iPhone's built-in Passwords app (on older iPhones it's in Settings → Passwords).",
+        scan: [
+            'Open the Camera app and point it at the square code below. No need to take a photo.',
+            'Tap the yellow "Add Verification Code in Passwords" button that pops up.',
+            'Pick your Budget Tracker login if it\'s listed, or make a new entry called Budget Tracker, then tap Save.',
+        ],
+        key: 'Open the Passwords app, tap Codes, tap +, choose "Enter Setup Key", name it Budget Tracker and paste the key.',
+        later: 'Each time you sign in, open the Passwords app, tap the Codes tab, and type the code shown for Budget Tracker.',
+    },
+    android: {
+        app: 'Install Google Authenticator from the Play Store (free).',
+        scan: [
+            'Open Google Authenticator and tap + (bottom right).',
+            'Tap "Scan a QR code" and point your camera at the square code below.',
+            'Budget Tracker is added to the list.',
+        ],
+        key: 'In Google Authenticator tap +, choose "Enter a setup key", name it Budget Tracker, paste the key, and tap Add.',
+        later: 'Each time you sign in, open Google Authenticator and type the code shown for Budget Tracker.',
+    },
+}
 
 /** Settings: turn two-factor sign-in on or off. Reports changes so other sections can react. */
 export function TwoFactorSection({ onChange }: { onChange: (on: boolean) => void }) {
@@ -16,6 +50,15 @@ export function TwoFactorSection({ onChange }: { onChange: (on: boolean) => void
     const [error, setError] = useState<string | null>(null)
     const [confirmOff, setConfirmOff] = useState(false)
     const [busy, setBusy] = useState(false)
+    const [phone, setPhone] = useState<Phone>(guessPhone)
+    const [copied, setCopied] = useState(false)
+    const canCopy = Platform.OS === 'web' && typeof navigator !== 'undefined' && !!navigator.clipboard
+    const steps = STEPS[phone]
+
+    async function copyKey() {
+        if (!setup) return
+        try { await navigator.clipboard.writeText(setup.secret); setCopied(true) } catch { /* the key can still be selected by hand */ }
+    }
 
     async function refresh() {
         try {
@@ -80,27 +123,37 @@ export function TwoFactorSection({ onChange }: { onChange: (on: boolean) => void
 
             {setup && (
                 <View style={styles.setup}>
-                    <Text style={styles.step}>1. Scan this with your phone</Text>
+                    <Text style={styles.intro}>Takes about a minute. Have your phone ready.</Text>
+                    <Segmented<Phone> value={phone} onChange={setPhone} options={PHONES} />
+
+                    <Text style={styles.step}>1. Get an authenticator app</Text>
+                    <Text style={styles.body}>{steps.app}</Text>
+
+                    <Text style={styles.step}>2. Add Budget Tracker to it</Text>
+                    {steps.scan.map((line, i) => (
+                        <View key={i} style={styles.bullet}>
+                            <Text style={styles.bulletMark}>{String.fromCharCode(97 + i)}.</Text>
+                            <Text style={styles.bulletText}>{line}</Text>
+                        </View>
+                    ))}
                     <View style={styles.qrFrame}>
                         <Image accessibilityLabel="QR code for your authenticator app" source={{ uri: setup.qrCode }} style={styles.qr} />
                     </View>
                     <View style={styles.howTo}>
                         <Text style={styles.howToLine}>
-                            <Text style={styles.howToBold}>iPhone: </Text>
-                            open the Camera app, point it at the code (no photo needed) and tap "Add Verification Code in Passwords".
-                            Save it as a new entry called Budget Tracker.
+                            <Text style={styles.howToBold}>Reading this on the same phone? </Text>
+                            You can't scan your own screen, so use this key instead. {steps.key}
                         </Text>
-                        <Text style={styles.howToLine}>
-                            <Text style={styles.howToBold}>Android: </Text>
-                            install Google Authenticator, tap +, then "Scan a QR code".
-                        </Text>
-                        <Text style={styles.howToLine}>
-                            Next time you sign in, get the code from the Passwords app (Codes tab) on iPhone, or from Google Authenticator.
-                        </Text>
+                        <View style={styles.row}>
+                            <Text selectable style={styles.secret}>{setup.secret}</Text>
+                            {canCopy && <Button variant="secondary" small label={copied ? 'Copied' : 'Copy key'} onPress={copyKey} />}
+                        </View>
                     </View>
-                    <Text style={styles.step}>Or type this key into the app:</Text>
-                    <Text selectable style={styles.secret}>{setup.secret}</Text>
-                    <Text style={styles.step}>2. Enter the 6-digit code it shows (it changes every 30 seconds)</Text>
+
+                    <Text style={styles.step}>3. Type the code it shows</Text>
+                    <Text style={styles.body}>
+                        The app now shows a 6-digit code for Budget Tracker. It changes every 30 seconds; if it changes while you're typing, just use the new one.
+                    </Text>
                     <View style={styles.row}>
                         <TextInput
                             accessibilityLabel="6-digit code"
@@ -114,8 +167,9 @@ export function TwoFactorSection({ onChange }: { onChange: (on: boolean) => void
                             placeholderTextColor={C.faint}
                         />
                         <Button label="Confirm" onPress={confirm} loading={busy} />
-                        <Button variant="ghost" label="Cancel" onPress={() => { setSetup(null); setCode(''); setError(null) }} />
+                        <Button variant="ghost" label="Cancel" onPress={() => { setSetup(null); setCode(''); setError(null); setCopied(false) }} />
                     </View>
+                    <Text style={styles.later}>{steps.later}</Text>
                 </View>
             )}
 
@@ -155,7 +209,13 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     badgeOff: { backgroundColor: C.track },
     badgeText: { fontSize: 12, fontWeight: '600' },
     setup: { gap: 10 },
-    step: { fontSize: 14, color: C.ink, fontWeight: '600', marginTop: 4 },
+    step: { fontSize: 15, color: C.ink, fontWeight: '700', marginTop: 8 },
+    intro: { fontSize: 14, color: C.text, lineHeight: 20 },
+    body: { fontSize: 14, color: C.text, lineHeight: 20 },
+    bullet: { flexDirection: 'row', gap: 8, paddingLeft: 4 },
+    bulletMark: { fontSize: 14, color: C.muted, lineHeight: 20, width: 16 },
+    bulletText: { fontSize: 14, color: C.text, lineHeight: 20, flex: 1 },
+    later: { fontSize: 13, color: C.muted, lineHeight: 19, marginTop: 4 },
     // The QR code needs a white quiet zone to scan, even in dark mode
     qrFrame: { alignSelf: 'flex-start', backgroundColor: light.surface, padding: 10, borderRadius: 10, borderWidth: 1, borderColor: C.line },
     qr: { width: 180, height: 180 },

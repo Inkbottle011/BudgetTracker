@@ -103,13 +103,41 @@ describe('two-factor sign-in', () => {
         expect(showToast).toHaveBeenCalledWith('Two-factor sign-in is on')
     })
 
-    it('explains how to scan the code on an iPhone or Android phone, and where to find codes later', async () => {
+    it('walks through setup in three steps, for the phone you pick', async () => {
         await renderSettings()
         await fireEvent.press(screen.getByText('Set up two-factor sign-in'))
-        expect(screen.getByText(/iPhone: open the Camera app/)).toBeTruthy()
+        expect(screen.getByText('1. Get an authenticator app')).toBeTruthy()
+        expect(screen.getByText('2. Add Budget Tracker to it')).toBeTruthy()
+        expect(screen.getByText('3. Type the code it shows')).toBeTruthy()
+
+        // iPhone: nothing to install, scan with the Camera
+        expect(screen.getByRole('button', { name: 'iPhone' }).props.accessibilityState.selected).toBe(true)
+        expect(screen.getByText(/built-in Passwords app/)).toBeTruthy()
+        expect(screen.getByText(/Open the Camera app/)).toBeTruthy()
         expect(screen.getByText(/Add Verification Code in Passwords/)).toBeTruthy()
-        expect(screen.getByText(/Android: install Google Authenticator/)).toBeTruthy()
-        expect(screen.getByText(/Next time you sign in/)).toBeTruthy()
+
+        // Android: Google Authenticator
+        await fireEvent.press(screen.getByRole('button', { name: 'Android' }))
+        expect(screen.getByText(/Install Google Authenticator/)).toBeTruthy()
+        expect(screen.getByText(/Scan a QR code/)).toBeTruthy()
+        expect(screen.queryByText(/Open the Camera app/)).toBeNull()
+    })
+
+    it('explains what to do when this page is open on the same phone, so the code can\'t be scanned', async () => {
+        await renderSettings()
+        await fireEvent.press(screen.getByText('Set up two-factor sign-in'))
+        expect(screen.getByText(/Reading this on the same phone\?/)).toBeTruthy()
+        expect(screen.getByText('JBSWY3DPEHPK3PXP')).toBeTruthy()
+        expect(screen.getByText(/Enter Setup Key/)).toBeTruthy()
+        await fireEvent.press(screen.getByRole('button', { name: 'Android' }))
+        expect(screen.getByText(/Enter a setup key/)).toBeTruthy()
+    })
+
+    it('says where to find the code next time you sign in', async () => {
+        await renderSettings()
+        await fireEvent.press(screen.getByText('Set up two-factor sign-in'))
+        expect(screen.getByText(/Each time you sign in/)).toBeTruthy()
+        expect(screen.getByText(/Codes tab/)).toBeTruthy()
     })
 
     it('clears out a half-finished setup before starting again', async () => {
