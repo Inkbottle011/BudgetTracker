@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react'
-import { NavigationContainer } from '@react-navigation/native'
+import { useEffect, useMemo, useState } from 'react'
+import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
-import { View, Text, TouchableOpacity, StyleSheet, Modal, Alert, Platform } from 'react-native'
+import { View, Text, TouchableOpacity, Pressable, ActivityIndicator, StyleSheet, Modal, Platform } from 'react-native'
+import { StatusBar } from 'expo-status-bar'
 import * as Linking from 'expo-linking'
 import { supabase } from './lib/supabase'
 import Dashboard from './app/dashboard/index'
-import AuthScreen from './app/auth'
+import AuthScreen, { BrandMark } from './app/auth'
 import ResetPasswordScreen from './app/reset-password'
 import TwoFactorPrompt from './app/two-factor-prompt'
 import { needsTwoFactorCode } from './lib/twoFactor'
@@ -20,82 +21,172 @@ import { Toast } from './components/Toast'
 import { ToastContext } from './context/ToastContext'
 import { useToast } from './hooks/useToast'
 import { useToastContext } from './context/ToastContext'
+import { ThemeProvider, useTheme, useStyles, Palette } from './lib/theme'
+import { Button } from './components/ui'
+import { SpaceBackground } from './components/SpaceBackground'
+import { tabScreenLayout } from './components/TabScreenLayout'
 
 const Tab = createBottomTabNavigator()
 
-function Header({ userEmail }: { userEmail: string }) {
+/** The bar across the top: the app name, and your initial, which opens the account menu. */
+export function AppHeader({ userEmail }: { userEmail: string }) {
+  const styles = useStyles(makeStyles)
   const [showProfile, setShowProfile] = useState(false)
+  const [signingOut, setSigningOut] = useState(false)
   const { showToast } = useToastContext()
-  
+  const initial = (userEmail || '?').charAt(0).toUpperCase()
+
   async function handleSignOut() {
-    const { error } = await supabase.auth.signOut()
-    if (error) Alert.alert('Error', error.message)
-      else showToast('Signed out successfully')
+    setSigningOut(true)
+    try {
+      const { error } = await supabase.auth.signOut()
+      if (error) showToast(`Couldn't sign out: ${error.message}. Check your connection and try again.`, 'error')
+      else { setShowProfile(false); showToast('Signed out') }
+    } catch (e: any) {
+      showToast(`Couldn't sign out: ${e?.message ?? 'unknown error'}. Check your connection and try again.`, 'error')
+    } finally {
+      setSigningOut(false)
+    }
   }
-  
+
   return (
     <View style={styles.header}>
-    <Text style={styles.headerTitle}>💰 Budget Tracker</Text>
-    <TouchableOpacity
-    style={styles.profileBtn}
-    onPress={() => setShowProfile(true)}
-    >
-    <View style={styles.avatar}>
-    <Text style={styles.avatarText}>
-    {userEmail.charAt(0).toUpperCase()}
-    </Text>
-    </View>
-    </TouchableOpacity>
-    
-    <Modal
-    visible={showProfile}
-    transparent
-    animationType="fade"
-    onRequestClose={() => setShowProfile(false)}
-    >
-    <TouchableOpacity
-    style={styles.modalOverlay}
-    onPress={() => setShowProfile(false)}
-    >
-    <View style={styles.profileCard}>
-    <View style={styles.profileHeader}>
-    <View style={styles.avatarLarge}>
-    <Text style={styles.avatarLargeText}>
-    {userEmail.charAt(0).toUpperCase()}
-    </Text>
-    </View>
-    <Text style={styles.profileEmail}>{userEmail}</Text>
-    </View>
-    <TouchableOpacity
-    style={styles.signOutBtn}
-    onPress={handleSignOut}
-    >
-    <Text style={styles.signOutText}>Sign Out</Text>
-    </TouchableOpacity>
-    </View>
-    </TouchableOpacity>
-    </Modal>
+      <View style={styles.brand}>
+        <BrandMark size={26} />
+        <Text style={styles.title}>Budget Tracker</Text>
+      </View>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Account menu"
+        onPress={() => setShowProfile(true)}
+        style={styles.avatar}
+        hitSlop={8}
+      >
+        <Text style={styles.avatarText}>{initial}</Text>
+      </TouchableOpacity>
+
+      <Modal visible={showProfile} transparent animationType="fade" onRequestClose={() => setShowProfile(false)}>
+        <Pressable style={styles.overlay} onPress={() => setShowProfile(false)} accessibilityLabel="Close account menu">
+          <Pressable style={styles.menu} onPress={() => {}}>
+            <View style={styles.menuTop}>
+              <View style={[styles.avatar, styles.avatarLarge]}>
+                <Text style={[styles.avatarText, styles.avatarLargeText]}>{initial}</Text>
+              </View>
+              <View style={{ flexShrink: 1 }}>
+                <Text style={styles.menuLabel}>Signed in as</Text>
+                <Text style={styles.menuEmail} numberOfLines={1}>{userEmail}</Text>
+              </View>
+            </View>
+            <Button variant="danger" label="Sign out" onPress={handleSignOut} loading={signingOut} />
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   )
 }
 
-const styles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#2c3e50', borderBottomWidth: 0.5, borderColor: '#34495e' },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#fff' },
-  profileBtn: { padding: 4 },
-  avatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#3498db', alignItems: 'center', justifyContent: 'center' },
-  avatarText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'flex-start', alignItems: 'flex-end' },
-  profileCard: { backgroundColor: '#fff', borderRadius: 12, padding: 20, margin: 16, marginTop: 60, minWidth: 220, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 12, elevation: 8 },
-  profileHeader: { alignItems: 'center', marginBottom: 16 },
-  avatarLarge: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#3498db', alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
-  avatarLargeText: { color: '#fff', fontWeight: '700', fontSize: 24 },
-  profileEmail: { fontSize: 14, color: '#555', textAlign: 'center' },
-  signOutBtn: { backgroundColor: '#fdedec', borderRadius: 8, padding: 12, alignItems: 'center' },
-  signOutText: { color: '#e74c3c', fontWeight: '600', fontSize: 15 },
+const makeStyles = (C: Palette) => StyleSheet.create({
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 10, minHeight: 56,
+    backgroundColor: C.surface, borderBottomWidth: 1, borderColor: C.line,
+  },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  title: { fontSize: 17, fontWeight: '700', color: C.ink },
+  avatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: C.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: C.primary, fontWeight: '700', fontSize: 15 },
+  avatarLarge: { width: 44, height: 44, borderRadius: 22 },
+  avatarLargeText: { fontSize: 18 },
+  overlay: { flex: 1, backgroundColor: C.scrim, alignItems: 'flex-end' },
+  menu: {
+    backgroundColor: C.surface, borderRadius: 14, borderWidth: 1, borderColor: C.line,
+    padding: 16, marginTop: 60, marginHorizontal: 16, width: 280, maxWidth: '92%', gap: 16,
+    shadowColor: C.shadow, shadowOpacity: 0.18, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 8,
+  },
+  menuTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  menuLabel: { fontSize: 12, color: C.muted },
+  menuEmail: { fontSize: 14, color: C.ink, fontWeight: '600', marginTop: 2 },
 })
 
+const TAB_ICONS: Record<string, [string, string]> = {
+  Dashboard: ['home', 'home-outline'],
+  Transactions: ['list', 'list-outline'],
+  Subscriptions: ['repeat', 'repeat-outline'],
+  Budget: ['bar-chart', 'bar-chart-outline'],
+  Settings: ['settings', 'settings-outline'],
+}
+
+/** The tabs and screens, colored from the theme. */
+function MainApp({ userEmail }: { userEmail: string }) {
+  const { c, scheme, backdrop } = useTheme()
+  const navTheme = useMemo(() => {
+    const base = scheme === 'dark' ? DarkTheme : DefaultTheme
+    return {
+      ...base,
+      dark: scheme === 'dark',
+      colors: { ...base.colors, background: backdrop, card: c.surface, text: c.ink, border: c.line, primary: c.primary, notification: c.bad },
+    }
+  }, [c, scheme, backdrop])
+
+  return (
+    <View style={{ flex: 1, backgroundColor: backdrop }}>
+      <AppHeader userEmail={userEmail} />
+      <NavigationContainer theme={navTheme}>
+        <Tab.Navigator
+          screenLayout={tabScreenLayout}
+          screenOptions={({ route }) => ({
+            headerShown: false,
+            tabBarIcon: ({ focused, color, size }) => {
+              const [on, off] = TAB_ICONS[route.name] ?? ['ellipse', 'ellipse-outline']
+              return <Ionicons name={(focused ? on : off) as any} size={size} color={color} />
+            },
+            tabBarActiveTintColor: c.primary,
+            tabBarInactiveTintColor: c.muted,
+            tabBarStyle: { backgroundColor: c.surface, borderTopColor: c.line, borderTopWidth: 1 },
+            tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+            sceneStyle: { backgroundColor: backdrop },
+          })}
+        >
+          <Tab.Screen name="Dashboard" component={Dashboard} />
+          <Tab.Screen name="Transactions" component={TransactionsScreen} />
+          <Tab.Screen name="Subscriptions" component={SubscriptionsScreen} />
+          <Tab.Screen name="Budget" component={BudgetScreen} />
+          <Tab.Screen name="Settings" component={SettingsScreen} />
+        </Tab.Navigator>
+      </NavigationContainer>
+    </View>
+  )
+}
+
+/** A quiet spinner on the page background while the app gets ready. */
+function Waiting() {
+  const { c, backdrop } = useTheme()
+  return (
+    <View style={{ flex: 1, backgroundColor: backdrop, alignItems: 'center', justifyContent: 'center' }}>
+      <ActivityIndicator color={c.primary} />
+    </View>
+  )
+}
+
+/** Light or dark status bar text to match the theme. */
+function ThemedStatusBar() {
+  const { scheme } = useTheme()
+  return <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+}
+
 export default function App() {
+  return (
+    <ThemeProvider>
+      <ThemedStatusBar />
+      <View style={{ flex: 1 }}>
+        <SpaceBackground />
+        <AppContent />
+      </View>
+    </ThemeProvider>
+  )
+}
+
+function AppContent() {
   const [session, setSession] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [isRecovering, setIsRecovering] = useState(false)
@@ -167,50 +258,19 @@ export default function App() {
     return () => { done = true; clearTimeout(timer) }
   }, [userId])
   
-  if (loading) return null
+  if (loading) return <Waiting />
   if (session && isRecovering) return <ResetPasswordScreen onDone={() => setIsRecovering(false)} />
   if (!session) return <AuthScreen key={linkError ?? "auth"} initialError={linkError} />
-  if (needsCode === null) return null
+  if (needsCode === null) return <Waiting />
   if (needsCode) return <TwoFactorPrompt onDone={() => setNeedsCode(false)} />
-  if (!chargesSynced) return null
+  if (!chargesSynced) return <Waiting />
   
   return (
     <ErrorBoundary>
-    <ToastContext.Provider value={{ showToast }}>
-    <View style={{ flex: 1 }}>
-    <Header userEmail={session.user.email} />
-    <NavigationContainer>
-    <Tab.Navigator
-    screenOptions={({ route }) => ({
-      headerShown: false,
-      tabBarIcon: ({ focused, color, size }) => {
-        let iconName: any
-        if (route.name === 'Dashboard') iconName = focused ? 'home' : 'home-outline'
-        else if (route.name === 'Transactions') iconName = focused ? 'list' : 'list-outline'
-        else if (route.name === 'Subscriptions') iconName = focused ? 'repeat' : 'repeat-outline'
-        else if (route.name === 'Budget') iconName = focused ? 'bar-chart' : 'bar-chart-outline'
-        else if (route.name === 'Settings') iconName = focused ? 'settings' : 'settings-outline'
-        return <Ionicons name={iconName} size={size} color={color} />
-      },
-      tabBarActiveTintColor: '#2980b9',
-      tabBarInactiveTintColor: '#888',
-    })}
-    >
-    <Tab.Screen name="Dashboard" component={Dashboard} />
-    <Tab.Screen name="Transactions" component={TransactionsScreen} />
-    <Tab.Screen name="Subscriptions" component={SubscriptionsScreen} />
-    <Tab.Screen name="Budget" component={BudgetScreen} />
-    <Tab.Screen name="Settings" component={SettingsScreen} />
-    </Tab.Navigator>
-    </NavigationContainer>
-    <Toast
-    message={toast.message}
-    type={toast.type}
-    visible={toast.visible}
-    onHide={hideToast}
-    />
-    </View>
-    </ToastContext.Provider>
+      <ToastContext.Provider value={{ showToast }}>
+        <MainApp userEmail={session.user.email} />
+        <Toast message={toast.message} type={toast.type} visible={toast.visible} onHide={hideToast} />
+      </ToastContext.Provider>
     </ErrorBoundary>
   )
 }

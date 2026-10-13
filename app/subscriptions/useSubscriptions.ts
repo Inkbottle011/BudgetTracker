@@ -19,6 +19,13 @@ export interface SubscriptionDraft {
     note: string
 }
 
+/** "Oct 6" for this year, "Mar 1, 2025" for other years. */
+export function shortDate(date: string, today = localToday()): string {
+    const [y, m, d] = date.split('-').map(Number)
+    const sameYear = String(y) === today.slice(0, 4)
+    return new Date(y, m - 1, d).toLocaleDateString('en-US', sameYear ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
 export function emptyDraft(): SubscriptionDraft {
     return { type: 'Expense', name: '', amount: '', category: '', frequency: 'monthly', startDate: localToday(), endDate: '', note: '' }
 }

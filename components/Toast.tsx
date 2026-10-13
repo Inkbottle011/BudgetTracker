@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react'
-import { Animated, Text, StyleSheet, View } from 'react-native'
+import { Animated, Text, StyleSheet, useWindowDimensions } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
+import { useTheme, useStyles, Palette } from '../lib/theme'
 
 export type ToastType = 'success' | 'error' | 'info'
 
@@ -11,46 +13,64 @@ interface ToastProps {
     duration?: number
 }
 
-export function Toast({ message, type = 'success', visible, onHide, duration = 3000 }: ToastProps) {
+/** A short message that slides in under the header and goes away on its own. Errors stay a little longer. */
+export function Toast({ message, type = 'success', visible, onHide, duration }: ToastProps) {
+    const { c: C } = useTheme()
+    const styles = useStyles(makeStyles)
+    const { width } = useWindowDimensions()
     const opacity = useRef(new Animated.Value(0)).current
-    
+    const shownFor = duration ?? (type === 'error' ? 5000 : 3000)
+
     useEffect(() => {
         if (visible) {
-            Animated.sequence([
+            opacity.setValue(0)
+            const run = Animated.sequence([
                 Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-                Animated.delay(duration),
+                Animated.delay(shownFor),
                 Animated.timing(opacity, { toValue: 0, duration: 300, useNativeDriver: true }),
-            ]).start(() => onHide())
+            ])
+            run.start(({ finished }) => { if (finished) onHide() })
+            return () => run.stop()
         }
-    }, [visible])
-    
+    }, [visible, message])
+
     if (!visible) return null
-    
-    const bgColor = type === 'success' ? '#27ae60' : type === 'error' ? '#e74c3c' : '#2980b9'
-    const icon = type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ'
-    
+
+    const isError = type === 'error'
+    const icon = type === 'success' ? 'checkmark-circle' : isError ? 'alert-circle' : 'information-circle'
+    const fg = C.page // reads well on both the ink and the bad background, in light and dark
+    const narrow = width < 600
+
     return (
-        <Animated.View style={[styles.toast, { backgroundColor: bgColor, opacity }]}>
-        <Text style={styles.icon}>{icon}</Text>
-        <Text style={styles.message}>{message}</Text>
+        <Animated.View
+            accessibilityRole="alert"
+            accessibilityLiveRegion="polite"
+            style={[styles.toast, narrow ? styles.narrow : styles.wide, { backgroundColor: isError ? C.bad : C.ink, opacity }]}
+        >
+            <Ionicons name={icon} size={18} color={fg} />
+            <Text style={[styles.message, { color: fg }]}>{message}</Text>
         </Animated.View>
     )
 }
 
-const styles = StyleSheet.create({
-    toast: { 
-        position: 'absolute', 
-        top: 80, 
-        right: 20,
-        width: 'auto',
-        minWidth: 200,
-        maxWidth: 400,
-        flexDirection: 'row', 
-        alignItems: 'center', 
-        padding: 12, 
-        borderRadius: 12, 
-        gap: 8, 
-        zIndex: 9999 
-    },icon: { color: '#fff', fontWeight: '700', fontSize: 16 },
-    message: { color: '#fff', fontSize: 14, fontWeight: '500', flex: 1 },
+const makeStyles = (C: Palette) => StyleSheet.create({
+    toast: {
+        position: 'absolute',
+        top: 72,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        borderRadius: 12,
+        gap: 10,
+        zIndex: 9999,
+        shadowColor: C.shadow,
+        shadowOpacity: 0.18,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 6,
+    },
+    narrow: { left: 16, right: 16 },
+    wide: { right: 24, minWidth: 240, maxWidth: 420 },
+    message: { fontSize: 14, fontWeight: '500', lineHeight: 19, flex: 1 },
 })

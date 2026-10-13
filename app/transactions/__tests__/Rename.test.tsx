@@ -19,11 +19,11 @@ const nameInput = () => screen.getByPlaceholderText('e.g. Grocery run, Netflix, 
 async function editFirstTacos() {
     await render(<ToastContext.Provider value={{ showToast }}><TransactionsScreen /></ToastContext.Provider>)
     await screen.findByText('Wawa')
-    await fireEvent.press(screen.getByText('Edit'))
-    await fireEvent.press(screen.getAllByText('TACOS TEXAS')[0])
+    await fireEvent.press(screen.getAllByText('TACOS TEXAS')[0]) // tapping a row opens it for editing
 }
 
 beforeEach(() => {
+    jest.spyOn(require('react-native'), 'useWindowDimensions').mockReturnValue({ width: 1280, height: 800, scale: 1, fontScale: 1 })
     fake.reset()
     showToast.mockClear()
     rpc.mockReset()
@@ -44,7 +44,7 @@ it('offers to use a new name for every transaction from that place', async () =>
 it('renames every transaction from that place, keeps their original wording, and remembers the name', async () => {
     await editFirstTacos()
     await fireEvent.changeText(nameInput(), 'Tacos Texas')
-    await fireEvent.press(screen.getByText('Save Changes'))
+    await fireEvent.press(screen.getByText('Save changes'))
     await waitFor(() => expect(showToast).toHaveBeenCalledWith('Renamed 3 TACOS TEXAS transactions to Tacos Texas. New ones will be too.'))
     expect(rpc).toHaveBeenCalledWith('rename_transactions', { p_ids: ['a', 'b', 'c'], p_name: 'Tacos Texas' })
     expect(fake.arg('merchant_renames', 'upsert')).toEqual({ user_id: 'user-1', merchant_key: 'tacos texas', display_name: 'Tacos Texas' })
@@ -56,7 +56,7 @@ it('can rename just this one', async () => {
     await editFirstTacos()
     await fireEvent.changeText(nameInput(), 'Lunch with Sam')
     await fireEvent.press(screen.getByLabelText('Use this name for all "TACOS TEXAS" transactions, now and in the future'))
-    await fireEvent.press(screen.getByText('Save Changes'))
+    await fireEvent.press(screen.getByText('Save changes'))
     await waitFor(() => expect(rpc).toHaveBeenCalledWith('rename_transactions', { p_ids: ['a'], p_name: 'Lunch with Sam' }))
     expect(fake.arg('merchant_renames', 'upsert')).toBeUndefined()
 })
@@ -65,9 +65,11 @@ it('explains the one-time setup if renaming isn\'t set up yet, and still saves t
     rpc.mockResolvedValue({ data: null, error: { message: 'Could not find the function public.rename_transactions' } })
     await editFirstTacos()
     await fireEvent.changeText(nameInput(), 'Tacos Texas')
-    await fireEvent.press(screen.getByText('Save Changes'))
+    await fireEvent.press(screen.getByText('Save changes'))
     await waitFor(() => expect(showToast).toHaveBeenCalledWith(
         'Saved. To rename every TACOS TEXAS transaction, run supabase/sql/merchants/01_setup.sql in Supabase first.', 'error'))
     const updates = fake.calls('transactions').flatMap(c => c.ops.filter(o => o.method === 'update').map(o => o.args[0]))
     expect(updates).toContainEqual({ name: 'Tacos Texas' })
 })
+
+afterEach(() => jest.restoreAllMocks())

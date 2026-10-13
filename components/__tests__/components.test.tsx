@@ -13,6 +13,7 @@ describe('TransactionCard', () => {
         await render(<TransactionCard transaction={{ ...base, name: 'Groceries', note: '' }} />)
         expect(screen.getByText('Groceries')).toBeTruthy()
         expect(screen.getByText('-$12.50')).toBeTruthy()
+        expect(screen.getByText(/^Oct 1/)).toBeTruthy()
     })
 
     it('falls back to the note, then the category, then "Transaction"', async () => {
@@ -26,7 +27,12 @@ describe('TransactionCard', () => {
 
     it('shows income with a plus and copes with amounts stored as text', async () => {
         await render(<TransactionCard transaction={{ ...base, type: 'income', amount: '2000' as any, name: 'Pay' }} />)
-        expect(screen.getByText('+$2000.00')).toBeTruthy()
+        expect(screen.getByText('+$2,000.00')).toBeTruthy()
+    })
+
+    it('shows a transfer between your own accounts without a sign', async () => {
+        await render(<TransactionCard transaction={{ ...base, type: 'transfer' as any, amount: 40, name: 'To savings' }} />)
+        expect(screen.getByText('$40.00')).toBeTruthy()
     })
 })
 
@@ -48,7 +54,7 @@ describe('ErrorBoundary', () => {
         expect(screen.getByText('Something went wrong')).toBeTruthy()
         expect(screen.getByText('Kaboom')).toBeTruthy()
         await fireEvent.press(screen.getByText('fix it'))
-        await fireEvent.press(screen.getByText('Try Again'))
+        await fireEvent.press(screen.getByText('Try again'))
         expect(screen.getByText('All good')).toBeTruthy()
     })
 })

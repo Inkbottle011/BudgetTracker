@@ -1,19 +1,20 @@
+// The budget on a computer: every month side by side, one quiet section per kind of money.
+// Shared pieces (section heading, add-item row, delete button) are also used by the phone view.
+import { ReactNode } from 'react'
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native'
-import { BudgetType, MONTHS, SECTION_COLORS } from './types'
+import { useTheme, useStyles, Palette, typeColors, tabular } from '../../lib/theme'
+import { Button, Section } from '../../components/ui'
+import { formatMoney } from '../../lib/format'
+import { BudgetItem, BudgetType, MONTHS, SECTIONS, SECTION_LABELS, fillLabel } from './types'
 
-interface Props {
-    year: number
-    items: any[]
-    loading: boolean
+export interface BudgetViewProps {
+    items: BudgetItem[]
     addingType: BudgetType | null
     newItemName: string
-    newItemType: BudgetType
     editingCell: { itemId: string; month: number } | null
     editingValue: string
-    onYearChange: (y: number) => void
     onSetAddingType: (t: BudgetType | null) => void
     onNewItemName: (v: string) => void
-    onNewItemType: (t: BudgetType) => void
     onAddItem: () => void
     onDeleteItem: (id: string) => void
     onCellPress: (itemId: string, month: number, current: number) => void
@@ -28,239 +29,249 @@ interface Props {
     getNetTotal: () => number
 }
 
-const SECTIONS: BudgetType[] = ['income', 'expense', 'savings', 'investment']
+/** Whole dollars for the grid: "$1,200", "-$270". */
+export const dollars = (n: number) => formatMoney(n, { cents: false })
 
-export function BudgetTable({
-    year, items, loading,
-    addingType, newItemName,
-    editingCell, editingValue,
-    onYearChange, onSetAddingType, onNewItemName,
-    onAddItem, onDeleteItem, onCellPress, onCellChange, onCellSave, onCellCancel,
-    getAmount, getRowTotal, getMonthTotal, getSectionTotal,getNetByMonth, getNetTotal,
-}: Props) {
-    
-    function renderSection(type: BudgetType) {
-        const colors = SECTION_COLORS[type]
-        const sectionItems = items.filter(i => i.type === type)
-        const label = type.charAt(0).toUpperCase() + type.slice(1)
-        
-        return (
-            
-            <View key={type} style={[styles.section, { borderColor: colors.border }]}>
-            {/* Section Header */}
-            <View style={[styles.sectionHeader, { backgroundColor: colors.header }]}>
-            <Text style={styles.sectionHeaderText}>{label}</Text>
-            {MONTHS.map((m) => (
-                <Text key={m} style={styles.sectionHeaderCell}>{m}</Text>
-            ))}
-            <Text style={styles.sectionHeaderTotal}>Total</Text>
-            <View style={styles.colAction} />
-            </View>
-            
-            {/* Rows */}
-            {sectionItems.map(item => (
-                <View key={item.id} style={[styles.row, { backgroundColor: colors.light }]}>
-                <View style={styles.colName}>
-                <Text style={[styles.itemName, { color: colors.text }]}>{item.name}</Text>
-                </View>
-                {Array.from({ length: 12 }, (_, i) => i + 1).map(month => {
-                    const isEditing = editingCell?.itemId === item.id && editingCell?.month === month
-                    const amount = getAmount(item.id, month)
-                    return (
-                        <TouchableOpacity
-                        key={month}
-                        style={styles.cell}
-                        accessibilityLabel={`${item.name}, ${MONTHS[month - 1]}`}
-                        onPress={() => {
-                            if (editingCell) return
-                            onCellPress(item.id, month, amount)
-                        }}
-                        >
-                        {isEditing ? (
-                            <View style={styles.cellEditContainer}>
-                            <TextInput
-                            accessibilityLabel={`${item.name}, ${MONTHS[month - 1]} amount`}
-                            style={styles.cellInput}
-                            value={editingValue}
-                            onChangeText={onCellChange}
-                            keyboardType="decimal-pad"
-                            autoFocus
-                            placeholderTextColor="#aaa"
-                            />
-                            <View style={styles.cellActions}>
-                            <TouchableOpacity
-                            style={styles.cellActionBtn}
-                            onPress={() => onCellSave(item.id, month, editingValue, false)}
-                            accessibilityLabel="Save this month only"
-                            // @ts-ignore
-                            title="Save this month only"
-                            >
-                            <Text style={styles.cellActionText}>✓</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                            style={[styles.cellActionBtn, { backgroundColor: colors.header }]}
-                            onPress={() => onCellSave(item.id, month, editingValue, true)}
-                            accessibilityLabel="Fill this month and all months to the right"
-                            // @ts-ignore
-                            title="Fill this month and all months to the right"
-                            >
-                            <Text style={[styles.cellActionText, { color: '#fff' }]}>→</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                            style={styles.cellActionBtn}
-                            onPress={() => onCellCancel()}
-                            accessibilityLabel="Cancel"
-                            // @ts-ignore
-                            title="Cancel"
-                            >
-                            <Text style={[styles.cellActionText, { color: '#e74c3c' }]}>✕</Text>
-                            </TouchableOpacity>
-                            </View>
-                            </View>
-                        ) : (
-                            <Text style={[styles.cellText, amount > 0 && { color: colors.text, fontWeight: '500' }]}>
-                            {amount > 0 ? `$${amount.toLocaleString()}` : ''}
-                            </Text>
-                        )}
-                        </TouchableOpacity>
-                    )
-                })}
-                <Text style={[styles.rowTotal, { color: colors.text }]}>
-                ${getRowTotal(item.id).toLocaleString()}
-                </Text>
-                <TouchableOpacity style={styles.colAction} onPress={() => onDeleteItem(item.id)} accessibilityLabel={`Delete ${item.name}`}>
-                <Text style={styles.deleteIcon}>✕</Text>
-                </TouchableOpacity>
-                </View>
-            ))}
-            
-            {/* Add Row */}
-            {addingType === type ? (
-                <View style={[styles.row, { backgroundColor: colors.light }]}>
-                <View style={styles.colName}>
-                <TextInput
-                style={styles.addInput}
-                placeholder="Name..."
-                value={newItemName}
-                onChangeText={onNewItemName}
-                autoFocus
-                placeholderTextColor="#aaa"
-                />
-                </View>
-                <TouchableOpacity style={[styles.addConfirmBtn, { backgroundColor: colors.header }]} onPress={onAddItem}>
-                <Text style={styles.addConfirmText}>Add</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.addCancelBtn} onPress={() => onSetAddingType(null)}>
-                <Text style={styles.addCancelText}>Cancel</Text>
-                </TouchableOpacity>
-                </View>
-            ) : (
-                <TouchableOpacity
-                style={[styles.addRowBtn, { borderColor: colors.border }]}
-                onPress={() => onSetAddingType(type)}
-                >
-                <Text style={[styles.addRowText, { color: colors.text }]}>+ Add {label} Item</Text>
-                </TouchableOpacity>
-            )}
-            
-            {/* Section Total Row */}
-            <View style={[styles.totalRow, { backgroundColor: colors.header }]}>
-            <Text style={styles.totalLabel}>Total</Text>
-            {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
-                <Text key={month} style={styles.totalCell}>
-                ${getMonthTotal(type, month).toLocaleString()}
-                </Text>
-            ))}
-            <Text style={styles.totalCell}>${getSectionTotal(type).toLocaleString()}</Text>
-            <View style={styles.colAction} />
-            </View>
-            </View>
-        )
-    }
-    
+const MONTH_NUMBERS = Array.from({ length: 12 }, (_, i) => i + 1)
+
+export function BudgetTable(props: BudgetViewProps) {
+    const styles = useStyles(makeStyles)
     return (
-        <View style={styles.container}>
-        {/* Year Selector */}
-        <View style={styles.yearBar}>
-        <TouchableOpacity onPress={() => onYearChange(year - 1)} style={styles.yearBtn} accessibilityLabel="Previous year">
-        <Text style={styles.yearBtnText}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.yearText}>{year}</Text>
-        <TouchableOpacity onPress={() => onYearChange(year + 1)} style={styles.yearBtn} accessibilityLabel="Next year">
-        <Text style={styles.yearBtnText}>→</Text>
-        </TouchableOpacity>
-        </View>
-        
-        {loading ? (
-            <Text style={styles.loading}>Loading...</Text>
-        ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-            <ScrollView>
-            {/* Net Row */}
-            <View style={styles.netRow}>
-            <Text style={styles.netLabel}>Net</Text>
-            {Array.from({ length: 12 }, (_, i) => i + 1).map(month => {
-                const net = getNetByMonth(month)
-                return (
-                    <Text key={month} style={[styles.netCell, { color: net >= 0 ? '#27ae60' : '#e74c3c' }]}>
-                    {net >= 0 ? '+' : ''}${net.toLocaleString()}
-                    </Text>
-                )
-            })}
-            <Text style={[styles.netCell, styles.netTotal, { color: getNetTotal() >= 0 ? '#27ae60' : '#e74c3c' }]}>
-            {getNetTotal() >= 0 ? '+' : ''}${getNetTotal().toLocaleString()}
-            </Text>
-            <View style={styles.colAction} />
-            </View>
-            {SECTIONS.map(renderSection)}
-            </ScrollView>
-            </ScrollView>
-        )}
+        <View>
+            <LeftOverGrid getNetByMonth={props.getNetByMonth} getNetTotal={props.getNetTotal} />
+            {SECTIONS.map(type => (
+                <Section key={type}>
+                    <SectionHeading type={type} />
+                    <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={styles.gridScroll}>
+                        <GridSection type={type} {...props} />
+                    </ScrollView>
+                </Section>
+            ))}
         </View>
     )
 }
 
-const COL_WIDTH = 80
-const NAME_WIDTH = 160
-const ACTION_WIDTH = 36
+/** "Left over each month": income minus spending, savings and investments. */
+function LeftOverGrid({ getNetByMonth, getNetTotal }: Pick<BudgetViewProps, 'getNetByMonth' | 'getNetTotal'>) {
+    const { c: C } = useTheme()
+    const styles = useStyles(makeStyles)
+    const tone = (n: number) => (n < 0 ? { color: C.bad } : n > 0 ? { color: C.good } : null)
+    const total = getNetTotal()
+    return (
+        <Section>
+            <Text style={styles.leftTitle}>Left over each month</Text>
+            <Text style={styles.leftHint}>Income minus spending, savings and investments. Below zero means you've planned more than comes in.</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={styles.gridScroll}>
+                <View>
+                    <HeaderRow />
+                    <View style={styles.row}>
+                        <View style={styles.colName}><Text style={styles.itemName}>Left over</Text></View>
+                        {MONTH_NUMBERS.map(m => {
+                            const net = getNetByMonth(m)
+                            return <Text key={m} style={[styles.cellText, styles.cellStatic, styles.bold, tone(net)]}>{dollars(net)}</Text>
+                        })}
+                        <Text style={[styles.colTotal, styles.bold, tone(total)]}>{dollars(total)}</Text>
+                        <View style={styles.colAction} />
+                    </View>
+                </View>
+            </ScrollView>
+        </Section>
+    )
+}
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#f5f6fa', padding: 16 },
-    yearBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16, gap: 16 },
-    yearBtn: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#2980b9' },
-    yearBtnText: { fontSize: 16, color: '#2980b9', fontWeight: '700' },
-    yearText: { fontSize: 22, fontWeight: '700', color: '#2c3e50', minWidth: 60, textAlign: 'center' },
-    loading: { textAlign: 'center', color: '#aaa', marginTop: 40 },
-    section: { marginBottom: 24, borderRadius: 8, overflow: 'hidden', borderWidth: 1 },
-    sectionHeader: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 4 },
-    sectionHeaderText: { width: NAME_WIDTH, color: '#fff', fontWeight: '700', fontSize: 14, paddingLeft: 8 },
-    sectionHeaderCell: { width: COL_WIDTH, color: '#fff', fontWeight: '600', fontSize: 12, textAlign: 'center' },
-    sectionHeaderTotal: { width: COL_WIDTH, color: '#fff', fontWeight: '700', fontSize: 12, textAlign: 'center' },
-    row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, paddingHorizontal: 4, borderTopWidth: 0.5, borderColor: '#ddd' },
-    colName: { width: NAME_WIDTH, paddingLeft: 8, flexDirection: 'row', alignItems: 'center', gap: 6 },
+function HeaderRow() {
+    const styles = useStyles(makeStyles)
+    return (
+        <View style={styles.headRow}>
+            <View style={styles.colName} />
+            {MONTHS.map(m => <Text key={m} style={[styles.headText, styles.colMonth]}>{m}</Text>)}
+            <Text style={[styles.headText, styles.colTotal]}>Year</Text>
+            <View style={styles.colAction} />
+        </View>
+    )
+}
+
+function GridSection({ type, ...p }: BudgetViewProps & { type: BudgetType }) {
+    const { c: C } = useTheme()
+    const styles = useStyles(makeStyles)
+    const sectionItems = p.items.filter(i => i.type === type)
+    return (
+        <View>
+            <HeaderRow />
+            {sectionItems.map((item, index) => (
+                <View key={item.id} style={[styles.row, index % 2 === 1 && styles.rowAlt]}>
+                    <View style={styles.colName}><Text style={styles.itemName} numberOfLines={2}>{item.name}</Text></View>
+                    {MONTH_NUMBERS.map(month => {
+                        const isEditing = p.editingCell?.itemId === item.id && p.editingCell?.month === month
+                        const amount = p.getAmount(item.id, month)
+                        const where = `${item.name}, ${MONTHS[month - 1]}`
+                        if (isEditing) {
+                            return (
+                                <View key={month} style={styles.colMonth}>
+                                    <TextInput
+                                        accessibilityLabel={`${where} amount`}
+                                        style={[styles.cellInput, tabular]}
+                                        value={p.editingValue}
+                                        onChangeText={p.onCellChange}
+                                        onSubmitEditing={() => p.onCellSave(item.id, month, p.editingValue, false)}
+                                        keyboardType="decimal-pad"
+                                        autoFocus
+                                        placeholder="0"
+                                        placeholderTextColor={C.faint}
+                                    />
+                                    <View style={styles.cellActions}>
+                                        <IconButton label="Save this month only" glyph="✓" tone="primary" onPress={() => p.onCellSave(item.id, month, p.editingValue, false)} />
+                                        {month < 12 && <IconButton label={fillLabel(month)} glyph="→" tone="primary" onPress={() => p.onCellSave(item.id, month, p.editingValue, true)} />}
+                                        <IconButton label="Cancel" glyph="×" onPress={p.onCellCancel} />
+                                    </View>
+                                </View>
+                            )
+                        }
+                        return (
+                            <TouchableOpacity
+                                key={month}
+                                style={styles.colMonth}
+                                accessibilityRole="button"
+                                accessibilityLabel={where}
+                                onPress={() => { if (!p.editingCell) p.onCellPress(item.id, month, amount) }}
+                            >
+                                <Text style={[styles.cellText, amount === 0 && styles.cellEmpty]}>{amount === 0 ? '–' : dollars(amount)}</Text>
+                            </TouchableOpacity>
+                        )
+                    })}
+                    <Text style={[styles.colTotal, styles.bold]}>{dollars(p.getRowTotal(item.id))}</Text>
+                    <View style={styles.colAction}><DeleteButton name={item.name} onPress={() => p.onDeleteItem(item.id)} /></View>
+                </View>
+            ))}
+
+            <AddItemRow type={type} {...p} />
+
+            <View style={[styles.row, styles.totalRow]}>
+                <View style={styles.colName}><Text style={[styles.itemName, styles.bold]}>Total</Text></View>
+                {MONTH_NUMBERS.map(month => (
+                    <Text key={month} style={[styles.cellText, styles.cellStatic, styles.bold]}>{dollars(p.getMonthTotal(type, month))}</Text>
+                ))}
+                <Text style={[styles.colTotal, styles.bold]}>{dollars(p.getSectionTotal(type))}</Text>
+                <View style={styles.colAction} />
+            </View>
+        </View>
+    )
+}
+
+/** Small colored dot + section name, e.g. "• Spending", with optional content on the right. */
+export function SectionHeading({ type, right }: { type: BudgetType; right?: ReactNode }) {
+    const { c: C } = useTheme()
+    const styles = useStyles(makeStyles)
+    return (
+        <View style={styles.heading}>
+            <View style={styles.headingLeft}>
+                <View style={[styles.dot, { backgroundColor: typeColors(type, C).fg }]} />
+                <Text style={styles.headingText} accessibilityRole="header">{SECTION_LABELS[type].title}</Text>
+            </View>
+            {right}
+        </View>
+    )
+}
+
+/** "+ Add item", which turns into a name box with Add and Cancel. */
+export function AddItemRow({ type, addingType, newItemName, onNewItemName, onAddItem, onSetAddingType }:
+    Pick<BudgetViewProps, 'addingType' | 'newItemName' | 'onNewItemName' | 'onAddItem' | 'onSetAddingType'> & { type: BudgetType }) {
+    const { c: C } = useTheme()
+    const styles = useStyles(makeStyles)
+    const label = SECTION_LABELS[type]
+    if (addingType !== type) {
+        return (
+            <View style={styles.addRow}>
+                <Button variant="ghost" small label="+ Add item" accessibilityLabel={`Add a ${label.noun} item`} onPress={() => onSetAddingType(type)} />
+            </View>
+        )
+    }
+    return (
+        <View style={[styles.addRow, styles.addRowOpen]}>
+            <TextInput
+                accessibilityLabel={`New ${label.noun} item name`}
+                style={styles.addInput}
+                placeholder={`Name, e.g. ${label.example}`}
+                placeholderTextColor={C.faint}
+                value={newItemName}
+                onChangeText={onNewItemName}
+                onSubmitEditing={onAddItem}
+                autoFocus
+            />
+            <Button small label="Add" onPress={onAddItem} />
+            <Button small variant="secondary" label="Cancel" accessibilityLabel="Cancel new item" onPress={() => onSetAddingType(null)} />
+        </View>
+    )
+}
+
+export function DeleteButton({ name, onPress }: { name: string; onPress: () => void }) {
+    const styles = useStyles(makeStyles)
+    return (
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Delete ${name}`} onPress={onPress} style={styles.iconBtn} hitSlop={8}>
+            <Text style={styles.deleteGlyph}>×</Text>
+        </TouchableOpacity>
+    )
+}
+
+function IconButton({ label, glyph, onPress, tone }: { label: string; glyph: string; onPress: () => void; tone?: 'primary' }) {
+    const { c: C } = useTheme()
+    const styles = useStyles(makeStyles)
+    return (
+        <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={label}
+            // @ts-ignore: shows a tooltip on the web
+            title={label}
+            onPress={onPress}
+            style={[styles.cellBtn, tone === 'primary' && { backgroundColor: C.primarySoft, borderColor: C.primarySoft }]}
+        >
+            <Text style={[styles.cellBtnText, { color: tone === 'primary' ? C.primary : C.muted }]}>{glyph}</Text>
+        </TouchableOpacity>
+    )
+}
+
+const NAME_WIDTH = 170
+const COL_WIDTH = 72
+const TOTAL_WIDTH = 92
+const ACTION_WIDTH = 32
+
+const makeStyles = (C: Palette) => StyleSheet.create({
+    gridScroll: { flexGrow: 1 },
+    heading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10 },
+    headingLeft: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
+    dot: { width: 10, height: 10, borderRadius: 5 },
+    headingText: { fontSize: 18, fontWeight: '700', color: C.ink },
+    leftTitle: { fontSize: 18, fontWeight: '700', color: C.ink },
+    leftHint: { fontSize: 13, color: C.muted, marginTop: 4, marginBottom: 10, lineHeight: 18 },
+
+    headRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1, borderColor: C.line },
+    headText: { fontSize: 12, color: C.muted, fontWeight: '600', textAlign: 'right', paddingHorizontal: 6 },
+    row: { flexDirection: 'row', alignItems: 'center', minHeight: 40, borderRadius: 8 },
+    rowAlt: { backgroundColor: C.surfaceAlt },
+    totalRow: { borderTopWidth: 1, borderColor: C.line, borderRadius: 0, marginTop: 2 },
+    colName: { width: NAME_WIDTH, paddingHorizontal: 8 },
+    colMonth: { width: COL_WIDTH, paddingVertical: 6 },
+    colTotal: { width: TOTAL_WIDTH, fontSize: 13, color: C.ink, textAlign: 'right', paddingHorizontal: 6, ...tabular },
     colAction: { width: ACTION_WIDTH, alignItems: 'center' },
-    itemName: { fontSize: 13, fontWeight: '500', flex: 1 },
-    cell: { width: COL_WIDTH, alignItems: 'center', paddingVertical: 4 },
-    cellEditContainer: { alignItems: 'center' },
-    cellInput: { width: COL_WIDTH - 8, borderWidth: 1, borderColor: '#2980b9', borderRadius: 4, padding: 4, fontSize: 12, textAlign: 'center', backgroundColor: '#fff' },
-    cellActions: { flexDirection: 'row', gap: 2, marginTop: 2 },
-    cellActionBtn: { width: 22, height: 22, borderRadius: 4, borderWidth: 1, borderColor: '#ddd', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8f9fa' },
-    cellActionText: { fontSize: 11, fontWeight: '700', color: '#555' },
-    cellText: { fontSize: 12, color: '#aaa', textAlign: 'center' },
-    rowTotal: { width: COL_WIDTH, fontSize: 13, fontWeight: '700', textAlign: 'center' },
-    deleteIcon: { fontSize: 12, color: '#e74c3c' },
-    addRowBtn: { padding: 10, alignItems: 'center', borderTopWidth: 0.5, borderStyle: 'dashed' },
-    addRowText: { fontSize: 13, fontWeight: '600' },
-    addInput: { flex: 1, borderWidth: 1, borderColor: '#ddd', borderRadius: 6, padding: 6, fontSize: 13, backgroundColor: '#fff' },
-    addConfirmBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, marginLeft: 8 },
-    addConfirmText: { color: '#fff', fontWeight: '600', fontSize: 13 },
-    addCancelBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#ddd', marginLeft: 4 },
-    addCancelText: { color: '#555', fontSize: 13 },
-    totalRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 4 },
-    totalLabel: { width: NAME_WIDTH, color: '#fff', fontWeight: '700', fontSize: 13, paddingLeft: 8 },
-    totalCell: { width: COL_WIDTH, color: '#fff', fontWeight: '700', fontSize: 12, textAlign: 'center' },
-    netRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#2c3e50', borderRadius: 8, padding: 8, marginBottom: 16 },
-    netLabel: { width: NAME_WIDTH, color: '#fff', fontWeight: '700', fontSize: 14, paddingLeft: 8 },
-    netCell: { width: COL_WIDTH, fontSize: 12, fontWeight: '600', textAlign: 'center' },
-    netTotal: { fontSize: 13, fontWeight: '700' },
+    itemName: { fontSize: 14, color: C.ink },
+    bold: { fontWeight: '700' },
+    cellText: { fontSize: 13, color: C.text, textAlign: 'right', paddingHorizontal: 6, ...tabular },
+    cellStatic: { width: COL_WIDTH },
+    cellEmpty: { color: C.faint },
+    cellInput: {
+        marginHorizontal: 3, borderWidth: 1, borderColor: C.primary, borderRadius: 8, paddingVertical: 4, paddingHorizontal: 6,
+        fontSize: 13, textAlign: 'right', color: C.ink, backgroundColor: C.surface,
+    },
+    cellActions: { flexDirection: 'row', justifyContent: 'center', gap: 2, marginTop: 4 },
+    cellBtn: { width: 20, height: 20, borderRadius: 6, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' },
+    cellBtnText: { fontSize: 12, fontWeight: '700', lineHeight: 14 },
+    iconBtn: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    deleteGlyph: { fontSize: 18, lineHeight: 20, color: C.faint },
+
+    addRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, paddingHorizontal: 4 },
+    addRowOpen: { gap: 8, flexWrap: 'wrap' },
+    addInput: {
+        flexGrow: 1, flexBasis: 160, maxWidth: 320, backgroundColor: C.surfaceAlt, borderRadius: 10, borderWidth: 1, borderColor: C.line,
+        paddingHorizontal: 12, paddingVertical: 8, fontSize: 14, color: C.ink,
+    },
 })

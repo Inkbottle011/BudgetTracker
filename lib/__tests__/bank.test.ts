@@ -100,3 +100,15 @@ describe('formatBalance', () => {
         expect(formatBalance(null)).toBe('—')
     })
 })
+
+import { isSavingsAccount } from '../bank'
+
+describe('isSavingsAccount', () => {
+    it('counts savings, vaults ("cash management") and money market accounts, not checking or cards', () => {
+        expect(isSavingsAccount({ type: 'depository', subtype: 'savings' })).toBe(true)
+        expect(isSavingsAccount({ type: 'depository', subtype: 'cash management' })).toBe(true)
+        expect(isSavingsAccount({ type: 'depository', subtype: 'money market' })).toBe(true)
+        expect(isSavingsAccount({ type: 'depository', subtype: 'checking' })).toBe(false)
+        expect(isSavingsAccount({ type: 'credit', subtype: 'savings' })).toBe(false)
+    })
+})

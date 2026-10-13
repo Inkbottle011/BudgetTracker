@@ -35,8 +35,8 @@ async function openAndPick(text = CSV) {
     pickFile(text)
     const onImported = jest.fn()
     await render(<ImportModal visible onClose={jest.fn()} onImported={onImported} />)
-    await fireEvent.press(screen.getByText('📂 Choose CSV File'))
-    await screen.findByText('Match Columns')
+    await fireEvent.press(screen.getByText('Choose a CSV file'))
+    await screen.findByText('Match columns')
     return onImported
 }
 
@@ -56,7 +56,7 @@ it('guesses the columns and shows a sample value for each', async () => {
 it('requires a date and an amount column', async () => {
     database()
     await openAndPick('Foo,Bar\n1,2')
-    await fireEvent.press(screen.getByText('Preview →'))
+    await fireEvent.press(screen.getByText('Preview'))
     expect(screen.getByText('Pick which column is the Date.')).toBeTruthy()
 })
 
@@ -66,19 +66,19 @@ it('reviews before importing: ready, already imported and left out, with reasons
         history: [{ name: 'Blue Bottle Coffee', category_label: 'Coffee', type: 'expense' }],
     })
     await openAndPick()
-    await fireEvent.press(screen.getByText('Preview →'))
-    expect(await screen.findByText('Review Import')).toBeTruthy()
+    await fireEvent.press(screen.getByText('Preview'))
+    expect(await screen.findByText('Review import')).toBeTruthy()
     expect(screen.getByText(/Row 4: "Payment Thank You-Mobile" looks like a credit card payment/)).toBeTruthy()
     expect(screen.getByText(/Row 5: can't read the date "13\/45\/2026"/)).toBeTruthy()
     expect(screen.getByText('1 transaction was given a category based on how you categorized the same place before.')).toBeTruthy()
-    expect(screen.getByText('Import 2 Transactions')).toBeTruthy()
+    expect(screen.getByText('Import 2 transactions')).toBeTruthy()
 })
 
 it('imports the ready rows and reports the result', async () => {
     database({ history: [{ name: 'Blue Bottle Coffee', category_label: 'Coffee', type: 'expense' }] })
     const onImported = await openAndPick()
-    await fireEvent.press(screen.getByText('Preview →'))
-    await fireEvent.press(await screen.findByText('Import 3 Transactions'))
+    await fireEvent.press(screen.getByText('Preview'))
+    await fireEvent.press(await screen.findByText('Import 3 transactions'))
     expect(await screen.findByText('Imported 3 transactions')).toBeTruthy()
     expect(inserted()).toEqual([
         expect.objectContaining({ user_id: 'user-1', date: '2026-10-01', amount: 6.5, type: 'expense', category_label: 'Coffee' }),
@@ -91,8 +91,8 @@ it('imports the ready rows and reports the result', async () => {
 it('lists rows the database rejected instead of counting them as imported', async () => {
     database({ rejectName: 'NETFLIX.COM' })
     await openAndPick()
-    await fireEvent.press(screen.getByText('Preview →'))
-    await fireEvent.press(await screen.findByText('Import 3 Transactions'))
+    await fireEvent.press(screen.getByText('Preview'))
+    await fireEvent.press(await screen.findByText('Import 3 transactions'))
     expect(await screen.findByText('Imported 2 transactions')).toBeTruthy()
     expect(screen.getByText("1 couldn't be saved")).toBeTruthy()
     expect(screen.getByText('Row 3 (NETFLIX.COM): value too long')).toBeTruthy()
@@ -107,7 +107,7 @@ it('says there is nothing new when the whole file was imported before', async ()
         ],
     })
     await openAndPick()
-    await fireEvent.press(screen.getByText('Preview →'))
+    await fireEvent.press(screen.getByText('Preview'))
     expect(await screen.findByText('Nothing new to import.')).toBeTruthy()
     expect(screen.queryByText(/^Import \d/)).toBeNull()
 })
@@ -116,8 +116,8 @@ it('reads cards that show spending as positive numbers', async () => {
     database()
     await openAndPick('Date,Description,Amount\n10/01/2026,Shop,15.99\n10/02/2026,Refund,-5.00')
     await fireEvent.press(screen.getByText('Positive (12.50)'))
-    await fireEvent.press(screen.getByText('Preview →'))
-    await fireEvent.press(await screen.findByText('Import 2 Transactions'))
+    await fireEvent.press(screen.getByText('Preview'))
+    await fireEvent.press(await screen.findByText('Import 2 transactions'))
     await screen.findByText('Imported 2 transactions')
     expect(inserted().map(t => t.type)).toEqual(['expense', 'reimbursement']) // the refund reduces spending
 })
@@ -126,6 +126,6 @@ it('explains when the file has no rows', async () => {
     database()
     pickFile('')
     await render(<ImportModal visible onClose={jest.fn()} onImported={jest.fn()} />)
-    await fireEvent.press(screen.getByText('📂 Choose CSV File'))
+    await fireEvent.press(screen.getByText('Choose a CSV file'))
     expect(await screen.findByText(/doesn't have any rows we could read/)).toBeTruthy()
 })

@@ -4,7 +4,7 @@ import { useTransactionStore } from '../../store/useTransactionStore'
 import { EditingTransaction } from './types'
 import { useToastContext } from '../../context/ToastContext'
 import { parseAmount, parseDate, todayString, merchantKey } from '../../lib/entry'
-import { withRunningBalance, filterTransactions, sortTransactions, toCSV } from './listLogic'
+import { filterTransactions, sortTransactions, toCSV } from './listLogic'
 import { totalShares } from '../../lib/splits'
 
 export function useTransactionLogic() {
@@ -33,7 +33,6 @@ export function useTransactionLogic() {
     const [selected, setSelected] = useState<Set<string>>(new Set())
     const [deleting, setDeleting] = useState(false)
     const [confirmDelete, setConfirmDelete] = useState(false)
-    const [editMode, setEditMode] = useState(false)
     
     // Search/filter/sort state
     const [search, setSearch] = useState('')
@@ -46,7 +45,6 @@ export function useTransactionLogic() {
     
     const [page, setPage] = useState(0)
     const PAGE_SIZE = 20
-    const [duplicateMode, setDuplicateMode] = useState(false)
     const [budgetCategories, setBudgetCategories] = useState<Record<string, string[]>>({
         Income: [], Expense: [], Savings: [], Investment: []
     })
@@ -115,10 +113,11 @@ export function useTransactionLogic() {
         setErrors({})
     }
     
-    async function handleAdd() {
+    /** Saves the add form. Resolves true when the transaction was added. */
+    async function handleAdd(): Promise<boolean> {
         const { data: { session } } = await supabase.auth.getSession()
-        if (!session) return
-        if (!validate()) return
+        if (!session) return false
+        if (!validate()) return false
         setSaving(true)
         setErrors({})
         const shares = type === 'Expense' ? filledSplits() : []
@@ -154,6 +153,7 @@ export function useTransactionLogic() {
             showToast('Failed to add transaction', 'error')
         }
         setSaving(false)
+        return !error
     }
     
     async function handleSaveEdit() {
@@ -216,29 +216,28 @@ export function useTransactionLogic() {
         return { ok: `Renamed ${ids.length} ${place} transaction${ids.length === 1 ? '' : 's'} to ${newName}. New ones will be too.` }
     }
 
+    /** Tapping a row: picks it in select mode, otherwise opens it for editing. */
     function handleEditSelect(t: any) {
         if (selectMode) { toggleSelect(t.id); return }
-        if (duplicateMode) {
-            handleDuplicate(t)
-            setDuplicateMode(false)
-            return
-        }
-        if (editMode) {
-            setEditingTransaction({
-                id: t.id,
-                type: t.type.charAt(0).toUpperCase() + t.type.slice(1),
-                category: t.category_label || '',
-                name: t.name || '',
-                startName: t.name || '',
-                placeName: t.original_name || t.name || '',
-                renameAll: true,
-                amount: String(t.amount),
-                details: t.note || '',
-                date: t.date,
-            })
-            setEditMode(false)
-            return
-        }
+        setEditingTransaction({
+            id: t.id,
+            type: t.type.charAt(0).toUpperCase() + t.type.slice(1),
+            category: t.category_label || '',
+            name: t.name || '',
+            startName: t.name || '',
+            placeName: t.original_name || t.name || '',
+            renameAll: true,
+            amount: String(t.amount),
+            details: t.note || '',
+            date: t.date,
+        })
+    }
+
+    /** "Duplicate" in the edit form: adds a copy of the saved transaction dated today, and closes the editor. */
+    async function duplicateEditing() {
+        const original = editingTransaction && transactions.find(x => x.id === editingTransaction.id)
+        if (!original) return
+        if (await handleDuplicate(original)) setEditingTransaction(null)
     }
     
     function toggleSelect(id: string) {
@@ -312,9 +311,10 @@ export function useTransactionLogic() {
         }
     }
     
-    async function handleDuplicate(t: any) {
+    /** Adds a copy of a transaction, dated today. Resolves true when it was saved. */
+    async function handleDuplicate(t: any): Promise<boolean> {
         const { data: { session } } = await supabase.auth.getSession()
-        if (!session) return
+        if (!session) return false
         const { error } = await supabase.from('transactions').insert({
             user_id: session.user.id,
             type: t.type,
@@ -327,19 +327,21 @@ export function useTransactionLogic() {
         })
         if (!error) {
             fetchTransactions()
-            showToast('Transaction duplicated!')
+            showToast('Added a copy dated today')
         } else {
-            showToast('Failed to duplicate transaction', 'error')
+            showToast("Couldn't add a copy. Check your connection and try again.", 'error')
         }
+        return !error
     }
     
     const totalRows = sortTransactions(
-        filterTransactions(withRunningBalance(transactions), { search, type: filterType, from: filterFrom, to: filterTo }),
+        filterTransactions(transactions, { search, type: filterType, from: filterFrom, to: filterTo }),
         sortCol, sortDir,
     )
     
     const rows = totalRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
     const totalPages = Math.ceil(totalRows.length / PAGE_SIZE)
+    const filtering = !!(search.trim() || filterType || filterFrom || filterTo)
     
     return {
         type, setType, category, setCategory, amount, setAmount,
@@ -348,8 +350,7 @@ export function useTransactionLogic() {
         handleAdd, applySuggestion, transactions,
         splitOpen, openSplit, closeSplit, splits, setSplits, splitEvenly,
         editingTransaction, setEditingTransaction,
-        handleSaveEdit, handleEditSelect,
-        editMode, setEditMode,
+        handleSaveEdit, handleEditSelect, duplicateEditing,
         selectMode, setSelectMode, selected,
         deleting, confirmDelete, setConfirmDelete,
         toggleSelect, exitSelectMode, handleDelete,
@@ -359,9 +360,9 @@ export function useTransactionLogic() {
         filterTo, setFilterTo,
         showFilters, setShowFilters,
         sortCol, sortDir, handleSort,
-        rows,
+        rows, filtering,
         page, setPage, totalPages,
-        exportToCSV, handleDuplicate, duplicateMode, setDuplicateMode,
+        exportToCSV, handleDuplicate,
         budgetCategories,
         showImport, setShowImport,fetchTransactions,
     }

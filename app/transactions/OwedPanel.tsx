@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
+import { Button } from '../../components/ui'
+import { useStyles, Palette, tabular } from '../../lib/theme'
+import { formatMoney } from '../../lib/format'
+import { displayDate } from './listLogic'
 import { supabase } from '../../lib/supabase'
 import { todayString } from '../../lib/entry'
 import { owedToYou, matchingPayments, SplitShare } from '../../lib/splits'
@@ -11,11 +15,13 @@ interface Props {
     onChanged: () => void
 }
 
-const money = (n: number | string) => `$${Number(n).toFixed(2)}`
+const money = (n: number | string) => formatMoney(Number(n))
 
 /** "Owed to you": who still has to pay you back for split expenses, and recording when they do. */
 export function OwedPanel({ transactions, onChanged }: Props) {
     const { showToast } = useToastContext()
+    const styles = useStyles(makeStyles)
+    const today = todayString()
     const [shares, setShares] = useState<SplitShare[]>([])
     const [open, setOpen] = useState(false)
     const [busy, setBusy] = useState(false)
@@ -85,12 +91,20 @@ export function OwedPanel({ transactions, onChanged }: Props) {
     }
 
     return (
-        <View style={styles.wrap}>
-            <TouchableOpacity style={styles.bar} onPress={() => setOpen(o => !o)}>
-                <Text style={styles.barText}>Owed to you: {money(owed.total)}</Text>
-                <Text style={styles.barHint}>
-                    {owed.byPerson.map(p => `${p.person} ${money(p.amount)}`).join(' · ')}  {open ? '▲' : '▼'}
-                </Text>
+        <View style={styles.box}>
+            <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityState={{ expanded: open }}
+                style={styles.bar}
+                onPress={() => setOpen(o => !o)}
+            >
+                <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={styles.barText}>Owed to you: {money(owed.total)}</Text>
+                    <Text style={styles.barHint} numberOfLines={open ? undefined : 1}>
+                        {owed.byPerson.map(p => `${p.person} ${money(p.amount)}`).join(' · ')}
+                    </Text>
+                </View>
+                <Text style={styles.toggle}>{open ? 'Hide' : 'Show'}</Text>
             </TouchableOpacity>
 
             {open && (
@@ -98,41 +112,43 @@ export function OwedPanel({ transactions, onChanged }: Props) {
                     {owed.expenses.map(({ expense, unpaid, outstanding }) => (
                         <View key={expense.id} style={styles.expense}>
                             <Text style={styles.expenseTitle}>
-                                {expense.name || 'Expense'} · {expense.date} · {money(expense.amount)}
-                                <Text style={styles.muted}>  ({money(outstanding)} still owed)</Text>
+                                {expense.name || 'Expense'} · {displayDate(expense.date, today)} · {money(expense.amount)}
                             </Text>
+                            <Text style={styles.muted}>{money(outstanding)} still owed</Text>
                             {unpaid.map(share => {
                                 const matches = matchingPayments(share, expense, transactions, shares).slice(0, 2)
                                 return (
                                     <View key={share.id} style={styles.share}>
                                         <View style={styles.shareRow}>
                                             <Text style={styles.person}>{share.person}</Text>
-                                            <Text style={styles.amount}>{money(share.amount)}</Text>
-                                            <TouchableOpacity
+                                            <Text style={[styles.amount, tabular]}>{money(share.amount)}</Text>
+                                            <Button
+                                                small
+                                                variant="secondary"
+                                                label="Paid"
                                                 accessibilityLabel={`${share.person} paid`}
-                                                style={styles.paidBtn}
                                                 onPress={() => markPaid(share, expense)}
                                                 disabled={busy}
-                                            >
-                                                <Text style={styles.paidText}>Paid</Text>
-                                            </TouchableOpacity>
-                                            <TouchableOpacity
+                                            />
+                                            <Button
+                                                small
+                                                variant="ghost"
+                                                label="Forget"
                                                 accessibilityLabel={`Forget what ${share.person} owes`}
                                                 onPress={() => forget(share)}
                                                 disabled={busy}
-                                            >
-                                                <Text style={styles.forget}>Forget</Text>
-                                            </TouchableOpacity>
+                                            />
                                         </View>
                                         {matches.map(m => (
                                             <TouchableOpacity
                                                 key={m.id}
+                                                accessibilityRole="button"
                                                 accessibilityLabel={`Use ${m.name || 'payment'} on ${m.date} for ${share.person}`}
                                                 onPress={() => useExisting(share, expense, m)}
                                                 disabled={busy}
                                             >
                                                 <Text style={styles.match}>
-                                                    Already in your transactions? Use "{m.name || 'payment'}" on {m.date}
+                                                    Already in your transactions? Use "{m.name || 'payment'}" from {displayDate(m.date, today)}
                                                 </Text>
                                             </TouchableOpacity>
                                         ))}
@@ -147,21 +163,19 @@ export function OwedPanel({ transactions, onChanged }: Props) {
     )
 }
 
-const styles = StyleSheet.create({
-    wrap: { paddingHorizontal: 16, paddingTop: 12 },
-    bar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#e8f6f3', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
-    barText: { fontWeight: '700', color: '#117864', fontSize: 13 },
-    barHint: { color: '#117864', fontSize: 12, flexShrink: 1, textAlign: 'right', marginLeft: 8 },
-    panel: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#d5efe9', borderRadius: 8, marginTop: 6, padding: 10 },
-    expense: { marginBottom: 10 },
-    expenseTitle: { fontSize: 13, fontWeight: '600', color: '#2c3e50', marginBottom: 4 },
-    muted: { fontWeight: '400', color: '#888' },
-    share: { paddingVertical: 4, borderTopWidth: 0.5, borderColor: '#f0f0f0' },
+const makeStyles = (C: Palette) => StyleSheet.create({
+    box: { backgroundColor: C.surface, borderRadius: 14, borderWidth: 1, borderColor: C.line, marginBottom: 16, overflow: 'hidden' },
+    bar: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingVertical: 14 },
+    barText: { fontWeight: '700', color: C.ink, fontSize: 15 },
+    barHint: { color: C.muted, fontSize: 13, marginTop: 2 },
+    toggle: { color: C.primary, fontWeight: '600', fontSize: 14 },
+    panel: { borderTopWidth: 1, borderColor: C.line, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 },
+    expense: { marginBottom: 12 },
+    expenseTitle: { fontSize: 14, fontWeight: '600', color: C.ink },
+    muted: { fontSize: 12, color: C.muted, marginTop: 2, marginBottom: 4 },
+    share: { paddingVertical: 6, borderTopWidth: 1, borderColor: C.line },
     shareRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    person: { flex: 1, fontSize: 13, color: '#1a1a1a' },
-    amount: { fontSize: 13, fontWeight: '600', color: '#117864' },
-    paidBtn: { backgroundColor: '#16a085', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4 },
-    paidText: { color: '#fff', fontSize: 12, fontWeight: '600' },
-    forget: { color: '#999', fontSize: 12 },
-    match: { fontSize: 11, color: '#2980b9', marginTop: 4 },
+    person: { flex: 1, fontSize: 14, color: C.text },
+    amount: { fontSize: 14, fontWeight: '600', color: C.ink },
+    match: { fontSize: 12, color: C.primary, marginTop: 4, lineHeight: 17 },
 })

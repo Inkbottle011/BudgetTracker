@@ -45,7 +45,7 @@ it('says how many transactions need a category, grouped by place', async () => {
     expect(screen.getByText('4 transactions without a category (3 places)')).toBeTruthy()
     await fireEvent.press(screen.getByText('Review'))
     expect(screen.getByText('TACOS TEXAS')).toBeTruthy()
-    expect(screen.getByText('2 × · $26.86')).toBeTruthy()
+    expect(screen.getByText('2 transactions · $26.86')).toBeTruthy()
 })
 
 it('applies the suggested category to every transaction from that place', async () => {

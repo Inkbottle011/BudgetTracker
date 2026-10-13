@@ -1,37 +1,29 @@
-import { withRunningBalance, filterTransactions, sortTransactions, toCSV } from '../listLogic'
+import { filterTransactions, sortTransactions, toCSV, displayDate, amountText } from '../listLogic'
 
 const tx = (id: string, date: string, type: string, amount: number, extra: any = {}) =>
     ({ id, date, type, amount, name: '', note: '', category_label: '', ...extra }) as any
 
-describe('withRunningBalance', () => {
-    it('adds income and subtracts expenses, newest first', () => {
-        const rows = withRunningBalance([
-            tx('b', '2026-10-02', 'expense', 30),
-            tx('a', '2026-10-01', 'income', 100),
-            tx('c', '2026-10-03', 'expense', 20),
-        ])
-        expect(rows.map(r => [r.id, r.balance])).toEqual([['c', 50], ['b', 70], ['a', 100]])
+describe('displayDate', () => {
+    it('reads like "Oct 6", adding the year only when it is not this year', () => {
+        expect(displayDate('2026-10-06', '2026-10-12')).toBe('Oct 6')
+        expect(displayDate('2026-01-31', '2026-10-12')).toBe('Jan 31')
+        expect(displayDate('2025-12-24', '2026-10-12')).toBe('Dec 24, 2025')
     })
 
-    it('matches the dashboard balance: money put into savings lowers it, investments do not change it', () => {
-        const rows = withRunningBalance([
-            tx('a', '2026-10-01', 'income', 100),
-            tx('b', '2026-10-02', 'savings', 40),
-            tx('c', '2026-10-03', 'investment', 10),
-        ])
-        expect(rows[0].balance).toBe(60)
+    it('copes with timestamps and leaves unreadable dates alone', () => {
+        expect(displayDate('2026-03-05T23:30:00Z', '2026-10-12')).toBe('Mar 5')
+        expect(displayDate('soon', '2026-10-12')).toBe('soon')
     })
+})
 
-    it('keeps the original order for transactions on the same day', () => {
-        const rows = withRunningBalance([
-            tx('a', '2026-10-01', 'income', 100),
-            tx('b', '2026-10-01', 'expense', 10),
-        ])
-        expect(rows.map(r => [r.id, r.balance])).toEqual([['b', 90], ['a', 100]])
-    })
-
-    it('handles amounts stored as text', () => {
-        expect(withRunningBalance([tx('a', '2026-10-01', 'income', '12.5' as any)])[0].balance).toBe(12.5)
+describe('amountText', () => {
+    it('money in is green-ish with a plus, money out has a minus, transfers have no sign', () => {
+        expect(amountText({ type: 'income', amount: 2000 })).toEqual({ text: '+$2,000.00', direction: 'in' })
+        expect(amountText({ type: 'reimbursement', amount: '15' })).toEqual({ text: '+$15.00', direction: 'in' })
+        expect(amountText({ type: 'withdrawal', amount: 50 })).toEqual({ text: '+$50.00', direction: 'in' })
+        expect(amountText({ type: 'expense', amount: 15.99 })).toEqual({ text: '-$15.99', direction: 'out' })
+        expect(amountText({ type: 'savings', amount: 100 })).toEqual({ text: '-$100.00', direction: 'out' })
+        expect(amountText({ type: 'transfer', amount: 500 })).toEqual({ text: '$500.00', direction: 'move' })
     })
 })
 
@@ -84,10 +76,10 @@ describe('sortTransactions', () => {
 
 describe('toCSV', () => {
     it('writes a header and quotes every value, escaping quotes', () => {
-        const csv = toCSV([{ ...tx('1', '2026-10-01', 'expense', 5, { name: 'Joe\'s "Diner"', note: 'a,b' }), balance: -5 }])
+        const csv = toCSV([tx('1', '2026-10-01', 'expense', 5, { name: 'Joe\'s "Diner"', note: 'a,b' })])
         expect(csv.split('\n')).toEqual([
-            'Date,Type,Category,Name,Amount,Details,Balance',
-            '"2026-10-01","expense","","Joe\'s ""Diner""","5","a,b","-5"',
+            'Date,Type,Category,Name,Amount,Details',
+            '"2026-10-01","expense","","Joe\'s ""Diner""","5","a,b"',
         ])
     })
 })
@@ -95,14 +87,6 @@ describe('toCSV', () => {
 import { listSummary } from '../listLogic'
 
 describe('reimbursements in the list', () => {
-    it('the running balance goes up when money is paid back', () => {
-        const rows = withRunningBalance([
-            tx('a', '2026-10-01', 'expense', 120),
-            tx('b', '2026-10-02', 'reimbursement', 90),
-        ])
-        expect(rows[0].balance).toBe(-30)
-    })
-
     it('the summary shows income, spending net of paybacks, and the difference', () => {
         expect(listSummary([
             tx('1', '2026-10-01', 'income', 1000),
@@ -116,10 +100,9 @@ describe('reimbursements in the list', () => {
 import { TRANSACTION_TYPES } from '../types'
 
 describe('transfers in the list', () => {
-    it('are a type you can pick, and are left out of the balance and summary', () => {
+    it('are a type you can pick, and are left out of the summary', () => {
         expect(TRANSACTION_TYPES).toContain('Transfer')
         const list = [tx('a', '2026-10-01', 'income', 100), tx('b', '2026-10-02', 'transfer', 500)]
-        expect(withRunningBalance(list)[0].balance).toBe(100)
         expect(listSummary(list)).toEqual({ income: 100, spent: 0, net: 100 })
     })
 
@@ -130,15 +113,6 @@ describe('transfers in the list', () => {
 })
 
 describe('savings in the list', () => {
-    it('the running balance goes down when you save and back up when you withdraw', () => {
-        const rows = withRunningBalance([
-            tx('a', '2026-10-01', 'income', 1000),
-            tx('b', '2026-10-02', 'savings', 400),
-            tx('c', '2026-10-03', 'withdrawal', 100),
-        ])
-        expect(rows.map(r => r.balance)).toEqual([700, 600, 1000])
-    })
-
     it('Withdrawal is a type you can pick and filter by', () => {
         expect(TRANSACTION_TYPES).toContain('Withdrawal')
         const list = [tx('a', '2026-10-01', 'income', 100), tx('b', '2026-10-02', 'withdrawal', 50)]
