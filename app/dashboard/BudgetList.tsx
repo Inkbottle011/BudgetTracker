@@ -1,6 +1,6 @@
 import { useTheme, useStyles, Palette } from '../../lib/theme'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
-import { BudgetRow } from './summary'
+import { BudgetRow, budgetTone } from './summary'
 import { tabular, money } from './theme'
 
 interface Props {
@@ -29,18 +29,21 @@ export function BudgetList({ title, rows, uncategorized, goals, onCategorize, on
             )}
 
             {visible.map(r => {
-                const over = r.planned > 0 && r.spent > r.planned
+                const tone = budgetTone(r.spent, r.planned)
+                const over = tone === 'over'
                 const share = r.planned > 0 ? Math.min(1, r.spent / r.planned) : 1
+                const barColor = { unplanned: C.faint, onTrack: C.paceMark, close: C.warnMark, over: C.spendMark }[tone]
+                const statusColor = { unplanned: C.muted, onTrack: C.good, close: C.warn, over: C.bad }[tone]
                 return (
                     <View key={r.name} style={styles.row}>
                         <View style={styles.rowTop}>
                             <Text style={styles.name} numberOfLines={1}>{r.name}</Text>
-                            <Text style={[styles.status, tabular, over && { color: C.bad }, r.planned > 0 && !over && { color: C.good }]}>
+                            <Text style={[styles.status, tabular, { color: statusColor }]}>
                                 {r.planned === 0 ? 'No budget' : over ? `${money(r.spent - r.planned)} over` : `${money(r.left)} left`}
                             </Text>
                         </View>
                         <View style={styles.track}>
-                            <View style={[styles.fill, { width: `${share * 100}%` }, over && styles.fillOver, r.planned === 0 && styles.fillUnplanned]} />
+                            <View style={[styles.fill, { width: `${share * 100}%`, backgroundColor: barColor }]} />
                         </View>
                         <Text style={[styles.detail, tabular]}>{r.planned > 0 ? `${money(r.spent)} of ${money(r.planned)}` : `${money(r.spent)} spent`}</Text>
                     </View>
@@ -69,13 +72,13 @@ export function BudgetList({ title, rows, uncategorized, goals, onCategorize, on
                             <View key={`${g.type}-${g.name}`} style={styles.row}>
                                 <View style={styles.rowTop}>
                                     <Text style={styles.name} numberOfLines={1}>{g.name}</Text>
-                                    <Text style={[styles.status, tabular, reached && { color: C.good }]}>
+                                    <Text style={[styles.status, tabular, reached && { color: g.type === 'savings' ? C.saved : C.good }]}>
                                         {g.planned === 0 ? money(g.actual) : reached ? 'Reached' : `${money(g.planned - g.actual)} to go`}
                                     </Text>
                                 </View>
                                 {g.planned > 0 && (
                                     <View style={styles.track}>
-                                        <View style={[styles.fill, styles.fillGoal, { width: `${share * 100}%` }]} />
+                                        <View style={[styles.fill, { width: `${share * 100}%`, backgroundColor: g.type === 'savings' ? C.savedMark : C.incomeMark }]} />
                                     </View>
                                 )}
                                 {g.planned > 0 && <Text style={[styles.detail, tabular]}>{money(g.actual)} of {money(g.planned)}</Text>}
@@ -100,10 +103,7 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     name: { fontSize: 15, color: C.ink, fontWeight: '500', flexShrink: 1 },
     status: { fontSize: 14, fontWeight: '600', color: C.muted },
     track: { height: 6, backgroundColor: C.track, borderRadius: 3, marginTop: 7, overflow: 'hidden' },
-    fill: { height: 6, backgroundColor: C.ink, borderRadius: 3 },
-    fillOver: { backgroundColor: C.bad },
-    fillUnplanned: { backgroundColor: C.faint },
-    fillGoal: { backgroundColor: C.primary },
+    fill: { height: 6, borderRadius: 3 },
     detail: { fontSize: 12, color: C.muted, marginTop: 5 },
     uncat: { borderTopWidth: 1, borderColor: C.line, marginTop: 6, paddingTop: 14 },
 })

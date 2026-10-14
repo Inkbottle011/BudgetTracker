@@ -116,3 +116,19 @@ describe('appearance', () => {
         await AsyncStorage.clear()
     })
 })
+
+describe('top bar', () => {
+    it('is filled with the theme color, with the app name in white', async () => {
+        const { AppHeader } = require('../App')
+        const { ThemeProvider } = require('../lib/theme')
+        const { THEMES } = require('../lib/themes')
+        const { ToastContext } = require('../context/ToastContext')
+        await render(<ThemeProvider><ToastContext.Provider value={{ showToast: jest.fn() }}><AppHeader userEmail="me@example.com" /></ToastContext.Provider></ThemeProvider>)
+        const { StyleSheet } = require('react-native')
+        const title = screen.getByText('Budget Tracker')
+        expect(StyleSheet.flatten(title.props.style).color).toBe('#ffffff')
+        let node: any = title
+        while (node && StyleSheet.flatten(node.props?.style)?.backgroundColor !== THEMES.nightSky.light.bar) node = node.parent
+        expect(node).toBeTruthy()
+    })
+})

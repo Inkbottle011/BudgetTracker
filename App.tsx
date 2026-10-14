@@ -69,8 +69,8 @@ export function AppHeader({ userEmail }: { userEmail: string }) {
         <Pressable style={styles.overlay} onPress={() => setShowProfile(false)} accessibilityLabel="Close account menu">
           <Pressable style={styles.menu} onPress={() => {}}>
             <View style={styles.menuTop}>
-              <View style={[styles.avatar, styles.avatarLarge]}>
-                <Text style={[styles.avatarText, styles.avatarLargeText]}>{initial}</Text>
+              <View style={styles.avatarLarge}>
+                <Text style={styles.avatarLargeText}>{initial}</Text>
               </View>
               <View style={{ flexShrink: 1 }}>
                 <Text style={styles.menuLabel}>Signed in as</Text>
@@ -89,14 +89,14 @@ const makeStyles = (C: Palette) => StyleSheet.create({
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 10, minHeight: 56,
-    backgroundColor: C.surface, borderBottomWidth: 1, borderColor: C.line,
+    backgroundColor: C.bar, borderBottomWidth: 1, borderColor: C.barLine,
   },
   brand: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  title: { fontSize: 17, fontWeight: '700', color: C.ink },
-  avatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: C.primarySoft, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { color: C.primary, fontWeight: '700', fontSize: 15 },
-  avatarLarge: { width: 44, height: 44, borderRadius: 22 },
-  avatarLargeText: { fontSize: 18 },
+  title: { fontSize: 17, fontWeight: '700', color: C.onBar },
+  avatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.16)', alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: C.onBar, fontWeight: '700', fontSize: 15 },
+  avatarLarge: { width: 44, height: 44, borderRadius: 22, backgroundColor: C.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  avatarLargeText: { color: C.primary, fontWeight: '700', fontSize: 18 },
   overlay: { flex: 1, backgroundColor: C.scrim, alignItems: 'flex-end' },
   menu: {
     backgroundColor: C.surface, borderRadius: 14, borderWidth: 1, borderColor: C.line,
@@ -140,9 +140,9 @@ function MainApp({ userEmail }: { userEmail: string }) {
               const [on, off] = TAB_ICONS[route.name] ?? ['ellipse', 'ellipse-outline']
               return <Ionicons name={(focused ? on : off) as any} size={size} color={color} />
             },
-            tabBarActiveTintColor: c.primary,
-            tabBarInactiveTintColor: c.muted,
-            tabBarStyle: { backgroundColor: c.surface, borderTopColor: c.line, borderTopWidth: 1 },
+            tabBarActiveTintColor: c.onBar,
+            tabBarInactiveTintColor: c.onBarMuted,
+            tabBarStyle: { backgroundColor: c.bar, borderTopColor: c.barLine, borderTopWidth: 1 },
             tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
             sceneStyle: { backgroundColor: backdrop },
           })}
@@ -170,8 +170,8 @@ function Waiting() {
 
 /** Light or dark status bar text to match the theme. */
 function ThemedStatusBar() {
-  const { scheme } = useTheme()
-  return <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+  // The top bar is a deep theme color in both light and dark, so the status bar text is always light
+  return <StatusBar style="light" />
 }
 
 export default function App() {

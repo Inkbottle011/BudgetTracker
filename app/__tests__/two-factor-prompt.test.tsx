@@ -36,3 +36,27 @@ it('lets you sign out instead', async () => {
     await fireEvent.press(screen.getByText('Sign out'))
     expect(auth.signOut).toHaveBeenCalled()
 })
+
+describe('where to find the code', () => {
+    it('shows step by step where the code is on an iPhone', async () => {
+        await render(<TwoFactorPrompt onDone={jest.fn()} />)
+        expect(screen.getByText('Where to find your code')).toBeTruthy()
+        expect(screen.getByRole('button', { name: 'iPhone' }).props.accessibilityState.selected).toBe(true)
+        expect(screen.getByText(/Open the Passwords app/)).toBeTruthy()
+        expect(screen.getByText(/Tap Codes/)).toBeTruthy()
+        expect(screen.getByText(/Budget Tracker/)).toBeTruthy()
+    })
+
+    it('and on an Android phone', async () => {
+        await render(<TwoFactorPrompt onDone={jest.fn()} />)
+        await fireEvent.press(screen.getByRole('button', { name: 'Android' }))
+        expect(screen.getByText(/Open Google Authenticator/)).toBeTruthy()
+        expect(screen.queryByText(/Open the Passwords app/)).toBeNull()
+    })
+
+    it('says the code changes every 30 seconds, and what to do if it can\'t be found', async () => {
+        await render(<TwoFactorPrompt onDone={jest.fn()} />)
+        expect(screen.getByText(/changes every 30 seconds/)).toBeTruthy()
+        expect(screen.getByText(/Can't find it\?/)).toBeTruthy()
+    })
+})

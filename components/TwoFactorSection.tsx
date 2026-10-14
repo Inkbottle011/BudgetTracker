@@ -4,16 +4,7 @@ import { twoFactorStatus, startTwoFactorSetup, verifyCode, turnOffTwoFactor } fr
 import { useToastContext } from '../context/ToastContext'
 import { useTheme, useStyles, Palette, light } from '../lib/theme'
 import { Section, Button, Segmented } from './ui'
-
-type Phone = 'iphone' | 'android'
-const PHONES: { value: Phone; label: string }[] = [{ value: 'iphone', label: 'iPhone' }, { value: 'android', label: 'Android' }]
-
-/** Best guess at the kind of phone, so the right steps show first. */
-function guessPhone(): Phone {
-    if (Platform.OS === 'android') return 'android'
-    const ua = typeof navigator !== 'undefined' ? navigator.userAgent ?? '' : ''
-    return /android/i.test(ua) ? 'android' : 'iphone'
-}
+import { guessPhone, PHONES, type Phone } from './FindYourCode'
 
 // The steps for each kind of phone
 const STEPS: Record<Phone, { app: string; scan: string[]; key: string; later: string }> = {
@@ -25,7 +16,7 @@ const STEPS: Record<Phone, { app: string; scan: string[]; key: string; later: st
             'Pick your Budget Tracker login if it\'s listed, or make a new entry called Budget Tracker, then tap Save.',
         ],
         key: 'Open the Passwords app, tap Codes, tap +, choose "Enter Setup Key", name it Budget Tracker and paste the key.',
-        later: 'Each time you sign in, open the Passwords app, tap the Codes tab, and type the code shown for Budget Tracker.',
+        later: 'Each time you sign in, open the Passwords app, tap Codes, and type the code shown for Budget Tracker.',
     },
     android: {
         app: 'Install Google Authenticator from the Play Store (free).',

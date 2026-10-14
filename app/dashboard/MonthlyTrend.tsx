@@ -26,11 +26,11 @@ export function MonthlyTrend({ transactions, selectedYear }: Props) {
         <View style={styles.headerRight}>
         <View style={styles.legend}>
         <View style={styles.legendItem}>
-        <View style={[styles.legendDot, { backgroundColor: C.good }]} />
+        <View style={[styles.legendDot, { backgroundColor: C.incomeMark }]} />
         <Text style={styles.legendText}>Income</Text>
         </View>
         <View style={styles.legendItem}>
-        <View style={[styles.legendDot, { backgroundColor: C.bad }]} />
+        <View style={[styles.legendDot, { backgroundColor: C.spendMark }]} />
         <Text style={styles.legendText}>Expenses</Text>
         </View>
         </View>
@@ -66,8 +66,8 @@ export function MonthlyTrend({ transactions, selectedYear }: Props) {
             >
             <View style={styles.bars}>
             <View style={styles.barPair}>
-            <View style={[styles.bar, { height: Math.max((d.income / max) * 120, d.income > 0 ? 3 : 0), backgroundColor: C.good }]} />
-            <View style={[styles.bar, { height: Math.max((d.expense / max) * 120, d.expense > 0 ? 3 : 0), backgroundColor: C.bad }]} />
+            <View style={[styles.bar, { height: Math.max((d.income / max) * 120, d.income > 0 ? 3 : 0), backgroundColor: C.incomeMark }]} />
+            <View style={[styles.bar, { height: Math.max((d.expense / max) * 120, d.expense > 0 ? 3 : 0), backgroundColor: C.spendMark }]} />
             </View>
             </View>
             <Text style={styles.monthLabel}>{d.label}</Text>

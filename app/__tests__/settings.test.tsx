@@ -54,13 +54,23 @@ describe('appearance', () => {
         await AsyncStorage.clear()
         await renderSettings()
         expect(screen.getByText('Appearance')).toBeTruthy()
-        expect(screen.getByText("Match device follows your phone or computer's light or dark setting.")).toBeTruthy()
+        expect(screen.getByText(/Match device follows your phone or computer's light or dark setting/)).toBeTruthy()
         expect(screen.getByRole('button', { name: 'Match device' }).props.accessibilityState.selected).toBe(true)
         await fireEvent.press(screen.getByRole('button', { name: 'Dark' }))
         expect(screen.getByRole('button', { name: 'Dark' }).props.accessibilityState.selected).toBe(true)
         expect(await AsyncStorage.getItem('appearance')).toBe('dark')
         await fireEvent.press(screen.getByRole('button', { name: 'Light' }))
         expect(await AsyncStorage.getItem('appearance')).toBe('light')
+    })
+
+    it('lets you pick a color theme, which recolors the app and is remembered', async () => {
+        await AsyncStorage.clear()
+        await renderSettings()
+        for (const name of ['Night sky', 'Ocean', 'Forest', 'Sunset', 'Classic']) expect(screen.getByRole('button', { name: `${name} theme` })).toBeTruthy()
+        expect(screen.getByRole('button', { name: 'Night sky theme' }).props.accessibilityState.selected).toBe(true)
+        await fireEvent.press(screen.getByRole('button', { name: 'Ocean theme' }))
+        expect(screen.getByRole('button', { name: 'Ocean theme' }).props.accessibilityState.selected).toBe(true)
+        await waitFor(async () => expect(await AsyncStorage.getItem('colorTheme')).toBe('ocean'))
     })
 
     it('lets you pick a moving background, how fast and how many stars, and its color, or turn it off', async () => {
@@ -137,7 +147,7 @@ describe('two-factor sign-in', () => {
         await renderSettings()
         await fireEvent.press(screen.getByText('Set up two-factor sign-in'))
         expect(screen.getByText(/Each time you sign in/)).toBeTruthy()
-        expect(screen.getByText(/Codes tab/)).toBeTruthy()
+        expect(screen.getByText(/open the Passwords app, tap Codes/)).toBeTruthy()
     })
 
     it('clears out a half-finished setup before starting again', async () => {

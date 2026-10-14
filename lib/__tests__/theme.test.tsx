@@ -2,7 +2,8 @@ import { Text, TouchableOpacity } from 'react-native'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as RN from 'react-native'
-import { ThemeProvider, useTheme, light, dark, typeColors, APPEARANCE_KEY } from '../theme'
+import { ThemeProvider, useTheme, light, dark, typeColors, APPEARANCE_KEY, COLOR_THEME_KEY } from '../theme'
+import { THEMES } from '../themes'
 import { BACKGROUND_KEY } from '../background'
 
 function Probe() {
@@ -102,3 +103,63 @@ describe('moving background', () => {
         expect(screen.getByText(`off:blue:${light.page}`)).toBeTruthy()
     })
 })
+
+describe('color themes', () => {
+    function ThemeProbe() {
+        const { c, themeId, setThemeId, background } = useTheme()
+        return (
+            <>
+                <Text>{`${themeId}:${c.primary}:${c.bar}:${background.tint}`}</Text>
+                <TouchableOpacity onPress={() => setThemeId('forest')}><Text>forest</Text></TouchableOpacity>
+            </>
+        )
+    }
+
+    it('starts on Night sky', async () => {
+        await render(<ThemeProvider><ThemeProbe /></ThemeProvider>)
+        expect(await screen.findByText(`nightSky:${THEMES.nightSky.light.primary}:${THEMES.nightSky.light.bar}:blue`)).toBeTruthy()
+    })
+
+    it('switching theme recolors the app, matches the moving background, and is remembered', async () => {
+        await render(<ThemeProvider><ThemeProbe /></ThemeProvider>)
+        await fireEvent.press(screen.getByText('forest'))
+        expect(screen.getByText(`forest:${THEMES.forest.light.primary}:${THEMES.forest.light.bar}:green`)).toBeTruthy()
+        await waitFor(async () => expect(await AsyncStorage.getItem(COLOR_THEME_KEY)).toBe('forest'))
+    })
+
+    it('uses the remembered theme, and ignores a broken one', async () => {
+        await AsyncStorage.setItem(COLOR_THEME_KEY, 'sunset')
+        const first = await render(<ThemeProvider><ThemeProbe /></ThemeProvider>)
+        expect(await screen.findByText(new RegExp(`^sunset:${THEMES.sunset.light.primary}`))).toBeTruthy()
+        first.unmount()
+        await AsyncStorage.setItem(COLOR_THEME_KEY, 'neon')
+        await render(<ThemeProvider><ThemeProbe /></ThemeProvider>)
+        expect(await screen.findByText(/^nightSky:/)).toBeTruthy()
+    })
+
+    it('every theme has every color in light and dark, and keeps money colors recognizable', () => {
+        for (const id of Object.keys(THEMES) as (keyof typeof THEMES)[]) {
+            for (const mode of ['light', 'dark'] as const) {
+                const p = THEMES[id][mode]
+                expect(Object.keys(p).sort()).toEqual(Object.keys(light).sort())
+                expect(p.mode).toBe(mode)
+                // Green in, red out, violet saved, whatever the theme
+                expect(hue(p.incomeMark)).toBeGreaterThan(90); expect(hue(p.incomeMark)).toBeLessThan(170)
+                expect(hue(p.spendMark) < 20 || hue(p.spendMark) > 340).toBe(true)
+                expect(hue(p.savedMark)).toBeGreaterThan(240); expect(hue(p.savedMark)).toBeLessThan(290)
+                // Transaction badges pick the right mode
+                expect(typeColors('income', p).fg).toBe(typeColors('income', mode === 'dark' ? dark : light).fg)
+            }
+        }
+    })
+})
+
+/** Hue in degrees of a #rrggbb color */
+function hue(hex: string) {
+    const n = parseInt(hex.slice(1), 16)
+    const r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min
+    if (!d) return 0
+    const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4
+    return (h * 60 + 360) % 360
+}
