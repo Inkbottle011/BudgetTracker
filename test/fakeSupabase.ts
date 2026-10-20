@@ -1,8 +1,8 @@
 /**
  * A stand-in for the Supabase client in screen tests.
  *
- *   jest.mock('../../lib/supabase', () => require('../../test/fakeSupabase').module)
- *   import { fake } from '../../test/fakeSupabase'
+ *   jest.mock('<path to>/shared/supabase', () => require('<path to>/test/fakeSupabase').module)
+ *   import { fake } from '<path to>/test/fakeSupabase'
  *   fake.table('transactions', { data: [...] })     // what queries on a table return
  *   fake.calls('transactions')                     // what the screen asked for
  *
