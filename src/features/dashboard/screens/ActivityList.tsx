@@ -1,6 +1,6 @@
 import { useTheme, useStyles, Palette } from '../../../shared/theme/theme'
 import { View, Text, StyleSheet } from 'react-native'
-import { shortDate } from '../../bank/logic/bank'
+import { shortDate } from '../../bank/api'
 import { activityDirection } from '../logic/summary'
 import { tabular, money } from '../logic/display'
 

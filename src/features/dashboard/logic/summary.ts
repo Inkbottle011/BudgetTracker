@@ -1,5 +1,5 @@
 // Numbers for the dashboard, all for one period (a month or a year).
-import { isSavingsAccount, BankAccountRow } from '../../bank/logic/bank'
+import { isSavingsAccount, BankAccountRow } from '../../bank/api'
 import { sumByType, netSpent, netSaved, actualAmount } from './calculations'
 
 export type Period = 'day' | 'week' | 'month' | 'year'
@@ -157,11 +157,7 @@ export function accountsSummary(accounts: BankAccountRow[]) {
     return { cash: group(cash), savings: group(savings), cards: group(cards), any: accounts.length > 0 }
 }
 
-/** Which way money went, for showing a transaction: in (+), out (-), or moved between your own accounts. */
-export function activityDirection(type: string): 'in' | 'out' | 'move' {
-    if (type === 'transfer') return 'move'
-    return type === 'income' || type === 'reimbursement' || type === 'withdrawal' ? 'in' : 'out'
-}
+export { activityDirection } from '../../../shared/money/direction'
 
 export type BudgetTone = 'unplanned' | 'onTrack' | 'close' | 'over'
 /** How a category is doing against its plan: under 85% is on track, up to 100% is close, then over. */

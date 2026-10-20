@@ -1,4 +1,5 @@
 import { supabase } from '../../../shared/supabase'
+import { toDateString, localToday, addDays, daysInMonth } from '../../../shared/dates'
 
 export type Frequency = 'weekly' | 'biweekly' | 'monthly' | 'yearly'
 export type SubscriptionStatus = 'active' | 'paused' | 'cancelled'
@@ -43,27 +44,8 @@ const PER_MONTH: Record<Frequency, number> = {
     yearly: 1 / 12,
 }
 
-// ---- Dates as plain 'YYYY-MM-DD' strings, so time zones can't shift them ----
-
-function pad(n: number) { return String(n).padStart(2, '0') }
-
-export function toDateString(d: Date): string {
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
-
-/** Today's date where the user is (not UTC). */
-export function localToday(): string {
-    return toDateString(new Date())
-}
-
-export function addDays(date: string, days: number): string {
-    const [y, m, d] = date.split('-').map(Number)
-    return toDateString(new Date(y, m - 1, d + days))
-}
-
-function daysInMonth(year: number, month0: number) {
-    return new Date(year, month0 + 1, 0).getDate()
-}
+// Date helpers live in shared/dates; re-exported here for this feature's own code and tests
+export { toDateString, localToday, addDays, isValidDate } from '../../../shared/dates'
 
 /**
  * Date of the n-th charge (n = 0 is the start date). Matches the database's
@@ -78,12 +60,6 @@ export function occurrence(start: string, frequency: Frequency, n: number): stri
     const year = y + Math.floor(totalMonths / 12)
     const month0 = totalMonths % 12
     return toDateString(new Date(year, month0, Math.min(d, daysInMonth(year, month0))))
-}
-
-export function isValidDate(s: string): boolean {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false
-    const [y, m, d] = s.split('-').map(Number)
-    return m >= 1 && m <= 12 && d >= 1 && d <= daysInMonth(y, m - 1)
 }
 
 /** True once a subscription has passed its end date. */

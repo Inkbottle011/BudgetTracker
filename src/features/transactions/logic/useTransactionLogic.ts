@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../shared/supabase'
+import { loadCategoryNames } from '../../budget/api'
 import { useTransactionStore } from './useTransactionStore'
 import { EditingTransaction } from './types'
 import { useToastContext } from '../../../shared/ui/ToastContext'
@@ -291,11 +292,7 @@ export function useTransactionLogic() {
     async function fetchBudgetCategories() {
         const { data: { session } } = await supabase.auth.getSession()
         if (!session) return
-        const { data } = await supabase
-            .from('budget_items')
-            .select('name, type')
-            .eq('user_id', session.user.id)
-            .order('created_at')
+        const data = await loadCategoryNames()
 
         if (data && data.length > 0) {
             const grouped: Record<string, string[]> = {

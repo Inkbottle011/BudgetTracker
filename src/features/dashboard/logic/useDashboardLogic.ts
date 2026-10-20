@@ -1,10 +1,11 @@
 import { useState, useCallback } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
 import { supabase } from '../../../shared/supabase'
-import { useTransactionStore } from '../../transactions/logic/useTransactionStore'
-import { BankAccountRow } from '../../bank/logic/bank'
+import { useTransactionStore, loadAllTransactions } from '../../transactions/api'
+import { loadBudgetItems, loadBudgetAmounts } from '../../budget/api'
+import { BankAccountRow, loadAccountBalances } from '../../bank/api'
 import { todayString } from '../../../shared/money/entry'
-import { Subscription, fetchSubscriptions, upcomingCharges } from '../../subscriptions/logic/subscriptions'
+import { Subscription, fetchSubscriptions, upcomingCharges } from '../../subscriptions/api'
 import { attributeReimbursements } from './calculations'
 import {
     Period, periodRange, shiftAnchor, periodTitle, periodElapsed, daysLeftAfterToday,
@@ -31,22 +32,20 @@ export function useDashboardLogic() {
         const { data: { session } } = await supabase.auth.getSession()
         if (!session) return
 
-        const { data: txData } = await supabase.from('transactions').select('*').order('date', { ascending: false })
+        const txData = await loadAllTransactions()
         if (txData) setTransactions(txData)
 
         fetchSubscriptions().then(setSubscriptions).catch(() => {})
 
-        const { data: items } = await supabase.from('budget_items').select('*').order('created_at')
+        const items = await loadBudgetItems()
         if (items) setBudgetItems(items)
 
         // Every year's plan, so a week spanning New Year still has one
-        const { data: amounts } = await supabase.from('budget_amounts').select('*')
+        const amounts = await loadBudgetAmounts()
         if (amounts) setBudgetAmounts(amounts)
 
         // Linked bank balances (none until a bank is linked)
-        const { data: accts } = await supabase.from('bank_accounts')
-            .select('id, name, last_four, type, subtype, balance_current, balance_available, balance_updated_at')
-        setAccounts(accts ?? [])
+        setAccounts(await loadAccountBalances())
     }
 
     // Paybacks count in the period of the expense they pay back

@@ -4,6 +4,7 @@ import { twoFactorStatus, startTwoFactorSetup, verifyCode, turnOffTwoFactor } fr
 import { useToastContext } from '../../../shared/ui/ToastContext'
 import { useTheme, useStyles, Palette, light } from '../../../shared/theme/theme'
 import { Section, Button, Segmented } from '../../../shared/ui/ui'
+import { makeSettingsStyles } from '../../../shared/ui/settingsStyles'
 import { guessPhone, PHONES, type Phone } from './FindYourCode'
 
 // The steps for each kind of phone
@@ -181,17 +182,6 @@ export function TwoFactorSection({ onChange }: { onChange: (on: boolean) => void
         </Section>
     )
 }
-
-/** Shared bits for the settings sections. */
-export const makeSettingsStyles = (C: Palette) => StyleSheet.create({
-    help: { fontSize: 14, color: C.muted, lineHeight: 20, marginBottom: 14 },
-    row: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
-    start: { alignSelf: 'flex-start' },
-    error: { color: C.bad, fontSize: 13, marginTop: 10, lineHeight: 18 },
-    confirm: { backgroundColor: C.surfaceAlt, borderRadius: 10, borderWidth: 1, borderColor: C.line, padding: 14, marginTop: 4 },
-    confirmText: { fontSize: 14, color: C.text, marginBottom: 12, lineHeight: 20 },
-    notice: { fontSize: 14, color: C.muted, lineHeight: 20 },
-})
 
 const makeStyles = (C: Palette) => StyleSheet.create({
     ...makeSettingsStyles(C),

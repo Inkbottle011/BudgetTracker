@@ -1,6 +1,6 @@
 // Transactions list: search/filter, sort, CSV export and how dates and amounts read, as plain functions.
 import { formatMoney } from '../../../shared/money/format'
-import { activityDirection } from '../../dashboard/logic/summary'
+import { activityDirection } from '../../../shared/money/direction'
 
 interface Tx {
     id: string

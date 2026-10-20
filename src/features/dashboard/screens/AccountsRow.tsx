@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useTheme, useStyles, Palette } from '../../../shared/theme/theme'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
-import { HIGH_CARD_USAGE, updatedAgo } from '../../bank/logic/bank'
+import { HIGH_CARD_USAGE, updatedAgo } from '../../bank/api'
 import { AccountGroup } from '../logic/summary'
 import { tabular, money } from '../logic/display'
 

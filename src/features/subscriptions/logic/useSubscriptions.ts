@@ -1,7 +1,8 @@
 import { useState, useCallback } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
 import { supabase } from '../../../shared/supabase'
-import { useTransactionStore } from '../../transactions/logic/useTransactionStore'
+import { useTransactionStore, loadAllTransactions } from '../../transactions/api'
+import { loadCategoryNames } from '../../budget/api'
 import { useToastContext } from '../../../shared/ui/ToastContext'
 import {
     Subscription, fetchSubscriptions, syncSubscriptionCharges, localToday, addDays, monthlyAmount, hasEnded, nextCharge,
@@ -66,7 +67,7 @@ export function useSubscriptions() {
 
     // Other tabs read transactions from the shared store, so refresh it after charges are added
     async function refreshTransactions() {
-        const { data } = await supabase.from('transactions').select('*').order('date', { ascending: false })
+        const data = await loadAllTransactions()
         if (data) setTransactions(data)
     }
 
@@ -80,7 +81,7 @@ export function useSubscriptions() {
     }
 
     async function loadCategories() {
-        const { data } = await supabase.from('budget_items').select('name, type').order('created_at')
+        const data = await loadCategoryNames()
         if (!data) return
         const grouped: Record<string, string[]> = { Income: [], Expense: [], Savings: [], Investment: [] }
         data.forEach(item => {

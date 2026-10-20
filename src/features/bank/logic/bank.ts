@@ -1,7 +1,8 @@
 // Linked banks, from the app's side. All bank access happens in the "bank" server function;
 // the app never sees or stores a bank token.
 import { supabase } from '../../../shared/supabase'
-import { addDays } from '../../subscriptions/logic/subscriptions'
+import { addDays } from '../../../shared/dates'
+import { transactionsByIds } from '../../transactions/api'
 
 export interface LinkedBank {
     id: string
@@ -144,8 +145,7 @@ export async function fetchPossibleDuplicates(): Promise<PossibleDuplicate[]> {
     const ids = reviews.map((r: any) => r.existing_transaction_id).filter(Boolean)
     let mine: any[] = []
     if (ids.length) {
-        const { data: rows } = await supabase.from('transactions').select('id, date, amount, name, note').in('id', ids)
-        mine = rows ?? []
+        mine = await transactionsByIds(ids)
     }
     return reviews.map((r: any) => ({
         ...r,
@@ -178,4 +178,11 @@ export function reviewNote(n: number | undefined): string {
  */
 export function isSavingsAccount(a: { type?: string | null; subtype?: string | null }): boolean {
     return a.type === 'depository' && /savings|money\s*market|cash\s*management|\bcd\b/i.test(a.subtype ?? '')
+}
+
+/** Latest balances of every linked account, for the dashboard. */
+export async function loadAccountBalances(): Promise<BankAccountRow[]> {
+    const { data } = await supabase.from('bank_accounts')
+        .select('id, name, last_four, type, subtype, balance_current, balance_available, balance_updated_at')
+    return (data ?? []) as BankAccountRow[]
 }

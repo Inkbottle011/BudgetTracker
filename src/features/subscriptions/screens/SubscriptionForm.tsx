@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
-import { TYPES, DEFAULT_CATEGORIES } from '../../transactions/logic/types'
+import { TYPES, DEFAULT_CATEGORIES } from '../../transactions/api'
 import { FREQUENCIES, FREQUENCY_LABELS, localToday, occurrence } from '../logic/subscriptions'
 import { SubscriptionDraft, shortDate } from '../logic/useSubscriptions'
 import { useStyles, Palette } from '../../../shared/theme/theme'

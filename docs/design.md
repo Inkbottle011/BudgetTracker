@@ -1,10 +1,10 @@
 # How the app looks
 
 One look across every screen, in light and dark, in five color themes you pick in Settings
-(Night sky by default, Ocean, Forest, Sunset, Classic). The themes are in `lib/themes.ts`;
+(Night sky by default, Ocean, Forest, Sunset, Classic). The themes are in `src/shared/theme/themes.ts`;
 every screen reads its colors from `useTheme()`, so nothing else needs editing.
 
-## Colors (`lib/themes.ts`)
+## Colors (`src/shared/theme/themes.ts`)
 - `page` behind everything; `surface` for sections, cards and sheets; `surfaceAlt` for inputs and
   selected rows; `line` for borders and dividers; `track` for empty bars and switches.
 - Text: `ink` for headings and numbers, `text` for body, `muted` for secondary, `faint` for hints.
@@ -19,16 +19,16 @@ every screen reads its colors from `useTheme()`, so nothing else needs editing.
 - Budget bars: `paceMark` (the theme's color) on track, amber from 85% of the plan, red when over.
 - Transaction types use `typeColors(type, c)` (soft background + colored text), shown with `<TypeBadge>`.
 - Never hard-code a hex color in a screen; use the palette so themes and dark mode work.
-- To add a theme, copy one in `lib/themes.ts`, change its colors and add it to `THEME_LIST`.
+- To add a theme, copy one in `src/shared/theme/themes.ts`, change its colors and add it to `THEME_LIST`.
 
-## Moving background (`lib/background.ts`, `lib/spaceScene.ts`, `components/SpaceBackground.tsx`)
+## Moving background (`src/shared/theme/background.ts`, `src/features/appearance/`)
 
 A starry sky behind every page, chosen in Settings: Stars, Warp or Nebula (or None), with speed, how many
 stars, color, and optional shooting stars and planets. Stars and Nebula also have bright sparkling
 stars and a faint Milky Way band of star dust (painted once, then reused each frame). It's saved on each device. When it's on, `backdrop` from `useTheme()` is see-through so
 the sky shows; sections and cards stay solid so text is easy to read. Page backgrounds should use
 `backdrop`, not `c.page`. It holds still if the device is set to reduce motion, and runs at about 30
-frames a second. New colors go in `TINTS` and `TINT_COLORS` in `lib/background.ts`.
+frames a second. New colors go in `TINTS` and `TINT_COLORS` in `src/shared/theme/background.ts`.
 
 ## Type and spacing
 - Page titles 26 bold; section titles 18 bold; body 14 to 15; secondary 12 to 13.
@@ -38,7 +38,7 @@ frames a second. New colors go in `TINTS` and `TINT_COLORS` in `lib/background.t
 - Sections: radius 14, padding 20, 1px `line` border. Inputs and buttons: radius 10. Chips: round.
 - Pages use `<Page>` (max width, 16px margins on phones, 28px on computers).
 
-## Building blocks (`components/ui.tsx`)
+## Building blocks (`src/shared/ui/ui.tsx`)
 `Page`, `PageTitle`, `Section`, `Button` (primary, secondary, danger, ghost), `Field`, `Chip`,
 `Segmented`, `TypeBadge`, `EmptyState`, `useIsWide()`.
 

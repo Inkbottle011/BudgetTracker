@@ -12,7 +12,8 @@ import { parseDate, todayString } from '../../../shared/money/entry'
 import { useToastContext } from '../../../shared/ui/ToastContext'
 import { useTheme, useStyles, Palette, tabular } from '../../../shared/theme/theme'
 import { Section, Button, Field } from '../../../shared/ui/ui'
-import { makeSettingsStyles } from '../../account/screens/TwoFactorSection'
+import { makeSettingsStyles } from '../../../shared/ui/settingsStyles'
+import { latestTransactionDate } from '../../transactions/api'
 
 /** Settings: link banks (Plaid by default), see their status, sync now, unlink. */
 export function LinkedBanksSection({ twoFactorOn }: { twoFactorOn: boolean }) {
@@ -49,8 +50,7 @@ export function LinkedBanksSection({ twoFactorOn }: { twoFactorOn: boolean }) {
     useFocusEffect(useCallback(() => { load() }, [twoFactorOn]))
 
     async function startLinking() {
-        const { data } = await supabase.from('transactions').select('date').order('date', { ascending: false }).limit(1)
-        setStartDate(suggestedStartDate(data ?? [], todayString()))
+        setStartDate(suggestedStartDate(await latestTransactionDate(), todayString()))
         setLinking(true)
     }
 
