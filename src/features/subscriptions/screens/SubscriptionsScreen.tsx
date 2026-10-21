@@ -83,6 +83,16 @@ export default function SubscriptionsScreen() {
     )
 }
 
+/** What we saw, and why it looks like a subscription. */
+function suggestionLine(sg: RecurringSuggestion): string {
+    const amount = formatMoney(sg.amount)
+    const next = `next around ${shortDate(sg.nextDate)}`
+    if (sg.reason === 'twoCharges') return `${amount} twice, a month apart · ${next}`
+    if (sg.reason === 'knownService') return `${amount} on ${shortDate(sg.lastDate)} · usually a monthly subscription · ${next}`
+    if (sg.reason === 'bankSays') return `${amount} on ${shortDate(sg.lastDate)} · your bank says it repeats · ${next}`
+    return `${amount} ${FREQUENCY_LABELS[sg.frequency].toLowerCase()} · charged ${sg.count} times · ${next}`
+}
+
 /** Charges that repeat but aren't subscriptions yet. */
 function Suggestions({ suggestions, onAdd, onDismiss }: { suggestions: RecurringSuggestion[]; onAdd: (s: RecurringSuggestion) => void; onDismiss: (s: RecurringSuggestion) => void }) {
     const styles = useStyles(makeStyles)
@@ -96,7 +106,7 @@ function Suggestions({ suggestions, onAdd, onDismiss }: { suggestions: Recurring
                         <View style={styles.rowText}>
                             <Text style={styles.name} numberOfLines={1}>{sg.name}</Text>
                             <Text style={[styles.meta, tabular]}>
-                                {`${formatMoney(sg.amount)} ${FREQUENCY_LABELS[sg.frequency].toLowerCase()} · charged ${sg.count} times · next around ${shortDate(sg.nextDate)}`}
+                                {suggestionLine(sg)}
                             </Text>
                         </View>
                     </View>

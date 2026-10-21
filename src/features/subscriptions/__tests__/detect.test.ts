@@ -25,7 +25,7 @@ describe('findRecurringCharges', () => {
         const list = monthly('SPOTIFY P1A2B3', 11.99, ['2026-07-07', '2026-08-07', '2026-09-07', '2026-10-07'])
         expect(findRecurringCharges(list, [], [], TODAY)).toEqual([{
             key: 'spotify', name: 'SPOTIFY P1A2B3', amount: 11.99, frequency: 'monthly', category: 'Subscriptions',
-            lastDate: '2026-10-07', nextDate: '2026-11-07', count: 4,
+            lastDate: '2026-10-07', nextDate: '2026-11-07', count: 4, reason: 'schedule',
         }])
     })
 
@@ -50,8 +50,8 @@ describe('findRecurringCharges', () => {
         expect(findRecurringCharges(twice, [], [], TODAY)).toEqual([])
     })
 
-    it('needs three monthly charges, but two are enough for a yearly one', () => {
-        expect(findRecurringCharges(monthly('Hulu', 7.99, ['2026-09-03', '2026-10-03']), [], [], TODAY)).toEqual([])
+    it('needs three monthly charges (unless the amount matches exactly), but two are enough for a yearly one', () => {
+        expect(findRecurringCharges([tx('2026-09-03', 'Bookshop', 7.99), tx('2026-10-03', 'Bookshop', 8.25)], [], [], TODAY)).toEqual([])
         expect(findRecurringCharges(monthly('Domain renewal', 12, ['2025-03-15', '2026-03-14']), [], [], TODAY))
             .toMatchObject([{ frequency: 'yearly', nextDate: '2027-03-14' }])
     })
@@ -144,5 +144,47 @@ describe('findPriceChanges', () => {
     it('only goes by recent charges from your bank, not the ones the app added', () => {
         expect(findPriceChanges([sub()], [tx('2026-05-10', 'Netflix', 17.99)], TODAY)).toEqual([])
         expect(findPriceChanges([sub()], [tx('2026-10-10', 'Netflix', 17.99, { subscription_id: 's1' })], TODAY)).toEqual([])
+    })
+})
+
+describe('spotting subscriptions sooner', () => {
+    it('suggests a well-known subscription service from its first charge, guessing monthly', () => {
+        expect(findRecurringCharges([tx('2026-10-10', 'NETFLIX.COM', 15.49)], [], [], TODAY)).toMatchObject([{
+            name: 'NETFLIX.COM', amount: 15.49, frequency: 'monthly', count: 1, nextDate: '2026-11-10', reason: 'knownService',
+        }])
+        expect(findRecurringCharges([tx('2026-10-02', 'ANTHROPIC* CLAUDE SUB', 21.2)], [], [], TODAY)).toMatchObject([{ reason: 'knownService' }])
+        expect(findRecurringCharges([tx('2026-10-02', 'Spotify USA', 11.99)], [], [], TODAY)).toMatchObject([{ reason: 'knownService' }])
+    })
+
+    it('suggests a charge your bank describes as recurring or a subscription', () => {
+        expect(findRecurringCharges([tx('2026-10-05', 'RECURRING PAYMENT ACME CLOUD', 9)], [], [], TODAY)).toMatchObject([{ reason: 'bankSays' }])
+        expect(findRecurringCharges([tx('2026-10-05', 'Local Gym', 25, { note: 'Monthly membership' })], [], [], TODAY)).toMatchObject([{ reason: 'bankSays' }])
+    })
+
+    it('does not treat ordinary shopping at a big company as a subscription', () => {
+        const list = [tx('2026-10-05', 'AMAZON MKTP US', 34.99), tx('2026-10-08', 'APPLEBEES 123', 40), tx('2026-10-09', 'GOOGLE *PLAY STORE', 4.99)]
+        expect(findRecurringCharges(list, [], [], TODAY)).toEqual([])
+    })
+
+    it('suggests two charges a month apart when the amount matches to the cent', () => {
+        expect(findRecurringCharges(monthly('Acme Cloud', 7.99, ['2026-09-03', '2026-10-03']), [], [], TODAY))
+            .toMatchObject([{ frequency: 'monthly', count: 2, nextDate: '2026-11-03', reason: 'twoCharges' }])
+        // ...but not when the amounts differ, or they're not a month apart
+        expect(findRecurringCharges([tx('2026-09-03', 'Corner Deli', 7.99), tx('2026-10-03', 'Corner Deli', 8.49)], [], [], TODAY)).toEqual([])
+        expect(findRecurringCharges(monthly('Corner Deli', 7.99, ['2026-09-20', '2026-10-03']), [], [], TODAY)).toEqual([])
+    })
+
+    it('keeps the stronger reason once there are three charges', () => {
+        const list = monthly('Netflix', 15.49, ['2026-08-10', '2026-09-10', '2026-10-10'])
+        expect(findRecurringCharges(list, [], [], TODAY)).toMatchObject([{ reason: 'schedule', count: 3 }])
+    })
+
+    it('leaves out a single charge from a while ago', () => {
+        expect(findRecurringCharges([tx('2026-08-01', 'Netflix', 15.49)], [], [], TODAY)).toEqual([])
+    })
+
+    it('still respects your subscriptions and dismissals', () => {
+        expect(findRecurringCharges([tx('2026-10-10', 'NETFLIX.COM', 15.49)], [sub()], [], TODAY)).toEqual([])
+        expect(findRecurringCharges([tx('2026-10-10', 'NETFLIX.COM', 15.49)], [], ['netflix com'], TODAY)).toEqual([])
     })
 })

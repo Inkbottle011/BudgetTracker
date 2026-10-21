@@ -10,8 +10,18 @@ interface Tx {
     amount: number | string
     type: string
     category_label?: string | null
+    note?: string | null
     subscription_id?: string | null
 }
+
+/**
+ * Why it looks like a subscription:
+ *   schedule      charged on a regular schedule (3+ times, or twice a year apart)
+ *   twoCharges    charged twice a month apart, the same amount to the cent
+ *   knownService  a well-known subscription service (from its first charge)
+ *   bankSays      your bank describes it as recurring, a subscription or a membership
+ */
+export type SuggestionReason = 'schedule' | 'twoCharges' | 'knownService' | 'bankSays'
 
 export interface RecurringSuggestion {
     key: string             // the place, as matched (also what's saved when you say it's not a subscription)
@@ -21,7 +31,8 @@ export interface RecurringSuggestion {
     category: string | null
     lastDate: string
     nextDate: string        // when the next charge is expected: always after today, so adding it never repeats one already imported
-    count: number           // how many charges in a row fit the schedule
+    count: number           // how many charges in a row fit the schedule (or were seen, for early guesses)
+    reason: SuggestionReason
 }
 
 export interface PriceChange {
@@ -35,6 +46,24 @@ const GAPS: Record<Frequency, [number, number]> = { weekly: [5, 9], biweekly: [1
 const PERIOD_DAYS: Record<Frequency, number> = { weekly: 7, biweekly: 14, monthly: 31, yearly: 366 }
 const MIN_CHARGES: Record<Frequency, number> = { weekly: 3, biweekly: 3, monthly: 3, yearly: 2 }
 const PRICE_WIGGLE = 0.25   // charges in a row may differ from the newest by up to 25% (small price changes)
+
+// Services that are almost always subscriptions. Matched against the bank's wording, so ordinary shopping
+// at the same company (Amazon Marketplace, Google Play, Applebee's) isn't caught.
+const KNOWN_SERVICES: RegExp[] = [
+    /\bnetflix\b/, /\bspotify\b/, /\bhulu\b/, /disney\s*(\+|plus)/, /youtube\s*(premium|tv|music)|google\s*\*\s*youtube/,
+    /\bhbo\b|\bmax\.com\b/, /paramount\s*(\+|plus)/, /\bpeacock\b/, /\bicloud\b|apple\.com\/bill/, /google\s*(one|\*\s*google\s*storage|storage)/,
+    /\badobe\b/, /chatgpt|openai/, /\banthropic\b|claude\.ai|\bclaude\b/, /amazon\s*prime|amzn\s*prime|prime\s*video/, /\baudible\b/,
+    /\bxbox\b|playstation|nintendo/, /\bpatreon\b/, /\bdropbox\b/, /microsoft\s*365|office\s*365|\bmsft\s*\*/, /\bduolingo\b/,
+    /crunchyroll/, /sirius\s*xm/, /planet\s*fitness|la\s*fitness|anytime\s*fitness|\bequinox\b|\bpeloton\b/,
+    /nytimes|new\s*york\s*times/, /\bheadspace\b/, /\bcalm\.com\b/, /linkedin\s*premium/,
+]
+// Words banks use for charges that repeat
+const BANK_SAYS_RECURRING = /\b(recurring|subscription|subscr|membership|auto[- ]?renew(al)?)\b/
+const EARLY_RECENT_DAYS = 45   // early guesses only for charges in the last month and a half
+
+const textOf = (t: Tx) => `${t.original_name ?? ''} ${t.name ?? ''} ${t.note ?? ''}`.toLowerCase()
+const isKnownService = (t: Tx) => KNOWN_SERVICES.some(re => re.test(textOf(t)))
+const bankSaysRecurring = (t: Tx) => BANK_SAYS_RECURRING.test(textOf(t))
 
 /** The place behind a transaction name, ignoring the codes banks add to each charge. */
 export function recurringKey(name: unknown): string {
@@ -81,15 +110,31 @@ export function findRecurringCharges(transactions: Tx[], subscriptions: Subscrip
         const latest = charges.at(-1)!
         if (charges.some(t => keysOf(t).some(k => yours.some(y => sharesWord(k, y))))) continue
 
-        const best = bestSchedule(charges)
-        if (!best) continue
         const lastDate = latest.date.slice(0, 10)
-        if (daysBetween(lastDate, today) > PERIOD_DAYS[best.frequency] * 1.5) continue   // seems to have stopped
+        const name = String(latest.name || latest.original_name || key)
+        const best = bestSchedule(charges)
+        if (best) {
+            if (daysBetween(lastDate, today) > PERIOD_DAYS[best.frequency] * 1.5) continue   // seems to have stopped
+            found.push({
+                key, name, amount: Number(latest.amount), frequency: best.frequency, category: mostCommon(best.run.map(t => t.category_label)),
+                lastDate, nextDate: nextAfter(lastDate, best.frequency, today), count: best.run.length, reason: 'schedule',
+            })
+            continue
+        }
 
+        // Earlier guesses, before there's a full schedule to go on: assumed monthly
+        if (daysBetween(lastDate, today) > EARLY_RECENT_DAYS) continue
+        const prev = charges.at(-2)
+        const [min, max] = GAPS.monthly
+        const gap = prev ? daysBetween(prev.date.slice(0, 10), lastDate) : 0
+        let reason: SuggestionReason | null = null
+        if (prev && gap >= min && gap <= max && Math.abs(Number(prev.amount) - Number(latest.amount)) < 0.005) reason = 'twoCharges'
+        else if (isKnownService(latest)) reason = 'knownService'
+        else if (charges.some(bankSaysRecurring)) reason = 'bankSays'
+        if (!reason) continue
         found.push({
-            key, name: String(latest.name || latest.original_name || key), amount: Number(latest.amount),
-            frequency: best.frequency, category: mostCommon(best.run.map(t => t.category_label)),
-            lastDate, nextDate: nextAfter(lastDate, best.frequency, today), count: best.run.length,
+            key, name, amount: Number(latest.amount), frequency: 'monthly', category: mostCommon(charges.map(t => t.category_label)),
+            lastDate, nextDate: nextAfter(lastDate, 'monthly', today), count: reason === 'twoCharges' ? 2 : charges.length, reason,
         })
     }
     return found.sort((a, b) => a.nextDate.localeCompare(b.nextDate) || a.name.localeCompare(b.name))

@@ -196,6 +196,18 @@ describe('subscriptions spotted in your spending', () => {
         expect(screen.getByRole('button', { name: 'Add Spotify as a subscription' })).toBeTruthy()
     })
 
+    it('says why an early guess looks like a subscription', async () => {
+        fake.table('transactions', { data: [
+            charge('2026-09-20', 'HULU 877-824-4858', 15.49),
+            charge('2026-09-01', 'Acme Cloud', 7.99), charge('2026-10-01', 'Acme Cloud', 7.99),
+            charge('2026-09-28', 'RECURRING PAYMENT BOXCO', 30),
+        ] })
+        await renderScreen()
+        expect(await screen.findByText('$15.49 on Sep 20 · usually a monthly subscription · next around Oct 20')).toBeTruthy()
+        expect(screen.getByText('$7.99 twice, a month apart · next around Nov 1')).toBeTruthy()
+        expect(screen.getByText('$30.00 on Sep 28 · your bank says it repeats · next around Oct 28')).toBeTruthy()
+    })
+
     it('adding one opens the form filled in, starting at the next charge so past ones aren\'t added twice', async () => {
         await renderScreen()
         await fireEvent.press(await screen.findByRole('button', { name: 'Add Spotify as a subscription' }))
