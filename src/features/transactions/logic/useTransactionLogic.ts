@@ -1,0 +1,366 @@
+import { useState, useEffect } from 'react'
+import { supabase } from '../../../shared/supabase'
+import { loadCategoryNames } from '../../budget/api'
+import { useTransactionStore } from './useTransactionStore'
+import { EditingTransaction } from './types'
+import { useToastContext } from '../../../shared/ui/ToastContext'
+import { parseAmount, parseDate, todayString, merchantKey } from '../../../shared/money/entry'
+import { filterTransactions, sortTransactions, toCSV } from './listLogic'
+import { totalShares } from './splits'
+
+export function useTransactionLogic() {
+    const { transactions, setTransactions } = useTransactionStore()
+    const { showToast } = useToastContext()
+    
+    // Add form state
+    const [type, setType] = useState('Expense')
+    const [category, setCategory] = useState('')
+    const [amount, setAmount] = useState('')
+    const [details, setDetails] = useState('')
+    const [date, setDate] = useState(todayString()) // local date, not UTC (UTC is tomorrow after 8pm in New York)
+    const [name, setName] = useState('')
+    const [errors, setErrors] = useState<{ amount?: string; date?: string; split?: string }>({})
+    // People who owe you part of this expense (empty rows are ignored)
+    const [splitOpen, setSplitOpen] = useState(false)
+    const [splits, setSplits] = useState<{ person: string; amount: string }[]>([])
+    const [saving, setSaving] = useState(false)
+    const [success, setSuccess] = useState(false)
+    
+    // Edit state
+    const [editingTransaction, setEditingTransaction] = useState<EditingTransaction | null>(null)
+    
+    // Select/delete state
+    const [selectMode, setSelectMode] = useState(false)
+    const [selected, setSelected] = useState<Set<string>>(new Set())
+    const [deleting, setDeleting] = useState(false)
+    const [confirmDelete, setConfirmDelete] = useState(false)
+    
+    // Search/filter/sort state
+    const [search, setSearch] = useState('')
+    const [filterType, setFilterType] = useState<string | null>(null)
+    const [filterFrom, setFilterFrom] = useState('')
+    const [filterTo, setFilterTo] = useState('')
+    const [showFilters, setShowFilters] = useState(false)
+    const [sortCol, setSortCol] = useState<string>('date')
+    const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+    
+    const [page, setPage] = useState(0)
+    const PAGE_SIZE = 20
+    const [budgetCategories, setBudgetCategories] = useState<Record<string, string[]>>({
+        Income: [], Expense: [], Savings: [], Investment: []
+    })
+    const [showImport, setShowImport] = useState(false)
+    
+    useEffect(() => { setPage(0) }, [search, filterType, filterFrom, filterTo])
+    useEffect(() => {
+        fetchTransactions()
+        fetchBudgetCategories()
+    }, [])
+
+    async function fetchTransactions() {
+        const { data } = await supabase
+            .from('transactions')
+            .select('*')
+            .order('date', { ascending: false })
+        if (data) setTransactions(data)
+    }
+    
+    // Split rows that have something typed in them
+    const filledSplits = () => splits.filter(r => r.person.trim() || r.amount.trim())
+
+    function validate() {
+        const e: { amount?: string; date?: string; split?: string } = {}
+        if (!date) e.date = 'Required'
+        else if (!parseDate(date)) e.date = 'Use a date like 2026-10-05 or 10/5/2026'
+        const amt = parseAmount(amount)
+        if (amt === null || amt === 0) e.amount = 'Enter an amount, like 12.50'
+        if (type === 'Expense' && filledSplits().length) {
+            const rows = filledSplits()
+            if (rows.some(r => !r.person.trim())) e.split = 'Add a name for each person'
+            else if (rows.some(r => !parseAmount(r.amount))) e.split = 'Enter how much each person owes'
+            else if (amt && totalShares(rows) > Math.abs(amt) + 0.005) e.split = "Others can't owe more than the total"
+        }
+        setErrors(e)
+        return !e.date && !e.amount && !e.split
+    }
+
+    /** Share the amount equally between you and everyone listed; you keep any leftover cent. */
+    function splitEvenly() {
+        const total = Math.abs(parseAmount(amount) ?? 0)
+        const people = splits.length
+        if (!total || !people) return
+        const each = Math.floor((total / (people + 1)) * 100) / 100
+        setSplits(rows => rows.map(r => ({ ...r, amount: each.toFixed(2) })))
+        setErrors(e => ({ ...e, split: undefined }))
+    }
+
+    function openSplit() {
+        setSplitOpen(true)
+        if (splits.length === 0) setSplits([{ person: '', amount: '' }])
+    }
+
+    function closeSplit() {
+        setSplitOpen(false)
+        setSplits([])
+        setErrors(e => ({ ...e, split: undefined }))
+    }
+    
+    // Pick a past transaction from the name suggestions: fill in its details
+    function applySuggestion(t: { name?: string; amount: number; type: string; category_label?: string }) {
+        setName(t.name || '')
+        setAmount(String(t.amount))
+        setType(t.type.charAt(0).toUpperCase() + t.type.slice(1))
+        setCategory(t.category_label || '')
+        setErrors({})
+    }
+    
+    /** Saves the add form. Resolves true when the transaction was added. */
+    async function handleAdd(): Promise<boolean> {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) return false
+        if (!validate()) return false
+        setSaving(true)
+        setErrors({})
+        const shares = type === 'Expense' ? filledSplits() : []
+        const { data: created, error } = await supabase.from('transactions').insert({
+            user_id: session.user.id,
+            type: type.toLowerCase(),
+            category_id: null,
+            amount: Math.abs(parseAmount(amount)!),
+            name: name.trim(),
+            note: details.trim(),
+            category_label: category,
+            date: parseDate(date)!,
+        }).select('id').single()
+        if (!error) {
+            let message = 'Transaction added!'
+            if (shares.length && created?.id) {
+                const { error: shareError } = await supabase.from('split_shares').insert(
+                    shares.map(r => ({ expense_id: created.id, person: r.person.trim(), amount: Math.abs(parseAmount(r.amount)!) })),
+                )
+                message = shareError
+                    ? "Transaction added, but who owes you couldn't be saved"
+                    : `Transaction added! $${totalShares(shares).toFixed(2)} is owed to you.`
+            }
+            // Keep the type and date for the next entry; clear the rest
+            setAmount(''); setDetails(''); setCategory(''); setName(''); setDate(parseDate(date)!)
+            setSplits([]); setSplitOpen(false)
+            setSuccess(true)
+            setTimeout(() => setSuccess(false), 2000)
+            fetchTransactions()
+            if (message.includes("couldn't")) showToast(message, 'error')
+            else showToast(message)
+        } else {
+            showToast('Failed to add transaction', 'error')
+        }
+        setSaving(false)
+        return !error
+    }
+    
+    async function handleSaveEdit() {
+        if (!editingTransaction) return
+        const editAmount = parseAmount(editingTransaction.amount)
+        const editDate = parseDate(editingTransaction.date)
+        if (editAmount === null || editAmount === 0) { showToast('Enter an amount, like 12.50', 'error'); return }
+        if (!editDate) { showToast('Use a date like 2026-10-05 or 10/5/2026', 'error'); return }
+        setSaving(true)
+        const newName = editingTransaction.name.trim()
+        const renamed = editingTransaction.startName !== undefined && newName !== '' && newName !== editingTransaction.startName
+        const { error } = await supabase
+            .from('transactions')
+            .update({
+                type: editingTransaction.type.toLowerCase(),
+                category_label: editingTransaction.category,
+                // A new name is saved below, keeping the original wording
+                ...(renamed ? {} : { name: editingTransaction.name }),
+                amount: Math.abs(editAmount),
+                note: editingTransaction.details,
+                date: editDate,
+            })
+            .eq('id', editingTransaction.id)
+        if (error) {
+            showToast('Failed to update transaction', 'error')
+            setSaving(false)
+            return
+        }
+        const message = renamed ? await renameTransaction(editingTransaction, newName) : null
+        setEditingTransaction(null)
+        fetchTransactions()
+        if (message?.error) showToast(message.error, 'error')
+        else showToast(message?.ok ?? 'Transaction updated!')
+        setSaving(false)
+    }
+    
+    /**
+     * Renames one transaction, or every one from the same place (and remembers the name for future
+     * imports). The original wording is kept so duplicate checks and matching still work.
+     */
+    async function renameTransaction(t: EditingTransaction, newName: string): Promise<{ ok?: string; error?: string }> {
+        const place = t.placeName || t.startName || ''
+        const key = merchantKey(place)
+        const all = !!t.renameAll && !!key
+        const ids = all
+            ? [...new Set([t.id, ...transactions.filter(x => merchantKey(x.original_name || x.name || x.note) === key).map(x => x.id)])]
+            : [t.id]
+        const { error } = await supabase.rpc('rename_transactions', { p_ids: ids, p_name: newName })
+        if (error) {
+            // Renaming isn't set up yet: still save the new name on this one
+            await supabase.from('transactions').update({ name: newName }).eq('id', t.id)
+            return all ? { error: `Saved. To rename every ${place} transaction, run supabase/sql/merchants/01_setup.sql in Supabase first.` } : {}
+        }
+        if (!all) return {}
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session) {
+            await supabase.from('merchant_renames').upsert(
+                { user_id: session.user.id, merchant_key: key, display_name: newName }, { onConflict: 'user_id,merchant_key' })
+        }
+        return { ok: `Renamed ${ids.length} ${place} transaction${ids.length === 1 ? '' : 's'} to ${newName}. New ones will be too.` }
+    }
+
+    /** Tapping a row: picks it in select mode, otherwise opens it for editing. */
+    function handleEditSelect(t: any) {
+        if (selectMode) { toggleSelect(t.id); return }
+        setEditingTransaction({
+            id: t.id,
+            type: t.type.charAt(0).toUpperCase() + t.type.slice(1),
+            category: t.category_label || '',
+            name: t.name || '',
+            startName: t.name || '',
+            placeName: t.original_name || t.name || '',
+            renameAll: true,
+            amount: String(t.amount),
+            details: t.note || '',
+            date: t.date,
+        })
+    }
+
+    /** "Duplicate" in the edit form: adds a copy of the saved transaction dated today, and closes the editor. */
+    async function duplicateEditing() {
+        const original = editingTransaction && transactions.find(x => x.id === editingTransaction.id)
+        if (!original) return
+        if (await handleDuplicate(original)) setEditingTransaction(null)
+    }
+    
+    function toggleSelect(id: string) {
+        setSelected(prev => {
+            const next = new Set(prev)
+            if (next.has(id)) next.delete(id)
+            else next.add(id)
+            return next
+        })
+    }
+    
+    function exitSelectMode() {
+        setSelectMode(false)
+        setSelected(new Set())
+        setConfirmDelete(false)
+    }
+    
+    async function handleDelete() {
+        if (selected.size === 0) return
+        setDeleting(true)
+        const { error } = await supabase
+            .from('transactions')
+            .delete()
+            .in('id', Array.from(selected))
+        if (!error) {
+            await fetchTransactions()
+            exitSelectMode()
+            showToast(`${selected.size} transaction${selected.size > 1 ? 's' : ''} deleted`)
+        } else {
+            showToast('Failed to delete transactions', 'error')
+        }
+        setDeleting(false)
+    }
+    
+    function handleSort(col: string) {
+        if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+        else { setSortCol(col); setSortDir('asc') }
+    }
+    
+    function exportToCSV() {
+        const blob = new Blob([toCSV(totalRows)], { type: 'text/csv' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `transactions_${todayString()}.csv`
+        a.click()
+        URL.revokeObjectURL(url)
+        showToast('CSV exported!')
+    }
+
+    async function fetchBudgetCategories() {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) return
+        const data = await loadCategoryNames()
+
+        if (data && data.length > 0) {
+            const grouped: Record<string, string[]> = {
+                Income: [], Expense: [], Savings: [], Investment: []
+            }
+            data.forEach(item => {
+                const key = item.type.charAt(0).toUpperCase() + item.type.slice(1)
+                if (grouped[key]) grouped[key].push(item.name)
+            })
+            grouped.Reimbursement = grouped.Expense // paybacks go against spending categories
+            grouped.Withdrawal = grouped.Savings    // withdrawals come out of savings categories
+            setBudgetCategories(grouped)
+        }
+    }
+    
+    /** Adds a copy of a transaction, dated today. Resolves true when it was saved. */
+    async function handleDuplicate(t: any): Promise<boolean> {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) return false
+        const { error } = await supabase.from('transactions').insert({
+            user_id: session.user.id,
+            type: t.type,
+            category_id: null,
+            amount: t.amount,
+            name: t.name,
+            note: t.note,
+            category_label: t.category_label,
+            date: todayString(),
+        })
+        if (!error) {
+            fetchTransactions()
+            showToast('Added a copy dated today')
+        } else {
+            showToast("Couldn't add a copy. Check your connection and try again.", 'error')
+        }
+        return !error
+    }
+    
+    const totalRows = sortTransactions(
+        filterTransactions(transactions, { search, type: filterType, from: filterFrom, to: filterTo }),
+        sortCol, sortDir,
+    )
+    
+    const rows = totalRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+    const totalPages = Math.ceil(totalRows.length / PAGE_SIZE)
+    const filtering = !!(search.trim() || filterType || filterFrom || filterTo)
+    
+    return {
+        type, setType, category, setCategory, amount, setAmount,
+        details, setDetails, date, setDate, name, setName,
+        errors, setErrors, saving, success,
+        handleAdd, applySuggestion, transactions,
+        splitOpen, openSplit, closeSplit, splits, setSplits, splitEvenly,
+        editingTransaction, setEditingTransaction,
+        handleSaveEdit, handleEditSelect, duplicateEditing,
+        selectMode, setSelectMode, selected,
+        deleting, confirmDelete, setConfirmDelete,
+        toggleSelect, exitSelectMode, handleDelete,
+        search, setSearch,
+        filterType, setFilterType,
+        filterFrom, setFilterFrom,
+        filterTo, setFilterTo,
+        showFilters, setShowFilters,
+        sortCol, sortDir, handleSort,
+        rows, filtering,
+        page, setPage, totalPages,
+        exportToCSV, handleDuplicate,
+        budgetCategories,
+        showImport, setShowImport,fetchTransactions,
+    }
+}

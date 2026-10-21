@@ -43,7 +43,7 @@
     "test:coverage": "jest --coverage",
     "test:app": "jest",
     "test:db": "node --test \"supabase/sql/__tests__/*.test.mjs\"",
-    "sync:shared": "node -e \"require('fs').copyFileSync('lib/entry.ts','supabase/functions/_shared/entry.ts')\""
+    "sync:shared": "node -e \"require('fs').copyFileSync('src/shared/money/entry.ts','supabase/functions/_shared/entry.ts')\""
   },
   "private": true,
   "jest": {
@@ -59,11 +59,7 @@
       "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|victory-native)"
     ],
     "collectCoverageFrom": [
-      "app/**/*.{ts,tsx}",
-      "lib/**/*.ts",
-      "components/**/*.tsx",
-      "hooks/**/*.ts",
-      "store/**/*.ts",
+      "src/**/*.{ts,tsx}",
       "!**/*.d.ts",
       "supabase/functions/_shared/**/*.ts"
     ],

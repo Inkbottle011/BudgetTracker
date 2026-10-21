@@ -5,7 +5,7 @@
 ## 🔴 Critical (Do Before Sharing With Anyone)
 
 - [ D] **Sign out** — users have no way to log out currently
-- [ D] **Move anon key to environment variables** — currently hardcoded in `lib/supabase.ts`
+- [ D] **Move anon key to environment variables** — currently hardcoded in `src/shared/supabase.ts`
 - [ D] **Re-enable email verification** — disabled for testing, must be on for production
 - [ D] **Error boundaries** — app shows blank screen on crash, needs graceful error handling
 

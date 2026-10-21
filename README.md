@@ -140,9 +140,9 @@ Tests also run on every pull request (GitHub Actions: type-check, then `npm test
 
 | Where | What the tests check |
 |---|---|
-| `lib/__tests__/` | Reading typed amounts and bank dates, merchant matching, subscription dates (month ends, leap years, daylight saving) |
-| `app/*/__tests__/*calculations*`, `listLogic` | Dashboard totals, budget grid totals, running balance, search, sort, CSV export |
-| `app/transactions/__tests__/importLogic` | Bank CSV formats (Chase, Capital One, Amex, UK banks), duplicate detection, card payments |
+| `src/shared/money/__tests__/`, `src/features/*/__tests__/*.test.ts` | Reading typed amounts and bank dates, merchant matching, subscription dates (month ends, leap years, daylight saving), dashboard and budget totals, search, sort, CSV export |
+| `src/features/transactions/__tests__/importLogic` | Bank CSV formats (Chase, Capital One, Amex, UK banks), duplicate detection, card payments |
+| `src/__tests__/architecture.test.ts` | The app's structure: features only use each other through their front doors, and only the owner of a table uses it |
 | Screen tests (`*.test.tsx`) | Sign-in, sign-up and forgot password; reset password; adding, editing and deleting transactions; CSV import; subscriptions; budget grid; dashboard; app routing and email links |
 | `supabase/sql/__tests__/` | The real subscription SQL run against an in-memory Postgres: catch-up, no duplicates, row-level security, conversion of old data |
 
@@ -156,24 +156,42 @@ For a new feature or a bug fix:
 2. Write the smallest change that makes it pass.
 3. Tidy the code with the tests still passing.
 
-Keep calculations in plain functions (like `app/dashboard/calculations.ts`) rather than inside screens or hooks: they're quicker to test and easier to reuse.
+Keep calculations in plain functions (like `src/features/dashboard/logic/calculations.ts`) rather than inside screens or hooks: they're quicker to test and easier to reuse.
 
 ## Project structure
 
+One app, organised feature by feature (a "modular monolith"):
+
 ```
-App.tsx                 Navigation (bottom tabs) and sign-out
-app/dashboard/          Dashboard screen, charts, and logic hook
-app/transactions/       List, form, CSV import, and logic hook
-app/subscriptions/      Subscriptions list, form, and logic hook
-app/budget/             Yearly planner table and logic hook
-app/auth.tsx            Sign-in / sign-up
-components/, context/   Toasts, error boundary, shared UI
-store/                  Zustand transaction store
-lib/supabase.ts         Supabase client
-lib/subscriptions.ts    Subscription dates, totals, and database calls
-supabase/sql/           SQL to set up subscriptions
-supabase/functions/     generate-recurring edge function (scheduled charges)
+index.ts                     Expo's entry point (loads src/App)
+src/App.tsx                  Top bar, tabs, sign-in gate
+src/features/<feature>/      One part of the app:
+    index.ts                   front door: everything other parts may use, screens included
+    api.ts                     front door for other features' logic: data and logic only, no screens
+    screens/                   what you see
+    logic/                     calculations, hooks and database calls (data.ts)
+    __tests__/
+  account/                   sign-in, password reset, two-factor
+  appearance/                the moving space background
+  bank/                      linking banks, balances, possible duplicates
+  budget/                    the yearly plan
+  dashboard/                 the summary of a day, week, month or year
+  settings/                  the Settings page (built from other features' sections)
+  subscriptions/             regular charges
+  transactions/              the list, adding/editing, CSV import, splits, categories, renaming
+src/shared/                  used by everything, depends on no feature
+  ui/                        buttons, sections, date field, toasts, error screen
+  theme/                     colors, themes, light/dark, background settings
+  money/                     money rules (entry.ts is copied to the bank function), formatting
+  dates.ts, supabase.ts
+supabase/sql/<feature>/      database setup, applied automatically on merge
+supabase/functions/          the bank function (Plaid) and generate-recurring
 ```
+
+The rules (checked by `src/__tests__/architecture.test.ts`):
+1. Features use each other only through their front doors: `features/<name>` for screens, `features/<name>/api` from logic.
+2. Each feature owns its database tables; others ask it (for example `loadAllTransactions()` from `transactions/api`).
+3. `src/shared` never imports a feature.
 
 ## What's next
 
