@@ -103,3 +103,16 @@ describe('subscriptions spotted in your spending', () => {
         expect(screen.queryByRole('button', { name: 'Review possible subscriptions' })).toBeNull()
     })
 })
+
+describe('pending charges', () => {
+    it('mentions what\'s pending this period (not counted yet) and lists it under Recent', async () => {
+        fake.table('bank_pending_transactions', { data: [
+            { id: 'p1', date: '2026-10-12', amount: 12.5, money_in: false, name: 'Lunch Spot' },
+            { id: 'p0', date: '2026-08-01', amount: 99, money_in: false, name: 'Old one' },
+        ] })
+        await render(<Dashboard />)
+        expect(await screen.findByText(/Plus \$12\.50 pending at your bank, not counted until it posts\./)).toBeTruthy()
+        expect(screen.getByText('Lunch Spot')).toBeTruthy()
+        expect(screen.getAllByText('Pending').length).toBeGreaterThan(0)
+    })
+})

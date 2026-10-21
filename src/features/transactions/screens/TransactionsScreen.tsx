@@ -7,6 +7,7 @@ import { TransactionList } from './TransactionList'
 import { TransactionForm } from './TransactionForm'
 import { OwedPanel } from './OwedPanel'
 import { UncategorizedPanel } from './UncategorizedPanel'
+import { PendingPanel } from './PendingPanel'
 
 /**
  * Transactions: the list, with the add/edit form beside it on a computer,
@@ -24,6 +25,7 @@ export default function TransactionsScreen() {
 
     const list = (
         <>
+            <PendingPanel refreshWhen={logic.transactions} />
             <OwedPanel transactions={logic.transactions} onChanged={logic.fetchTransactions} />
             <UncategorizedPanel transactions={logic.transactions} budgetCategories={logic.budgetCategories} onChanged={logic.fetchTransactions} />
             <TransactionList

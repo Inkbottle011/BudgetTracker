@@ -11,6 +11,7 @@ interface Props {
     saved: number
     left: number                  // income - spent
     remainingDays: number | null  // days left in a current period, else null
+    pending?: number              // charges in this period the bank hasn't posted yet (not in `spent`)
     wide: boolean
 }
 
@@ -18,7 +19,7 @@ interface Props {
  * The top of the dashboard: how much you've spent against your plan, with a marker for where
  * you'd be if you spent evenly, plus what came in, what you saved and what's left.
  */
-export function SpendingSummary({ heading, spent, planned, elapsed, income, saved, left, remainingDays, wide }: Props) {
+export function SpendingSummary({ heading, spent, planned, elapsed, income, saved, left, remainingDays, wide, pending = 0 }: Props) {
     const { c: C } = useTheme()
     const styles = useStyles(makeStyles)
     const hasPlan = planned > 0
@@ -51,6 +52,7 @@ export function SpendingSummary({ heading, spent, planned, elapsed, income, save
                     </View>
                 )}
                 <Text style={styles.note}>{note}</Text>
+                {pending > 0 && <Text style={styles.pending}>Plus {money(pending)} pending at your bank, not counted until it posts.</Text>}
             </View>
             <View style={[styles.side, wide && styles.sideWide]}>
                 <Figure label="Earned" value={income} tone="income" />
@@ -88,6 +90,7 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     fillOver: { backgroundColor: ON_PANEL.over },
     today: { position: 'absolute', top: -4, width: 2, height: 18, marginLeft: -1, backgroundColor: '#ffffff', borderRadius: 1 },
     note: { fontSize: 14, color: '#ffffff', opacity: 0.88, marginTop: 12, lineHeight: 20 },
+    pending: { fontSize: 13, color: C.onPanelMuted, marginTop: 4, lineHeight: 18 },
     side: { flexDirection: 'row', gap: 16, flexWrap: 'wrap', borderTopWidth: 1, borderColor: 'rgba(255,255,255,0.12)', paddingTop: 16 },
     sideWide: { flexDirection: 'column', justifyContent: 'center', gap: 12, borderTopWidth: 0, borderLeftWidth: 1, paddingTop: 0, paddingLeft: 24, minWidth: 210 },
     figure: { minWidth: 90 },

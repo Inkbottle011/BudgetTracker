@@ -320,3 +320,24 @@ describe('on a phone', () => {
         expect(screen.queryByText('Edit transaction')).toBeNull()
     })
 })
+
+describe('pending charges', () => {
+    it('shows charges your bank hasn\'t posted yet, separately and marked pending', async () => {
+        fake.table('bank_pending_transactions', { data: [
+            { id: 'p1', date: '2026-10-05', amount: 12.5, money_in: false, name: 'Lunch Spot' },
+            { id: 'p2', date: '2026-10-04', amount: 40, money_in: true, name: 'Refund' },
+        ] })
+        await renderScreen()
+        expect(await screen.findByText('Pending at your bank (2)')).toBeTruthy()
+        expect(screen.getByText('Lunch Spot')).toBeTruthy()
+        expect(screen.getByText('-$12.50')).toBeTruthy()
+        expect(screen.getByText('+$40.00')).toBeTruthy()
+        expect(screen.getByText(/added to your list once your bank posts them/)).toBeTruthy()
+    })
+
+    it('shows nothing extra when there are none', async () => {
+        await renderScreen()
+        await screen.findByText('Transactions')
+        expect(screen.queryByText(/Pending at your bank/)).toBeNull()
+    })
+})

@@ -266,3 +266,33 @@ describe('transfers between your own accounts', () => {
         assert.deepEqual(await h.one(`select dates_checked from bank_connections where id = $1`, [connection]), { dates_checked: false })
     })
 })
+
+describe('pending charges', () => {
+    async function serverSavesPending(userId) {
+        const { connection, account } = await serverLinks(userId)
+        await h.as('job')
+        await h.db.exec('set role service_role')
+        await h.insert('bank_pending_transactions', {
+            user_id: userId, connection_id: connection, bank_account_id: account, external_id: 'p1',
+            date: '2026-10-20', amount: 12.5, money_in: false, name: 'Lunch',
+        })
+        return connection
+    }
+
+    it('you see your own, after two-factor sign-in, and can\'t change them', async () => {
+        await serverSavesPending(ALICE)
+        await asUser(ALICE)
+        assert.deepEqual(await h.rows(`select name, amount::float as amount, money_in from bank_pending_transactions`), [{ name: 'Lunch', amount: 12.5, money_in: false }])
+        await assert.rejects(h.db.query(`delete from bank_pending_transactions`))
+        await asUser(ALICE, { twoFactor: false })
+        assert.deepEqual(await h.rows(`select name from bank_pending_transactions`), [])
+        await asUser(BOB)
+        assert.deepEqual(await h.rows(`select name from bank_pending_transactions`), [])
+    })
+
+    it('go away when the bank is unlinked', async () => {
+        const connection = await serverSavesPending(ALICE)
+        await h.db.query(`delete from bank_connections where id = $1`, [connection])
+        assert.equal((await h.rows(`select 1 from bank_pending_transactions`)).length, 0)
+    })
+})
