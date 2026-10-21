@@ -190,3 +190,38 @@ describe('convertBankTransactions', () => {
         expect(convertBankTransactions([tx('t', '2026-10-01', -1.005, 'x')], checking, ctx()).rows[0].amount).toBe(1.01)
     })
 })
+
+describe('the bank charge for a subscription the app already added', () => {
+    const subEntry = (over: any = {}) => ({ id: 'mine-1', date: '2026-10-10', amount: 15.49, name: 'Netflix', type: 'expense', subscription_id: 's1', ...over })
+
+    it('takes the place of the app\'s entry when the price changed, instead of counting twice', () => {
+        const r = convertBankTransactions([tx('t1', '2026-10-11', -17.99, 'NETFLIX.COM')], checking, ctx({ existing: [subEntry()] }))
+        expect(r.rows).toEqual([])
+        expect(r.replacements).toEqual([{ existing_transaction_id: 'mine-1', row: expect.objectContaining({ external_id: 't1', amount: 17.99, date: '2026-10-11' }) }])
+        expect(r.skipped.subscriptionCharge).toBe(1)
+    })
+
+    it('recognizes the bank\'s wording for your subscription\'s name', () => {
+        const r = convertBankTransactions([tx('t1', '2026-10-03', -25.44, 'ANTHROPIC* CLAUDE SUB')], checking,
+            ctx({ existing: [subEntry({ name: 'Claude', amount: 21.2, date: '2026-10-02' })] }))
+        expect(r.replacements).toHaveLength(1)
+    })
+
+    it('leaves your own typed-in entries alone: a different amount there is a different purchase', () => {
+        const r = convertBankTransactions([tx('t1', '2026-10-11', -17.99, 'NETFLIX.COM')], checking, ctx({ existing: [subEntry({ subscription_id: null })] }))
+        expect(r.rows).toHaveLength(1)
+        expect(r.replacements).toEqual([])
+    })
+
+    it('only within a week, and only money going out', () => {
+        expect(convertBankTransactions([tx('t1', '2026-10-25', -17.99, 'NETFLIX.COM')], checking, ctx({ existing: [subEntry()] })).replacements).toEqual([])
+        expect(convertBankTransactions([tx('t1', '2026-10-11', 17.99, 'NETFLIX.COM')], checking, ctx({ existing: [subEntry()] })).replacements).toEqual([])
+    })
+
+    it('still just skips the bank charge when the amount is the same (as before)', () => {
+        const r = convertBankTransactions([tx('t1', '2026-10-11', -15.49, 'NETFLIX.COM')], checking, ctx({ existing: [subEntry()] }))
+        expect(r.rows).toEqual([])
+        expect(r.replacements).toEqual([])
+        expect(r.skipped.duplicate).toBe(1)
+    })
+})

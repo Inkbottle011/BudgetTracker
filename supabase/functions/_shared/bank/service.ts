@@ -1,6 +1,6 @@
 // Linking, syncing and unlinking banks. Runs only on the server (service role); provider-neutral.
 import { encryptToken, decryptToken } from './crypto.ts'
-import { convertBankTransactions, SAME_PLACE_DAYS, MONEY_IN_TYPES, type PossibleDuplicate, type TransactionRow } from './convert.ts'
+import { convertBankTransactions, SAME_PLACE_DAYS, MONEY_IN_TYPES, type PossibleDuplicate, type Replacement, type TransactionRow } from './convert.ts'
 import { findTransferPairs, TRANSFER_DAYS, type TransferCandidate } from './transfers.ts'
 import { isCardPayment } from '../entry.ts'
 import { BankProvider, ProviderError } from './types.ts'
@@ -138,7 +138,8 @@ export async function syncConnection(deps: BankDeps, connectionId: string) {
         const rows: TransactionRow[] = []
         const moneyIn = new Set<string>()
         const reviews: PossibleDuplicate[] = []
-        const skipped = { pending: 0, beforeStart: 0, duplicate: 0, cardPayment: 0, alreadyImported: 0 }
+        const replacements: Replacement[] = []
+        const skipped = { pending: 0, beforeStart: 0, duplicate: 0, cardPayment: 0, alreadyImported: 0, subscriptionCharge: 0 }
         for (const acc of (accounts ?? []).filter((a: any) => a.connection_id === conn.id)) {
             const txs = await deps.provider.listTransactions(token, acc.provider_account_id, since)
             if (acc.type !== 'credit') for (const t of txs) fetchedMoneyIn.set(t.externalId, t.amount > 0)
@@ -150,6 +151,7 @@ export async function syncConnection(deps: BankDeps, connectionId: string) {
             })
             rows.push(...r.rows)
             reviews.push(...r.reviews)
+            replacements.push(...r.replacements)
             r.moneyIn.forEach(id => moneyIn.add(id))
             for (const k of Object.keys(skipped) as (keyof typeof skipped)[]) skipped[k] += r.skipped[k]
         }
@@ -167,6 +169,15 @@ export async function syncConnection(deps: BankDeps, connectionId: string) {
                 .upsert(rows, { onConflict: 'user_id,provider,external_id', ignoreDuplicates: true }).select('id')
             if (error) throw new Error(`Couldn't save transactions: ${error.message}`)
             added = (data ?? []).length
+        }
+
+        // The bank's charge for a subscription the app already added (price changed): it becomes that entry
+        for (const { existing_transaction_id, row } of replacements) {
+            const { error } = await deps.db.from('transactions').update({
+                amount: row.amount, date: row.date, provider: row.provider, external_id: row.external_id,
+                bank_account_id: row.bank_account_id, original_name: row.original_name ?? row.name,
+            }).eq('user_id', conn.user_id).eq('id', existing_transaction_id)
+            if (error) throw new Error(`Couldn't update a subscription charge: ${error.message}`)
         }
 
         let toReview = 0
