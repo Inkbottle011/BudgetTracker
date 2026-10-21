@@ -14,12 +14,28 @@ async function factors() {
     const { data, error } = await supabase.auth.mfa.listFactors()
     if (error) throw new Error(error.message)
     const all = (data?.all ?? []) as any[]
-    return { all, verified: all.find(f => f.status === 'verified' && f.factor_type === 'totp') ?? (data?.totp ?? [])[0] ?? null }
+    let ready = all.filter(f => f.status === 'verified' && f.factor_type === 'totp')
+    if (!ready.length) ready = (data?.totp ?? []) as any[]
+    return { all, ready, verified: ready[0] ?? null }
 }
 
-export async function twoFactorStatus(): Promise<{ on: boolean; factorId: string | null }> {
-    const { verified } = await factors()
-    return { on: !!verified, factorId: verified?.id ?? null }
+/** An authenticator app set up for this account. You can have more than one (a backup). */
+export interface Authenticator { id: string; name: string }
+
+export async function twoFactorStatus(): Promise<{ on: boolean; factorId: string | null; authenticators: Authenticator[] }> {
+    const { ready } = await factors()
+    return {
+        on: ready.length > 0,
+        factorId: ready[0]?.id ?? null,
+        authenticators: ready.map((f, i) => ({ id: f.id, name: f.friendly_name || (i === 0 ? 'Authenticator' : `Authenticator ${i + 1}`) })),
+    }
+}
+
+/** Each authenticator needs its own name: the first, then a backup, then numbered. */
+function nextName(taken: string[]) {
+    if (!taken.includes('Authenticator')) return 'Authenticator'
+    if (!taken.includes('Backup authenticator')) return 'Backup authenticator'
+    for (let n = 3; ; n++) if (!taken.includes(`Authenticator ${n}`)) return `Authenticator ${n}`
 }
 
 /** Starts setup: returns the QR code to scan and the key to type in by hand. */
@@ -40,10 +56,11 @@ export function qrImageUri(qr: string): string {
 
 export async function startTwoFactorSetup(): Promise<{ factorId: string; qrCode: string; secret: string }> {
     // A setup that was started but never confirmed would block a new one
-    const { all } = await factors()
+    const { all, ready } = await factors()
     for (const f of all.filter(f => f.status !== 'verified')) await supabase.auth.mfa.unenroll({ factorId: f.id })
 
-    const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'Authenticator' } as any)
+    const friendlyName = nextName(ready.map(f => f.friendly_name).filter(Boolean))
+    const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp', friendlyName } as any)
     if (error || !data) throw new Error(error?.message ?? "Couldn't start two-factor setup")
     const d = data as any
     return { factorId: d.id, qrCode: qrImageUri(d.totp.qr_code), secret: d.totp.secret }
@@ -57,16 +74,32 @@ export async function verifyCode(factorId: string, input: string): Promise<void>
     if (error) throw new Error(CODE_ERROR)
 }
 
-/** At sign-in: verifies the code against the user's authenticator. */
+/** At sign-in: a code from any of your authenticators works. */
 export async function verifySignInCode(input: string): Promise<void> {
-    const { verified } = await factors()
-    if (!verified) throw new Error('Two-factor sign-in is not set up for this account.')
-    await verifyCode(verified.id, input)
+    const { ready } = await factors()
+    if (!ready.length) throw new Error('Two-factor sign-in is not set up for this account.')
+    let lastError: unknown
+    for (const f of ready) {
+        try { return await verifyCode(f.id, input) } catch (e) { lastError = e }
+    }
+    throw lastError
 }
 
-export async function turnOffTwoFactor(factorId: string): Promise<void> {
+/** Removes one authenticator. The last one can't be removed this way: turn two-factor sign-in off instead. */
+export async function removeAuthenticator(factorId: string): Promise<void> {
+    const { ready } = await factors()
+    if (ready.length <= 1) throw new Error("That's your last one. To stop using two-factor sign-in, turn it off instead.")
     const { error } = await supabase.auth.mfa.unenroll({ factorId })
     if (error) throw new Error(error.message)
+}
+
+/** Turns two-factor sign-in off by removing every authenticator. */
+export async function turnOffTwoFactor(): Promise<void> {
+    const { all } = await factors()
+    for (const f of all) {
+        const { error } = await supabase.auth.mfa.unenroll({ factorId: f.id })
+        if (error) throw new Error(error.message)
+    }
 }
 
 /** True when this account uses two-factor but the code hasn't been entered in this session yet. */

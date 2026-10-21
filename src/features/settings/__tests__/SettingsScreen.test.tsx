@@ -181,9 +181,44 @@ describe('two-factor sign-in', () => {
         await fireEvent.press(await screen.findByText('Turn off'))
         expect(screen.getByText(/Linked banks will stop syncing/)).toBeTruthy()
         twoFactor(false)
+        // Turning off first looks up every authenticator, then removes them
+        mfa.listFactors.mockResolvedValueOnce({ data: { all: [VERIFIED], totp: [VERIFIED] }, error: null })
         await fireEvent.press(screen.getByText('Yes, turn off'))
         expect(mfa.unenroll).toHaveBeenCalledWith({ factorId: 'factor-1' })
         expect(await screen.findByText('Off')).toBeTruthy()
+    })
+
+    it('adds a backup authenticator, so losing your phone doesn\'t lock you out', async () => {
+        twoFactor(true)
+        await renderSettings()
+        expect(await screen.findByText('Your authenticators')).toBeTruthy()
+        expect(screen.getByText(/so you can still sign in if you lose your phone/)).toBeTruthy()
+        await fireEvent.press(screen.getByRole('button', { name: 'Add a backup authenticator' }))
+        expect(mfa.enroll).toHaveBeenCalledWith({ factorType: 'totp', friendlyName: 'Backup authenticator' })
+        expect(screen.getByLabelText('QR code for your authenticator app')).toBeTruthy()
+        const backup = { ...VERIFIED, id: 'factor-2', friendly_name: 'Backup authenticator' }
+        mfa.listFactors.mockResolvedValue({ data: { all: [VERIFIED, backup], totp: [VERIFIED, backup] }, error: null })
+        await fireEvent.changeText(screen.getByPlaceholderText('123456'), '123456')
+        await fireEvent.press(screen.getByText('Confirm'))
+        expect(showToast).toHaveBeenCalledWith('Backup authenticator added')
+        expect(await screen.findByText('Backup authenticator')).toBeTruthy()
+    })
+
+    it('removes one of several authenticators after confirming', async () => {
+        const backup = { ...VERIFIED, id: 'factor-2', friendly_name: 'Backup authenticator' }
+        mfa.listFactors.mockResolvedValue({ data: { all: [VERIFIED, backup], totp: [VERIFIED, backup] }, error: null })
+        await renderSettings()
+        await fireEvent.press(await screen.findByRole('button', { name: 'Remove Backup authenticator' }))
+        expect(screen.getByText(/You can still sign in with your other authenticator/)).toBeTruthy()
+        await fireEvent.press(screen.getByText('Yes, remove'))
+        expect(mfa.unenroll).toHaveBeenCalledWith({ factorId: 'factor-2' })
+    })
+
+    it('has no remove button when there is only one (turn off instead)', async () => {
+        twoFactor(true)
+        await renderSettings()
+        await screen.findByText('Your authenticators')
+        expect(screen.queryByRole('button', { name: /^Remove / })).toBeNull()
     })
 })
 
