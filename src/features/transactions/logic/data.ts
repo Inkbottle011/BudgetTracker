@@ -1,10 +1,14 @@
 // Reading transactions for other features. Transactions are only read or changed directly in this feature.
 import { supabase } from '../../../shared/supabase'
+import { fetchAllRows } from '../../../shared/fetchAllRows'
 
-/** All your transactions, newest first. */
-export async function loadAllTransactions() {
-    const { data } = await supabase.from('transactions').select('*').order('date', { ascending: false })
-    return data ?? null
+/** All your transactions, newest first (every one, past Supabase's 1,000-row limit). Null if it can't load. */
+export async function loadAllTransactions(): Promise<any[] | null> {
+    try {
+        return await fetchAllRows(() => supabase.from('transactions').select('*').order('date', { ascending: false }).order('id'))
+    } catch {
+        return null
+    }
 }
 
 /** The date of your newest transaction, as a one-item list (empty when you have none). */

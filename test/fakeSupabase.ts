@@ -82,3 +82,12 @@ export const fake = {
 }
 
 export const module = { supabase }
+
+/** A table that answers .range(from, to) like Supabase does: at most 1,000 rows per request. */
+export function pagedTable(rows: any[]) {
+    return (call: QueryCall) => {
+        const range = call.ops.find(o => o.method === 'range')
+        const [from, to] = range ? range.args : [0, 999]
+        return { data: rows.slice(from, Math.min(to + 1, from + 1000)), error: null }
+    }
+}
