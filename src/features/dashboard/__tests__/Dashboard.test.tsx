@@ -80,3 +80,26 @@ it('takes you to categorize or edit the budget', async () => {
     await fireEvent.press(screen.getByText('Edit budget'))
     expect(mockNavigate).toHaveBeenCalledWith('Budget')
 })
+
+describe('subscriptions spotted in your spending', () => {
+    const charges = (name: string, dates: string[]) =>
+        dates.map(date => ({ id: `${name}-${date}`, date, type: 'expense', amount: 9.99, name, category_label: 'Subscriptions' }))
+
+    it('mentions them under Coming up, with a way to review them', async () => {
+        fake.table('transactions', { data: [
+            ...charges('Spotify', ['2026-07-07', '2026-08-07', '2026-09-07', '2026-10-07']),
+            ...charges('iCloud', ['2026-08-03', '2026-09-03', '2026-10-03']),
+        ] })
+        fake.table('dismissed_subscription_suggestions', { data: [] })
+        await render(<Dashboard />)
+        expect(await screen.findByText('2 charges look like subscriptions you haven\'t added.')).toBeTruthy()
+        await fireEvent.press(screen.getByRole('button', { name: 'Review possible subscriptions' }))
+        expect(mockNavigate).toHaveBeenCalledWith('Subscriptions')
+    })
+
+    it('says nothing when there are none', async () => {
+        await render(<Dashboard />)
+        await screen.findByText('October 2026')
+        expect(screen.queryByRole('button', { name: 'Review possible subscriptions' })).toBeNull()
+    })
+})

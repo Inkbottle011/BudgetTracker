@@ -149,6 +149,36 @@ describe('01_setup.sql', () => {
     })
 })
 
+describe('places you said are not subscriptions', () => {
+    beforeEach(async () => {
+        db = await freshDb()
+        await db.exec(sql('01_setup.sql'))
+    })
+
+    it('are remembered for you, once each', async () => {
+        await as(ALICE)
+        await db.query(`insert into dismissed_subscription_suggestions (merchant_key) values ('spotify') on conflict do nothing`)
+        await db.query(`insert into dismissed_subscription_suggestions (merchant_key) values ('spotify') on conflict do nothing`)
+        assert.deepEqual((await rows(`select merchant_key from dismissed_subscription_suggestions`)).map(r => r.merchant_key), ['spotify'])
+    })
+
+    it('are private, and can be undone', async () => {
+        await as(ALICE)
+        await db.query(`insert into dismissed_subscription_suggestions (merchant_key) values ('spotify')`)
+        await as(BOB)
+        assert.deepEqual(await rows(`select merchant_key from dismissed_subscription_suggestions`), [])
+        await db.query(`delete from dismissed_subscription_suggestions`)
+        await as(ALICE)
+        assert.equal((await rows(`select merchant_key from dismissed_subscription_suggestions`)).length, 1)
+        await db.query(`delete from dismissed_subscription_suggestions where merchant_key = 'spotify'`)
+        assert.deepEqual(await rows(`select merchant_key from dismissed_subscription_suggestions`), [])
+    })
+
+    it('setup can be run more than once', async () => {
+        await db.exec(sql('01_setup.sql'))
+    })
+})
+
 describe('preview and conversion of old recurring transactions', () => {
     beforeEach(async () => {
         db = await freshDb()

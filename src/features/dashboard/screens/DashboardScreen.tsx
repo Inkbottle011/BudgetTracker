@@ -32,7 +32,13 @@ export default function Dashboard() {
     const side = (
         <>
             <MonthlyTrend transactions={logic.forTotals} selectedYear={logic.selectedYear} />
-            <ActivityList title="Coming up" items={logic.upcoming} empty="No subscriptions due in the next 30 days." />
+            <ActivityList title="Coming up" items={logic.upcoming} empty="No subscriptions due in the next 30 days."
+                notice={logic.possibleSubscriptions > 0 ? {
+                    text: logic.possibleSubscriptions === 1 ? '1 charge looks like a subscription you haven\'t added.'
+                        : `${logic.possibleSubscriptions} charges look like subscriptions you haven't added.`,
+                    action: 'Review', a11y: 'Review possible subscriptions',
+                    onPress: () => navigation?.navigate?.('Subscriptions'),
+                } : null} />
             <ActivityList title="Recent" items={logic.recent} empty="No transactions yet." />
         </>
     )

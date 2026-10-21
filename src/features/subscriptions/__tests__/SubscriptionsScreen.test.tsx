@@ -173,3 +173,63 @@ it('asks before cancelling or deleting', async () => {
     await fireEvent.press(screen.getByText('Yes, delete'))
     expect(fake.calls('subscriptions').some(c => c.ops.some(o => o.method === 'delete'))).toBe(true)
 })
+
+describe('subscriptions spotted in your spending', () => {
+    const charge = (date: string, name: string, amount: number) =>
+        ({ id: `${name}-${date}`, date, name, amount, type: 'expense', category_label: 'Subscriptions', original_name: null, subscription_id: null })
+    const ops = (table: string, method: string) => fake.calls(table).flatMap(c => c.ops.filter(o => o.method === method).map(o => ({ args: o.args, call: c })))
+
+    beforeEach(() => {
+        fake.table('transactions', {
+            data: [
+                charge('2026-07-07', 'Spotify', 7.41), charge('2026-08-07', 'Spotify', 7.41), charge('2026-09-07', 'Spotify', 7.41),
+                charge('2026-09-15', 'NETFLIX.COM', 17.99),
+            ],
+        })
+        fake.table('dismissed_subscription_suggestions', { data: [] })
+    })
+
+    it('suggests charges that repeat, with when the next one is expected', async () => {
+        await renderScreen()
+        expect(await screen.findByText('Looks like a subscription')).toBeTruthy()
+        expect(screen.getByText('$7.41 monthly · charged 3 times · next around Oct 7')).toBeTruthy()
+        expect(screen.getByRole('button', { name: 'Add Spotify as a subscription' })).toBeTruthy()
+    })
+
+    it('adding one opens the form filled in, starting at the next charge so past ones aren\'t added twice', async () => {
+        await renderScreen()
+        await fireEvent.press(await screen.findByRole('button', { name: 'Add Spotify as a subscription' }))
+        expect(screen.getByDisplayValue('Spotify')).toBeTruthy()
+        expect(screen.getByDisplayValue('7.41')).toBeTruthy()
+        expect(screen.getByDisplayValue('2026-10-07')).toBeTruthy()
+    })
+
+    it('"Not a subscription" hides it for good', async () => {
+        await renderScreen()
+        await fireEvent.press(await screen.findByRole('button', { name: 'Spotify is not a subscription' }))
+        expect(ops('dismissed_subscription_suggestions', 'upsert')[0].args[0]).toEqual({ merchant_key: 'spotify' })
+        expect(screen.queryByRole('button', { name: 'Add Spotify as a subscription' })).toBeNull()
+        expect(showToast).toHaveBeenCalledWith("Spotify won't be suggested again")
+    })
+
+    it('leaves out places you said are not subscriptions', async () => {
+        fake.table('dismissed_subscription_suggestions', { data: [{ merchant_key: 'spotify' }] })
+        await renderScreen()
+        expect(await screen.findByText('Active (3)')).toBeTruthy()
+        expect(screen.queryByText('Looks like a subscription')).toBeNull()
+    })
+
+    it('still suggests if remembering choices isn\'t set up yet', async () => {
+        fake.table('dismissed_subscription_suggestions', { data: null, error: { message: 'relation does not exist' } })
+        await renderScreen()
+        expect(await screen.findByText('Looks like a subscription')).toBeTruthy()
+    })
+
+    it('points out a price change and updates the subscription in one tap', async () => {
+        await renderScreen()
+        expect(await screen.findByText('Netflix charged $17.99 on Sep 15. It\'s saved as $15.99, so update it to keep your totals right.')).toBeTruthy()
+        await fireEvent.press(screen.getByRole('button', { name: 'Update Netflix to $17.99' }))
+        const update = ops('subscriptions', 'update').find(u => u.args[0].amount === 17.99)!
+        expect(update.call.ops.find(o => o.method === 'eq')!.args).toEqual(['id', 'n'])
+    })
+})
