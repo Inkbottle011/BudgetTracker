@@ -1,6 +1,7 @@
 // Reading transactions for other features. Transactions are only read or changed directly in this feature.
 import { supabase } from '../../../shared/supabase'
 import { fetchAllRows } from '../../../shared/fetchAllRows'
+import { useTransactionStore } from './useTransactionStore'
 
 /** All your transactions, newest first (every one, past Supabase's 1,000-row limit). Null if it can't load. */
 export async function loadAllTransactions(): Promise<any[] | null> {
@@ -21,4 +22,19 @@ export async function latestTransactionDate(): Promise<{ date: string }[]> {
 export async function transactionsByIds(ids: string[]): Promise<{ id: string; date: string; amount: number; name: string; note: string }[]> {
     const { data } = await supabase.from('transactions').select('id, date, amount, name, note').in('id', ids)
     return data ?? []
+}
+
+/** Moves transactions to another category, a batch at a time. Also updates the list already on screen. */
+export async function recategorize(changes: { category: string; ids: string[] }[]): Promise<void> {
+    for (const { category, ids } of changes) {
+        for (let i = 0; i < ids.length; i += 200) {
+            const { error } = await supabase.from('transactions').update({ category_label: category }).in('id', ids.slice(i, i + 200))
+            if (error) throw new Error(`Couldn't move your transactions to ${category}: ${error.message}`)
+        }
+    }
+    const to = new Map(changes.flatMap(c => c.ids.map(id => [id, c.category] as const)))
+    const store = useTransactionStore.getState()
+    if (store.transactions.some(t => to.has(t.id))) {
+        store.setTransactions(store.transactions.map(t => (to.has(t.id) ? { ...t, category_label: to.get(t.id)! } : t)))
+    }
 }

@@ -153,7 +153,7 @@ export interface PastTransaction {
 
 // Places most people put in the same kind of category. Each rule lists category names to look for
 // among YOUR categories, in order; nothing is suggested if you have none of them. Checked in order,
-// so "Uber Eats" is food before "Uber" is a ride, and "Amazon Prime" a subscription before shopping.
+// so "Uber Eats" is eating out before "Uber" is a ride, and "Amazon Prime" a subscription before shopping.
 const KEYWORD_RULES: { pattern: RegExp; categories: string[] }[] = [
     {
         pattern: /\bfees?\b|service charge|overdraft/,
@@ -172,8 +172,14 @@ const KEYWORD_RULES: { pattern: RegExp; categories: string[] }[] = [
         categories: ['education', 'school', 'books', 'misc', 'other'],
     },
     {
-        pattern: /uber\s*eats|doordash|grubhub|taco|pizza|burger|mcdonald|chipotle|subway|wawa|sheetz|giant|aldi|\bweis\b|\bacme\b|grocer|trader joe|whole foods|cafe|coffee|starbucks|dunkin|bagel|gyro|halal|chicken|grill|bbq|\bwok\b|sushi|\bdeli\b|bakery|popeyes|wendy|\bkfc\b|\bfood\b|diner|restaurant|cookies|\btea\b|kitchen|eatery|7.?eleven|\bpub\b|\bbar\b|ale house|cheesecake|sweet sh|qdoba|panera|chick.?fil|raising cane|five guys|shake shack|noodle|ramen|\bpho\b|wings|donut|ice cream|\brita|beer|wine and spirits|liquor|truck|\btst\s*\*|applebee|snack|pasta|\bcibo\b|sazon|treats/,
-        categories: ['food', 'dining', 'restaurants', 'groceries', 'eating out'],
+        // Grocery stores (before eating out, since "Giant Food" has "food" in it)
+        pattern: /\bgiant\b|\baldi\b|\bweis\b|\bacme\b|grocer|trader joe|whole foods|wegmans|safeway|kroger|publix|\blidl\b|shop\s?rite|food lion|sprouts|h\s?mart|supermarket|save a lot|fresh grocer|sams club|bjs wholesale/,
+        categories: ['groceries', 'grocery', 'food', 'dining', 'eating out'],
+    },
+    {
+        // Restaurants, takeout, coffee and convenience-store snacks
+        pattern: /uber\s*eats|doordash|grubhub|taco|pizza|burger|mcdonald|chipotle|subway|wawa|sheetz|cafe|coffee|starbucks|dunkin|bagel|gyro|halal|chicken|grill|bbq|\bwok\b|sushi|\bdeli\b|bakery|popeyes|wendy|\bkfc\b|\bfood\b|diner|restaurant|cookies|\btea\b|kitchen|eatery|7.?eleven|\bpub\b|\bbar\b|ale house|cheesecake|sweet sh|qdoba|panera|chick.?fil|raising cane|five guys|shake shack|noodle|ramen|\bpho\b|wings|donut|ice cream|\brita|beer|wine and spirits|liquor|truck|\btst\s*\*|applebee|snack|pasta|\bcibo\b|sazon|treats/,
+        categories: ['eating out', 'dining out', 'dining', 'restaurants', 'restaurant', 'takeout', 'food', 'groceries'],
     },
     {
         pattern: /spotify|netflix|hulu|disney\s*(\+|plus)|apple\.com|apple cloud|icloud|google (cloud|storage|one)|amazon prime|prime video|youtube|anthropic|claude|openai|chatgpt|patreon|audible|\bhbo\b|max\.com/,

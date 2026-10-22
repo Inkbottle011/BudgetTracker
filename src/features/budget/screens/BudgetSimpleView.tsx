@@ -17,6 +17,7 @@ interface Props extends BudgetViewProps {
     onSetFrom: (itemId: string, month: number, value: string) => void
     onEditMonths: () => void
     onPlan: () => void
+    onSplit: (item: BudgetViewProps['items'][number]) => void
 }
 
 export function BudgetSimpleView(p: Props) {
@@ -132,6 +133,9 @@ function SimpleRow({ item, first, ...p }: Props & { item: BudgetViewProps['items
                             <Button small variant="secondary" label={p.month === 12 ? 'December only' : `${MONTHS[p.month - 1]} to Dec`} onPress={() => save(false)} />
                         )}
                         <Button small variant="ghost" label="Cancel" onPress={() => setEditing(false)} />
+                        {item.type === 'expense' && (
+                            <Button small variant="ghost" label="Split into two" onPress={() => { setEditing(false); p.onSplit(item) }} style={{ marginLeft: 'auto' }} />
+                        )}
                     </View>
                 </View>
             )}

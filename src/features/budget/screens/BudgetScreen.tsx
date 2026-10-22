@@ -8,6 +8,8 @@ import { BudgetTable, BudgetViewProps } from './BudgetTable'
 import { BudgetMonthView } from './BudgetMonthView'
 import { PlanGuide } from './PlanGuide'
 import { BudgetSimpleView } from './BudgetSimpleView'
+import { SplitCategory } from './SplitCategory'
+import { BudgetItem } from '../logic/types'
 
 export default function BudgetScreen() {
     const logic = useBudgetLogic()
@@ -16,6 +18,7 @@ export default function BudgetScreen() {
     const styles = useStyles(makeStyles)
     const [month, setMonth] = useState(new Date().getMonth() + 1)
     const [guideOpen, setGuideOpen] = useState(false)
+    const [splitting, setSplitting] = useState<BudgetItem | null>(null)
     const [layout, setLayout] = useState<'simple' | 'months'>('simple')
     const { showToast } = useToastContext()
     // An item's monthly amount right now: this month's, or its first planned month in another year
@@ -102,11 +105,25 @@ export default function BudgetScreen() {
                     onSetFrom={(itemId, m, value) => logic.handleCellSave(itemId, m, value, true)}
                     onEditMonths={() => { setMonth(shownMonth); setLayout('months') }}
                     onPlan={() => setGuideOpen(true)}
+                    onSplit={setSplitting}
                 />
             ) : wide ? (
                 <BudgetTable {...view} />
             ) : (
                 <BudgetMonthView {...view} month={month} onMonthChange={m => { logic.setEditingCell(null); setMonth(m) }} />
+            )}
+            {splitting && (
+                <SplitCategory
+                    item={splitting}
+                    items={logic.items}
+                    monthly={amountFor(splitting.id)}
+                    onClose={() => setSplitting(null)}
+                    onDone={([a, b]) => {
+                        showToast(`${splitting.name} is now ${a} and ${b}`)
+                        setSplitting(null)
+                        logic.reload()
+                    }}
+                />
             )}
             {guideOpen && (
                 <PlanGuide

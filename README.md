@@ -34,6 +34,7 @@ A personal finance app for planning a budget, tracking every transaction (typed 
 **Budget planner**
 - **Plan with questions**: a four-step guide asks how many jobs you have and how you're paid (hourly rate and hours a week, salary, or per paycheck, less taxes), what you pay for regularly (weekly, monthly or yearly, with what you've really spent lately as a hint), and what you're saving for (a target by a date, a set amount, or a share of your pay). It works out the monthly amounts, lets you change any of them, and adds them to your budget from this month on or for the whole year
 - **Simple view**: each item once with its monthly amount; change it for every month in one tap, and items that vary by month say so
+- **Split a category in two** (for example Food into Groceries and Eating out): past purchases are sorted place by place with a guess for each, the budget is shared by what you really spend in each, and new purchases follow
 - **By month**: the full grid of every month side by side on a computer (one month at a time on a phone), with "fill right", totals and "left over each month"
 
 **Split expenses and paybacks**

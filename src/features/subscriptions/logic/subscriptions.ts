@@ -154,3 +154,12 @@ export async function dismissSuggestion(merchantKey: string): Promise<void> {
         .upsert({ merchant_key: merchantKey }, { onConflict: 'user_id,merchant_key', ignoreDuplicates: true })
     if (error) throw new Error(error.message)
 }
+
+/** When a category is split, its subscriptions move to whichever part `pick` chooses by name. */
+export async function moveSubscriptionsOutOf(category: string, pick: (name: string) => string): Promise<void> {
+    const subs = await fetchSubscriptions()
+    for (const sub of subs.filter(x => (x.category_label ?? '').trim().toLowerCase() === category.trim().toLowerCase())) {
+        const { error } = await supabase.from('subscriptions').update({ category_label: pick(sub.name) }).eq('id', sub.id)
+        if (error) throw new Error(`Couldn't update ${sub.name}: ${error.message}`)
+    }
+}
