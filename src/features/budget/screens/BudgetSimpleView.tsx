@@ -18,6 +18,9 @@ interface Props extends BudgetViewProps {
     onEditMonths: () => void
     onPlan: () => void
     onSplit: (item: BudgetViewProps['items'][number]) => void
+    onRename: (item: BudgetViewProps['items'][number]) => void
+    /** Shown under the sections (categories not in your budget) */
+    footer?: React.ReactNode
 }
 
 export function BudgetSimpleView(p: Props) {
@@ -54,6 +57,7 @@ export function BudgetSimpleView(p: Props) {
             </Section>
 
             {SECTIONS.map(type => <SimpleSection key={type} type={type} {...p} />)}
+            {p.footer}
         </View>
     )
 }
@@ -133,9 +137,12 @@ function SimpleRow({ item, first, ...p }: Props & { item: BudgetViewProps['items
                             <Button small variant="secondary" label={p.month === 12 ? 'December only' : `${MONTHS[p.month - 1]} to Dec`} onPress={() => save(false)} />
                         )}
                         <Button small variant="ghost" label="Cancel" onPress={() => setEditing(false)} />
-                        {item.type === 'expense' && (
-                            <Button small variant="ghost" label="Split into two" onPress={() => { setEditing(false); p.onSplit(item) }} style={{ marginLeft: 'auto' }} />
-                        )}
+                        <View style={{ marginLeft: 'auto', flexDirection: 'row', gap: 4 }}>
+                            <Button small variant="ghost" label="Rename" onPress={() => { setEditing(false); p.onRename(item) }} />
+                            {item.type === 'expense' && (
+                                <Button small variant="ghost" label="Split into two" onPress={() => { setEditing(false); p.onSplit(item) }} />
+                            )}
+                        </View>
                     </View>
                 </View>
             )}

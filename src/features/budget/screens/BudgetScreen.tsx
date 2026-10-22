@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native'
 import { useTheme, useStyles, Palette } from '../../../shared/theme/theme'
 import { Page, PageTitle, Button, Segmented, useIsWide } from '../../../shared/ui/ui'
@@ -11,6 +11,12 @@ import { BudgetMonthView } from './BudgetMonthView'
 import { PlanGuide } from './PlanGuide'
 import { BudgetSimpleView } from './BudgetSimpleView'
 import { SplitCategory } from './SplitCategory'
+import { RenameCategory } from './RenameCategory'
+import { UnplannedCategories } from './UnplannedCategories'
+import { unplannedCategories } from '../logic/calculations'
+import { renameBudgetItem, mergeBudgetItems, undoMerge, addBudgetItem } from '../logic/data'
+import { useTransactionStore, loadAllTransactions, moveCategory, recategorize } from '../../transactions/api'
+import { moveSubscriptionsOutOf, moveSubscriptionsBack } from '../../subscriptions/api'
 import { BudgetItem } from '../logic/types'
 
 export default function BudgetScreen() {
@@ -21,6 +27,58 @@ export default function BudgetScreen() {
     const [month, setMonth] = useState(new Date().getMonth() + 1)
     const [guideOpen, setGuideOpen] = useState(false)
     const [splitting, setSplitting] = useState<BudgetItem | null>(null)
+    const [renaming, setRenaming] = useState<BudgetItem | null>(null)
+    const stored = useTransactionStore(st => st.transactions)
+    const [loadedTx, setLoadedTx] = useState<any[] | null>(null)
+    useEffect(() => { if (!stored.length) loadAllTransactions().then(t => { if (t) setLoadedTx(t) }).catch(() => {}) }, [])
+    const transactions = (stored.length ? stored : loadedTx ?? []) as any[]
+    const unplanned = unplannedCategories(transactions, logic.items)
+
+    /** Renames an item (with its transactions and subscriptions), or combines it into `into`; with Undo. */
+    async function rename(item: BudgetItem, name: string, into: BudgetItem | null) {
+        const to = into ? into.name : name
+        const moved = await moveCategory({ from: item.name, to, kind: item.type })
+        const subs = await moveSubscriptionsOutOf(item.name, () => to)
+        const merged = into ? await mergeBudgetItems(item, into) : null
+        if (!into) await renameBudgetItem(item.id, name)
+        setRenaming(null)
+        logic.reload()
+        showToast(into ? `${item.name} is now part of ${into.name}` : `${item.name} is now called ${name}`, 'success', {
+            label: 'Undo',
+            onPress: async () => {
+                try {
+                    if (merged) await undoMerge(merged)
+                    else await renameBudgetItem(item.id, item.name)
+                    if (moved.length) await recategorize([{ category: item.name, ids: moved }])
+                    await moveSubscriptionsBack(subs, item.name)
+                    showToast(`${item.name} is back`)
+                } catch (e: any) {
+                    showToast(e?.message ?? "Couldn't undo that", 'error')
+                }
+                logic.reload()
+            },
+        })
+    }
+
+    async function moveUnplanned(from: string, to: string) {
+        try {
+            const ids = await moveCategory({ from, to, kind: 'expense' })
+            showToast(`Moved ${ids.length} transaction${ids.length === 1 ? '' : 's'} to ${to}`, 'success', {
+                label: 'Undo',
+                onPress: async () => {
+                    try { await recategorize([{ category: from, ids }]); showToast(`Moved them back to ${from}`) }
+                    catch (e: any) { showToast(e?.message ?? "Couldn't undo that", 'error') }
+                },
+            })
+        } catch (e: any) {
+            showToast(e?.message ?? "Couldn't move them", 'error')
+        }
+    }
+
+    async function addUnplanned(name: string) {
+        try { await addBudgetItem(name, 'expense'); showToast(`${name} added to your budget`); logic.reload() }
+        catch (e: any) { showToast(e?.message ?? `Couldn't add ${name}`, 'error') }
+    }
     const [deleting, setDeleting] = useState<BudgetItem | null>(null)
     const [layout, setLayout] = usePersistentState<'simple' | 'months'>('budgetLayout', 'simple', ['simple', 'months'])
     const { showToast } = useToastContext()
@@ -109,6 +167,8 @@ export default function BudgetScreen() {
                     onEditMonths={() => { setMonth(shownMonth); setLayout('months') }}
                     onPlan={() => setGuideOpen(true)}
                     onSplit={setSplitting}
+                    onRename={setRenaming}
+                    footer={<UnplannedCategories categories={unplanned} choices={logic.items.filter(i => i.type === 'expense').map(i => i.name)} onMove={moveUnplanned} onAdd={addUnplanned} />}
                 />
             ) : wide ? (
                 <BudgetTable {...view} />
@@ -123,6 +183,9 @@ export default function BudgetScreen() {
                 onCancel={() => setDeleting(null)}
                 onConfirm={() => { const id = deleting!.id; setDeleting(null); logic.handleDeleteItem(id) }}
             />
+            {renaming && (
+                <RenameCategory item={renaming} items={logic.items} onClose={() => setRenaming(null)} onRename={(name, into) => rename(renaming, name, into)} />
+            )}
             {splitting && (
                 <SplitCategory
                     item={splitting}
