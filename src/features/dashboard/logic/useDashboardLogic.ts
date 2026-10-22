@@ -1,3 +1,4 @@
+import { usePersistentState } from '../../../shared/usePersistentState'
 import { useState, useCallback } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
 import { supabase } from '../../../shared/supabase'
@@ -24,7 +25,7 @@ export function useDashboardLogic() {
     const [pending, setPending] = useState<PendingCharge[]>([])
 
     const today = todayString()
-    const [view, setView] = useState<Period>('month')
+    const [view, setView] = usePersistentState<Period>('dashboardView', 'month', ['day', 'week', 'month', 'year'])
     const [anchor, setAnchor] = useState(today)
 
     // Refresh whenever the tab is opened, so changes made on other tabs show up

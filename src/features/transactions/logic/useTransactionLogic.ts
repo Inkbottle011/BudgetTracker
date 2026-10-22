@@ -8,6 +8,7 @@ import { useToastContext } from '../../../shared/ui/ToastContext'
 import { parseAmount, parseDate, todayString, merchantKey } from '../../../shared/money/entry'
 import { filterTransactions, sortTransactions, toCSV, DatePreset } from './listLogic'
 import { useTransactionFilters, activeRange } from './filters'
+import { usePersistentState } from '../../../shared/usePersistentState'
 import { totalShares } from './splits'
 
 export function useTransactionLogic() {
@@ -46,8 +47,8 @@ export function useTransactionLogic() {
     const setFilterFrom = (from: string) => filters.set({ preset: 'custom', from, to: range.to })
     const setFilterTo = (to: string) => filters.set({ preset: 'custom', from: range.from, to })
     const [showFilters, setShowFilters] = useState(false)
-    const [sortCol, setSortCol] = useState<string>('date')
-    const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+    const [sort, setSort] = usePersistentState<{ col: string; dir: 'asc' | 'desc' }>('transactionSort', { col: 'date', dir: 'desc' })
+    const sortCol = sort.col, sortDir = sort.dir
     
     const [page, setPage] = useState(0)
     const PAGE_SIZE = 20
@@ -287,8 +288,8 @@ export function useTransactionLogic() {
     }
     
     function handleSort(col: string) {
-        if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-        else { setSortCol(col); setSortDir('asc') }
+        if (sortCol === col) setSort({ col, dir: sortDir === 'asc' ? 'desc' : 'asc' })
+        else setSort({ col, dir: 'asc' })
     }
     
     function exportToCSV() {

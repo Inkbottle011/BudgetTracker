@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'rea
 import { useTheme, useStyles, Palette } from '../../../shared/theme/theme'
 import { Page, PageTitle, Button, Segmented, useIsWide } from '../../../shared/ui/ui'
 import { ConfirmDialog } from '../../../shared/ui/ConfirmDialog'
+import { usePersistentState } from '../../../shared/usePersistentState'
 import { useToastContext } from '../../../shared/ui/ToastContext'
 import { useBudgetLogic } from '../logic/useBudgetLogic'
 import { BudgetTable, BudgetViewProps } from './BudgetTable'
@@ -21,7 +22,7 @@ export default function BudgetScreen() {
     const [guideOpen, setGuideOpen] = useState(false)
     const [splitting, setSplitting] = useState<BudgetItem | null>(null)
     const [deleting, setDeleting] = useState<BudgetItem | null>(null)
-    const [layout, setLayout] = useState<'simple' | 'months'>('simple')
+    const [layout, setLayout] = usePersistentState<'simple' | 'months'>('budgetLayout', 'simple', ['simple', 'months'])
     const { showToast } = useToastContext()
     // An item's monthly amount right now: this month's, or its first planned month in another year
     const now = new Date()

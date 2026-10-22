@@ -5,6 +5,8 @@ process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANO
 jest.mock('@react-native-async-storage/async-storage', () =>
     require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 )
+// Each test starts with nothing remembered on the device
+beforeEach(() => require('@react-native-async-storage/async-storage').clear())
 
 // expo-linking reads the app config, which isn't available in tests
 jest.mock('expo-linking', () => ({

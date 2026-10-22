@@ -137,3 +137,12 @@ it('asks before deleting an item, and Undo brings it back with every planned mon
     expect(showToast).toHaveBeenLastCalledWith('Rent is back')
     expect(await screen.findByText('Rent')).toBeTruthy()
 })
+
+it('remembers Simple or By month for next time', async () => {
+    setWidth(1200)
+    await renderScreen()
+    await fireEvent.press(screen.getByRole('button', { name: 'By month' }))
+    await act(async () => { screen.unmount() })
+    await render(<ToastContext.Provider value={{ showToast }}><BudgetScreen /></ToastContext.Provider>)
+    expect(await screen.findByLabelText('Rent, Jan')).toBeTruthy()
+})
