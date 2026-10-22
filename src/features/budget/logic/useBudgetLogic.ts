@@ -134,5 +134,6 @@ export function useBudgetLogic() {
         getAmount, getRowTotal, getMonthTotal, getSectionTotal,
         handleCellSave, handleAddItem, handleDeleteItem,
         getNetByMonth, getNetTotal,
+        reload: fetchData,
     }
 }
