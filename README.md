@@ -32,7 +32,9 @@ A personal finance app for planning a budget, tracking every transaction (typed 
 - **Price changes**: when the bank charges a different amount, update the subscription in one tap; the bank's real charge replaces the app's entry so it isn't counted twice
 
 **Budget planner**
-- Yearly grid by month across income, spending, savings and investment, with "fill right", totals and "left over each month"
+- **Plan with questions**: a four-step guide asks how many jobs you have and how you're paid (hourly rate and hours a week, salary, or per paycheck, less taxes), what you pay for regularly (weekly, monthly or yearly, with what you've really spent lately as a hint), and what you're saving for (a target by a date, a set amount, or a share of your pay). It works out the monthly amounts, lets you change any of them, and adds them to your budget from this month on or for the whole year
+- **Simple view**: each item once with its monthly amount; change it for every month in one tap, and items that vary by month say so
+- **By month**: the full grid of every month side by side on a computer (one month at a time on a phone), with "fill right", totals and "left over each month"
 
 **Split expenses and paybacks**
 - Split an expense with others; "Owed to you" tracks who still has to pay you back
@@ -112,7 +114,7 @@ Tests also run on every pull request (type-check, then `npm test`).
 
 | Where | What the tests check |
 |---|---|
-| `src/features/*/__tests__/` | Each feature's screens and logic: dashboard periods and totals, budget, transactions (CSV import, splits, renaming, categories), subscriptions (including spotting them and price changes), two-factor, linked banks, appearance |
+| `src/features/*/__tests__/` | Each feature's screens and logic: dashboard periods and totals, budget (including the question guide's maths), transactions (CSV import, splits, renaming, categories), subscriptions (including spotting them and price changes), two-factor, linked banks, appearance |
 | `src/shared/**/__tests__/` | Money rules (amounts, dates, merchant matching), themes, loading every row past Supabase's 1,000-row limit, shared UI |
 | `src/__tests__/architecture.test.ts` | The app's structure: features use each other only through their front doors, and only the owner of a table uses it |
 | `supabase/functions/_shared/bank/__tests__/` | The bank function: Plaid and Teller against fake banks, conversion, duplicate and transfer matching, pending charges, subscription charges |
@@ -165,4 +167,5 @@ The rules (checked by `src/__tests__/architecture.test.ts`):
 - Add to your phone's home screen as an app (full screen, with an icon)
 - Undo after deleting a transaction
 - Copy last year's budget, budget templates (such as 50/30/20) and reordering budget items
+- Remember whether you prefer the Simple or By month view of the budget
 - Full data export (transactions and budget in one file) and account deletion
