@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../shared/supabase'
-import { loadAllTransactions } from './data'
+import { loadAllTransactions, deleteTransactions, restoreTransactions } from './data'
 import { loadCategoryNames } from '../../budget/api'
 import { useTransactionStore } from './useTransactionStore'
 import { EditingTransaction } from './types'
 import { useToastContext } from '../../../shared/ui/ToastContext'
 import { parseAmount, parseDate, todayString, merchantKey } from '../../../shared/money/entry'
-import { filterTransactions, sortTransactions, toCSV } from './listLogic'
+import { filterTransactions, sortTransactions, toCSV, DatePreset } from './listLogic'
+import { useTransactionFilters, activeRange } from './filters'
+import { usePersistentState } from '../../../shared/usePersistentState'
 import { totalShares } from './splits'
 
 export function useTransactionLogic() {
@@ -38,12 +40,15 @@ export function useTransactionLogic() {
     
     // Search/filter/sort state
     const [search, setSearch] = useState('')
-    const [filterType, setFilterType] = useState<string | null>(null)
-    const [filterFrom, setFilterFrom] = useState('')
-    const [filterTo, setFilterTo] = useState('')
+    const filters = useTransactionFilters()
+    const range = activeRange(filters)
+    const filterType = filters.type, filterFrom = range.from, filterTo = range.to
+    const setFilterType = (type: string | null) => filters.set({ type })
+    const setFilterFrom = (from: string) => filters.set({ preset: 'custom', from, to: range.to })
+    const setFilterTo = (to: string) => filters.set({ preset: 'custom', from: range.from, to })
     const [showFilters, setShowFilters] = useState(false)
-    const [sortCol, setSortCol] = useState<string>('date')
-    const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+    const [sort, setSort] = usePersistentState<{ col: string; dir: 'asc' | 'desc' }>('transactionSort', { col: 'date', dir: 'desc' })
+    const sortCol = sort.col, sortDir = sort.dir
     
     const [page, setPage] = useState(0)
     const PAGE_SIZE = 20
@@ -52,8 +57,9 @@ export function useTransactionLogic() {
     })
     const [showImport, setShowImport] = useState(false)
     
-    useEffect(() => { setPage(0) }, [search, filterType, filterFrom, filterTo])
+    useEffect(() => { setPage(0) }, [search, filterType, filterFrom, filterTo, filters.category])
     useEffect(() => {
+        filters.load()
         fetchTransactions()
         fetchBudgetCategories()
     }, [])
@@ -257,23 +263,33 @@ export function useTransactionLogic() {
     async function handleDelete() {
         if (selected.size === 0) return
         setDeleting(true)
-        const { error } = await supabase
-            .from('transactions')
-            .delete()
-            .in('id', Array.from(selected))
-        if (!error) {
+        const n = selected.size
+        const label = `${n} transaction${n > 1 ? 's' : ''}`
+        try {
+            const deleted = await deleteTransactions(Array.from(selected))
             await fetchTransactions()
             exitSelectMode()
-            showToast(`${selected.size} transaction${selected.size > 1 ? 's' : ''} deleted`)
-        } else {
+            showToast(`${label} deleted`, 'success', {
+                label: 'Undo',
+                onPress: async () => {
+                    try {
+                        await restoreTransactions(deleted)
+                        showToast(n > 1 ? `${label} are back` : 'The transaction is back')
+                    } catch (e: any) {
+                        showToast(e?.message ?? "Couldn't bring them back", 'error')
+                    }
+                    await fetchTransactions()
+                },
+            })
+        } catch {
             showToast('Failed to delete transactions', 'error')
         }
         setDeleting(false)
     }
     
     function handleSort(col: string) {
-        if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-        else { setSortCol(col); setSortDir('asc') }
+        if (sortCol === col) setSort({ col, dir: sortDir === 'asc' ? 'desc' : 'asc' })
+        else setSort({ col, dir: 'asc' })
     }
     
     function exportToCSV() {
@@ -330,13 +346,13 @@ export function useTransactionLogic() {
     }
     
     const totalRows = sortTransactions(
-        filterTransactions(transactions, { search, type: filterType, from: filterFrom, to: filterTo }),
+        filterTransactions(transactions, { search, type: filterType, from: filterFrom, to: filterTo, category: filters.category }),
         sortCol, sortDir,
     )
     
     const rows = totalRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
     const totalPages = Math.ceil(totalRows.length / PAGE_SIZE)
-    const filtering = !!(search.trim() || filterType || filterFrom || filterTo)
+    const filtering = !!(search.trim() || filterType || filterFrom || filterTo || filters.category)
     
     return {
         type, setType, category, setCategory, amount, setAmount,
@@ -353,6 +369,10 @@ export function useTransactionLogic() {
         filterType, setFilterType,
         filterFrom, setFilterFrom,
         filterTo, setFilterTo,
+        filterCategory: filters.category, setFilterCategory: (category: string | null) => filters.set({ category }),
+        datePreset: filters.preset, setDatePreset: (preset: DatePreset) => filters.set({ preset, from: range.from, to: range.to }),
+        clearFilters: filters.clear,
+        allRows: totalRows,
         showFilters, setShowFilters,
         sortCol, sortDir, handleSort,
         rows, filtering,

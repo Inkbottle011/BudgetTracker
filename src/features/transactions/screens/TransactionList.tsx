@@ -4,7 +4,7 @@ import { useTheme, useStyles, Palette, tabular } from '../../../shared/theme/the
 import { todayString } from '../../../shared/money/entry'
 import { formatMoney } from '../../../shared/money/format'
 import { TRANSACTION_TYPES } from '../logic/types'
-import { listSummary, displayDate, amountText } from '../logic/listLogic'
+import { listSummary, displayDate, amountText, describeFilters, DATE_PRESETS, DatePreset, UNCATEGORIZED } from '../logic/listLogic'
 import { ImportModal } from './ImportModal'
 
 interface Props {
@@ -26,6 +26,12 @@ interface Props {
     filterType: string | null
     filterFrom: string
     filterTo: string
+    filterCategory: string | null
+    datePreset: DatePreset
+    /** Categories to filter by */
+    categories: string[]
+    /** Every row matching the filters (not just this page), for the totals */
+    allRows: any[]
     sortCol: string
     sortDir: 'asc' | 'desc'
     onSearch: (v: string) => void
@@ -34,6 +40,8 @@ interface Props {
     onFilterFrom: (v: string) => void
     onFilterTo: (v: string) => void
     onClearFilters: () => void
+    onFilterCategory: (v: string | null) => void
+    onDatePreset: (v: DatePreset) => void
     onSort: (col: string) => void
     onRowPress: (t: any) => void
     onEnterSelect: () => void
@@ -54,7 +62,8 @@ interface Props {
 export function TransactionList({
     rows, wide, hasTransactions, filtering, activeId,
     selectMode, selected, confirmDelete, deleting,
-    search, showFilters, filterType, filterFrom, filterTo,
+    search, showFilters, filterType, filterFrom, filterTo, filterCategory, datePreset, categories, allRows,
+    onFilterCategory, onDatePreset,
     sortCol, sortDir,
     page, totalPages, onPageChange,
     onSearch, onToggleFilters, onFilterType, onFilterFrom, onFilterTo, onClearFilters,
@@ -66,6 +75,13 @@ export function TransactionList({
     const styles = useStyles(makeStyles)
     const today = todayString()
     const summary = listSummary(rows)
+    const described = describeFilters({ type: filterType, category: filterCategory, from: filterFrom, to: filterTo }, today)
+    const all = listSummary(allRows)
+    const totalsLine = [
+        `${allRows.length} transaction${allRows.length === 1 ? '' : 's'}`,
+        all.income ? `${formatMoney(all.income)} in` : null,
+        all.spent ? `${formatMoney(all.spent)} out` : null,
+    ].filter(Boolean).join(' · ')
     const n = selected.size
     const amountColor = (d: 'in' | 'out' | 'move') => (d === 'in' ? C.good : d === 'move' ? C.move : C.ink)
 
@@ -124,17 +140,43 @@ export function TransactionList({
                             <Chip key={t} label={t} tone={t.toLowerCase()} selected={filterType === t} onPress={() => onFilterType(t)} />
                         ))}
                     </View>
-                    <View style={styles.dates}>
-                        <View style={styles.dateField}>
-                            <Field label="From" placeholder="YYYY-MM-DD" value={filterFrom} onChangeText={onFilterFrom} />
-                        </View>
-                        <View style={styles.dateField}>
-                            <Field label="To" placeholder="YYYY-MM-DD" value={filterTo} onChangeText={onFilterTo} />
-                        </View>
+                    <Text style={styles.label}>Dates</Text>
+                    <View style={styles.chips}>
+                        {DATE_PRESETS.map(p => (
+                            <Chip key={p.value} label={p.label} selected={datePreset === p.value} onPress={() => onDatePreset(p.value)} />
+                        ))}
                     </View>
-                    {(filterType || filterFrom || filterTo) && (
+                    {datePreset === 'custom' && (
+                        <View style={styles.dates}>
+                            <View style={styles.dateField}>
+                                <Field label="From" placeholder="YYYY-MM-DD" value={filterFrom} onChangeText={onFilterFrom} />
+                            </View>
+                            <View style={styles.dateField}>
+                                <Field label="To" placeholder="YYYY-MM-DD" value={filterTo} onChangeText={onFilterTo} />
+                            </View>
+                        </View>
+                    )}
+                    <Text style={styles.label}>Category</Text>
+                    <View style={styles.chips}>
+                        {categories.map(c => (
+                            <Chip key={c} label={c} selected={filterCategory?.toLowerCase() === c.toLowerCase()} onPress={() => onFilterCategory(filterCategory?.toLowerCase() === c.toLowerCase() ? null : c)} />
+                        ))}
+                        <Chip label="Uncategorized" selected={filterCategory === UNCATEGORIZED} onPress={() => onFilterCategory(filterCategory === UNCATEGORIZED ? null : UNCATEGORIZED)} />
+                    </View>
+                    {(filterType || filterFrom || filterTo || filterCategory) && (
                         <Button variant="ghost" label="Clear filters" onPress={onClearFilters} style={{ alignSelf: 'flex-start' }} />
                     )}
+                </View>
+            )}
+
+            {/* What the list is narrowed to, with its totals */}
+            {!!described && (
+                <View style={styles.active}>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={styles.activeTitle}>{described}</Text>
+                        <Text style={[styles.activeTotals, tabular]}>{totalsLine}</Text>
+                    </View>
+                    <Button small variant="secondary" label="Clear" accessibilityLabel="Clear" onPress={onClearFilters} />
                 </View>
             )}
 
@@ -246,6 +288,9 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     tools: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 12 },
     selectedCount: { fontSize: 14, fontWeight: '600', color: C.ink, marginRight: 4 },
     confirmText: { fontSize: 14, color: C.bad, fontWeight: '500' },
+    active: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.primarySoft, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 12 },
+    activeTitle: { fontSize: 14, fontWeight: '700', color: C.ink },
+    activeTotals: { fontSize: 13, color: C.text, marginTop: 2 },
     filters: { backgroundColor: C.surface, borderRadius: 14, borderWidth: 1, borderColor: C.line, padding: 16, marginBottom: 12 },
     label: { fontSize: 13, fontWeight: '600', color: C.text, marginBottom: 6 },
     chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 14 },

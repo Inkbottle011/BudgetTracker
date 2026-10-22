@@ -85,6 +85,7 @@ describe('on a computer: the 12-month grid', () => {
 
         fake.table('budget_items', { data: null })
         await fireEvent.press(screen.getByLabelText('Delete Rent'))
+    await fireEvent.press(screen.getByRole('button', { name: 'Delete' }))
         expect(screen.queryByText('Rent')).toBeNull()
     })
 
@@ -153,6 +154,7 @@ describe('on a phone: one month at a time', () => {
 
         fake.table('budget_items', { data: null })
         await fireEvent.press(screen.getByLabelText('Delete Rent'))
+    await fireEvent.press(screen.getByRole('button', { name: 'Delete' }))
         expect(screen.queryByText('Rent')).toBeNull()
     })
 })

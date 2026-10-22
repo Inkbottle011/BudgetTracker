@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../shared/supabase'
 import { BudgetItem, BudgetAmount, BudgetType } from './types'
 import { useToastContext } from '../../../shared/ui/ToastContext'
-import { cellAmount, rowTotal, monthTotal, sectionTotal, netByMonth, netTotal, parseBudgetInput, varies } from './calculations'
-import { setEveryMonth } from './data'
+import { cellAmount, rowTotal, monthTotal, sectionTotal, netByMonth, netTotal, parseBudgetInput, varies, sortItems } from './calculations'
+import { setEveryMonth, deleteBudgetItem, restoreBudgetItem, DeletedBudgetItem, copyYear, clearYear, saveOrder } from './data'
 import { formatMoney } from '../../../shared/money/format'
 
 export function useBudgetLogic() {
@@ -39,7 +39,7 @@ export function useBudgetLogic() {
             .eq('user_id', session.user.id)
             .eq('year', year)
 
-        if (itemsData) setItems(itemsData)
+        if (itemsData) setItems(sortItems(itemsData))
         if (amountsData) setAmounts(amountsData)
         setLoading(false)
     }
@@ -113,6 +113,39 @@ export function useBudgetLogic() {
         showToast(`${name}: ${formatMoney(amount, { cents: amount % 1 !== 0 })} every month`)
     }
 
+    /** Fills an empty year with last year's plan, with Undo. */
+    async function handleCopyLastYear() {
+        const from = year - 1, to = year
+        const ids = items.map(i => i.id)
+        let rows: Awaited<ReturnType<typeof copyYear>>
+        try { rows = await copyYear(from, to, ids) } catch (e: any) { showToast(e?.message ?? `Couldn't copy ${from}`, 'error'); return }
+        if (!rows.length) { showToast(`Nothing was planned in ${from} to copy`, 'info'); return }
+        setAmounts(prev => [...prev.filter(a => a.year !== to), ...rows.map(r => ({ id: '', ...r }))])
+        showToast(`Copied ${from}'s budget into ${to}`, 'success', {
+            label: 'Undo',
+            onPress: async () => {
+                try { await clearYear(to, ids); showToast(`${to} is empty again`) }
+                catch (e: any) { showToast(e?.message ?? "Couldn't undo the copy", 'error') }
+                await fetchData()
+            },
+        })
+    }
+
+    /** Moves an item one place up (-1) or down (1) within its section, and saves the order. */
+    async function handleMoveItem(id: string, step: -1 | 1) {
+        const item = items.find(i => i.id === id)
+        if (!item) return
+        const section = items.filter(i => i.type === item.type)
+        const at = section.findIndex(i => i.id === id)
+        const swap = at + step
+        if (swap < 0 || swap >= section.length) return
+        const reordered = [...section]
+        ;[reordered[at], reordered[swap]] = [reordered[swap], reordered[at]]
+        const order = reordered.map((i, position) => ({ id: i.id, position }))
+        setItems(prev => sortItems(prev.map(i => ({ ...i, position: order.find(o => o.id === i.id)?.position ?? i.position }))))
+        try { await saveOrder(order) } catch (e: any) { showToast(e?.message ?? "Couldn't save the order", 'error'); fetchData() }
+    }
+
     async function handleAddItem() {
         if (!newItemName.trim()) return
         const { data: { session } } = await supabase.auth.getSession()
@@ -135,12 +168,32 @@ export function useBudgetLogic() {
         }
     }
 
+    /** Deletes an item (after you've confirmed), with Undo in the message. */
     async function handleDeleteItem(id: string) {
-        const { error } = await supabase.from('budget_items').delete().eq('id', id)
-        if (error) { fetchData(); showToast('Failed to delete', 'error'); return }
+        const item = items.find(i => i.id === id)
+        if (!item) return
+        let deleted: DeletedBudgetItem
+        try {
+            deleted = await deleteBudgetItem(item)
+        } catch {
+            fetchData()
+            showToast('Failed to delete', 'error')
+            return
+        }
         setItems(prev => prev.filter(i => i.id !== id))
         setAmounts(prev => prev.filter(a => a.budget_item_id !== id))
-        showToast('Budget item deleted')
+        showToast(`${item.name} deleted`, 'success', {
+            label: 'Undo',
+            onPress: async () => {
+                try {
+                    await restoreBudgetItem(deleted)
+                    showToast(`${item.name} is back`)
+                } catch (e: any) {
+                    showToast(e?.message ?? `Couldn't bring back ${item.name}`, 'error')
+                }
+                await fetchData()
+            },
+        })
     }
 
     return {
@@ -152,7 +205,8 @@ export function useBudgetLogic() {
         editingCell, setEditingCell,
         editingValue, setEditingValue,
         getAmount, getRowTotal, getMonthTotal, getSectionTotal,
-        handleCellSave, handleAddItem, handleDeleteItem, handleSetEveryMonth,
+        handleCellSave, handleAddItem, handleDeleteItem, handleSetEveryMonth, handleCopyLastYear, handleMoveItem,
+        yearIsEmpty: items.length > 0 && !amounts.some(a => a.year === year && Number(a.amount) !== 0),
         varies: (itemId: string) => varies(amounts, itemId),
         getNetByMonth, getNetTotal,
         reload: fetchData,

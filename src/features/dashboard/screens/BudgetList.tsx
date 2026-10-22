@@ -10,10 +10,12 @@ interface Props {
     goals: { name: string; type: string; planned: number; actual: number }[]
     onCategorize: () => void
     onEditBudget: () => void
+    /** Opens the transactions behind a category */
+    onOpenCategory: (name: string) => void
 }
 
 /** Every spending category against its plan, then income and savings goals. */
-export function BudgetList({ title, rows, uncategorized, goals, onCategorize, onEditBudget }: Props) {
+export function BudgetList({ title, rows, uncategorized, goals, onCategorize, onEditBudget, onOpenCategory }: Props) {
     const { c: C } = useTheme()
     const styles = useStyles(makeStyles)
     const visible = rows.filter(r => r.planned > 0 || r.spent > 0)
@@ -35,7 +37,7 @@ export function BudgetList({ title, rows, uncategorized, goals, onCategorize, on
                 const barColor = { unplanned: C.faint, onTrack: C.paceMark, close: C.warnMark, over: C.spendMark }[tone]
                 const statusColor = { unplanned: C.muted, onTrack: C.good, close: C.warn, over: C.bad }[tone]
                 return (
-                    <View key={r.name} style={styles.row}>
+                    <TouchableOpacity key={r.name} style={styles.row} accessibilityRole="button" accessibilityLabel={`See ${r.name} transactions`} onPress={() => onOpenCategory(r.name)}>
                         <View style={styles.rowTop}>
                             <Text style={styles.name} numberOfLines={1}>{r.name}</Text>
                             <Text style={[styles.status, tabular, { color: statusColor }]}>
@@ -46,7 +48,7 @@ export function BudgetList({ title, rows, uncategorized, goals, onCategorize, on
                             <View style={[styles.fill, { width: `${share * 100}%`, backgroundColor: barColor }]} />
                         </View>
                         <Text style={[styles.detail, tabular]}>{r.planned > 0 ? `${money(r.spent)} of ${money(r.planned)}` : `${money(r.spent)} spent`}</Text>
-                    </View>
+                    </TouchableOpacity>
                 )
             })}
 

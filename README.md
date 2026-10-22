@@ -9,14 +9,15 @@ A personal finance app for planning a budget, tracking every transaction (typed 
 **Dashboard**
 - Day, week (Monday to Sunday), month or year, with arrows to step back and forward
 - What you spent against your plan, with a marker for where you'd be if you spent evenly, plus what you earned, saved and have left
-- Budget bars per category, colored by how you're doing: on track, getting close (from 85%), or over
+- Budget bars per category, colored by how you're doing: on track, getting close (from 85%), or over; tap one to see its transactions for that period
 - Balances from your linked banks (checking, savings, owed on cards), a monthly trend chart, coming-up subscription charges and recent activity
 - Charges your bank hasn't posted yet are shown as pending, not counted until they post
 
 **Transactions**
-- Add, edit, duplicate, split and delete; search, filter and sort; CSV export
+- Add, edit, duplicate, split and delete; search, sort and CSV export
+- Filter by type, category (or uncategorized) and dates (this month, last month, last 30 days, this year, or any range), with what's shown and its totals at the top; your filters and sort are remembered on this device
 - **CSV import wizard**: match columns (auto-guessed), review, then import; skips what you already have, leaves out card payments, suggests categories
-- **Categorize in bulk**: uncategorized transactions are grouped by place with a suggested category
+- **Categorize in bulk**: uncategorized transactions are grouped by place (different spellings of the same store together) with a suggested category
 - **Rename** a place once ("SQ *BLUE BOTTLE #12" → "Blue Bottle") and future transactions use your name
 - Pending charges from your bank appear in their own section until they post
 
@@ -34,6 +35,8 @@ A personal finance app for planning a budget, tracking every transaction (typed 
 **Budget planner**
 - **Plan with questions**: a four-step guide asks how many jobs you have and how you're paid (hourly rate and hours a week, salary, or per paycheck, less taxes), what you pay for regularly (weekly, monthly or yearly, with what you've really spent lately as a hint), and what you're saving for (a target by a date, a set amount, or a share of your pay). It works out the monthly amounts, lets you change any of them, and adds them to your budget from this month on or for the whole year
 - **Simple view**: each item once with its monthly amount; change it for every month in one tap, and items that vary by month say so
+- **Rename or combine categories**: renaming a budget item renames its transactions and subscriptions too; renaming it to one you have combines the two, adding their planned amounts. Categories your transactions use but your budget doesn't (like a typo) can be moved or added
+- **Copy last year's budget** into an empty year, and **reorder** items within a section
 - **Split a category in two** (for example Food into Groceries and Eating out): past purchases are sorted place by place with a guess for each, the budget is shared by what you really spend in each, and new purchases follow
 - **By month**: the full grid of every month side by side on a computer (one month at a time on a phone), with "fill right", totals and "left over each month"
 
@@ -41,10 +44,18 @@ A personal finance app for planning a budget, tracking every transaction (typed 
 - Split an expense with others; "Owed to you" tracks who still has to pay you back
 - Paybacks reduce spending in that category (in the month of the expense) instead of counting as income
 
+**Safe deleting**
+- Deleting a budget item or forgetting what someone owes asks first, as deleting transactions and subscriptions already did
+- Every delete (budget items, transactions, subscriptions, what someone owes) and every category split shows an **Undo** button for a few seconds, which puts everything back as it was, including the links (who owes you for an expense, paybacks, a subscription's past charges)
+- Unlinking a bank and removing an authenticator can't be undone, and say so before you confirm
+
 **Security and accounts**
 - Email and password sign-in, password reset, and two-factor sign-in with an authenticator app (required for linking banks)
 - Add a **backup authenticator** so losing your phone doesn't lock you out
 - Row-level security: each person only ever sees their own data
+
+**Updates**
+- Settings shows the version you're running and can check for a newer one; a banner offers a reload when a new version is published
 
 **Look and feel**
 - Five color themes (Night sky, Ocean, Forest, Sunset, Classic) in light or dark; money colors mean the same in all of them
@@ -167,6 +178,5 @@ The rules (checked by `src/__tests__/architecture.test.ts`):
 - Smarter automatic categories, to shrink the uncategorized pile
 - Add to your phone's home screen as an app (full screen, with an icon)
 - Undo after deleting a transaction
-- Copy last year's budget, budget templates (such as 50/30/20) and reordering budget items
-- Remember whether you prefer the Simple or By month view of the budget
+- Budget templates (such as 50/30/20)
 - Full data export (transactions and budget in one file) and account deletion

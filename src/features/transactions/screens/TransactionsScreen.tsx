@@ -43,6 +43,12 @@ export default function TransactionsScreen() {
                 filterType={logic.filterType}
                 filterFrom={logic.filterFrom}
                 filterTo={logic.filterTo}
+                filterCategory={logic.filterCategory}
+                datePreset={logic.datePreset}
+                categories={categoryChoices(logic.budgetCategories.Expense, logic.transactions)}
+                allRows={logic.allRows}
+                onFilterCategory={logic.setFilterCategory}
+                onDatePreset={logic.setDatePreset}
                 sortCol={logic.sortCol}
                 sortDir={logic.sortDir}
                 onSearch={logic.setSearch}
@@ -50,7 +56,7 @@ export default function TransactionsScreen() {
                 onFilterType={t => logic.setFilterType(logic.filterType === t ? null : t)}
                 onFilterFrom={logic.setFilterFrom}
                 onFilterTo={logic.setFilterTo}
-                onClearFilters={() => { logic.setFilterType(null); logic.setFilterFrom(''); logic.setFilterTo('') }}
+                onClearFilters={logic.clearFilters}
                 onSort={logic.handleSort}
                 onRowPress={logic.handleEditSelect}
                 onEnterSelect={() => logic.setSelectMode(true)}
@@ -146,3 +152,14 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     formColumn: { width: 360, flexGrow: 0, flexShrink: 0 },
     columnContent: { paddingVertical: 28 },
 })
+
+/** Spending categories to filter by: your budget's, plus any your transactions use. */
+function categoryChoices(budget: string[] = [], transactions: any[]): string[] {
+    const seen = new Map<string, string>()
+    for (const name of budget) if (name?.trim()) seen.set(name.trim().toLowerCase(), name.trim())
+    for (const t of transactions) {
+        const label = String(t.category_label ?? '').trim()
+        if (label && (t.type === 'expense' || t.type === 'reimbursement') && !seen.has(label.toLowerCase())) seen.set(label.toLowerCase(), label)
+    }
+    return [...seen.values()]
+}
