@@ -5,3 +5,4 @@ export { loadAllTransactions, latestTransactionDate, transactionsByIds, recatego
 export { groupForSplit } from './logic/categorize'
 export type { SplitGroup } from './logic/categorize'
 export { TYPES, DEFAULT_CATEGORIES } from './logic/types'
+export { useTransactionFilters, showTransactionsFor } from './logic/filters'

@@ -87,7 +87,7 @@ export function useDashboardLogic() {
 
     return {
         transactions, forTotals, view, title, heading, budgetTitle, isCurrent,
-        anchor, selectedYear: +range.start.slice(0, 4),
+        anchor, range, selectedYear: +range.start.slice(0, 4),
         setView: (v: Period) => setView(v),
         prev: () => setAnchor(a => shiftAnchor(view, a, -1)),
         next: () => setAnchor(a => shiftAnchor(view, a, 1)),

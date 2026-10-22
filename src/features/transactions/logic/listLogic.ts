@@ -17,6 +17,41 @@ export interface ListFilters {
     type: string | null   // 'Income' | 'Expense' | ... or null for all
     from: string          // 'YYYY-MM-DD' or ''
     to: string
+    category?: string | null   // a category name, UNCATEGORIZED, or null for all
+}
+
+/** The category filter for spending that hasn't been given a category yet. */
+export const UNCATEGORIZED = '__uncategorized__'
+
+export type DatePreset = 'all' | 'thisMonth' | 'lastMonth' | 'last30' | 'thisYear' | 'custom'
+
+export const DATE_PRESETS: { value: DatePreset; label: string }[] = [
+    { value: 'all', label: 'All time' }, { value: 'thisMonth', label: 'This month' }, { value: 'lastMonth', label: 'Last month' },
+    { value: 'last30', label: 'Last 30 days' }, { value: 'thisYear', label: 'This year' }, { value: 'custom', label: 'Pick dates' },
+]
+
+const pad = (n: number) => String(n).padStart(2, '0')
+const ymd = (d: Date) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`
+
+/** The dates a preset covers, counted from `today` ('YYYY-MM-DD'). Custom and all-time give blanks. */
+export function presetRange(preset: DatePreset, today: string): { from: string; to: string } {
+    const [y, m, d] = today.split('-').map(Number)
+    if (preset === 'thisMonth') return { from: ymd(new Date(Date.UTC(y, m - 1, 1))), to: ymd(new Date(Date.UTC(y, m, 0))) }
+    if (preset === 'lastMonth') return { from: ymd(new Date(Date.UTC(y, m - 2, 1))), to: ymd(new Date(Date.UTC(y, m - 1, 0))) }
+    if (preset === 'last30') return { from: ymd(new Date(Date.UTC(y, m - 1, d - 29))), to: today }
+    if (preset === 'thisYear') return { from: `${y}-01-01`, to: `${y}-12-31` }
+    return { from: '', to: '' }
+}
+
+/** "Eating out · Oct 1 – Oct 31": what the list is filtered to, in words ('' when it isn't). */
+export function describeFilters(f: { type: string | null; category?: string | null; from: string; to: string }, today: string): string {
+    const parts: string[] = []
+    if (f.category) parts.push(f.category === UNCATEGORIZED ? 'Uncategorized' : f.category)
+    if (f.type) parts.push(f.type)
+    if (f.from && f.to) parts.push(`${displayDate(f.from, today)} – ${displayDate(f.to, today)}`)
+    else if (f.from) parts.push(`from ${displayDate(f.from, today)}`)
+    else if (f.to) parts.push(`until ${displayDate(f.to, today)}`)
+    return parts.join(' · ')
 }
 
 export function filterTransactions<T extends Tx>(list: T[], f: ListFilters): T[] {
@@ -29,6 +64,12 @@ export function filterTransactions<T extends Tx>(list: T[], f: ListFilters): T[]
         if (f.type && t.type !== f.type.toLowerCase()) return false
         if (f.from && t.date < f.from) return false
         if (f.to && t.date > f.to) return false
+        if (f.category) {
+            const label = String(t.category_label ?? '').trim().toLowerCase()
+            if (f.category === UNCATEGORIZED) {
+                if (label || t.type === 'transfer') return false
+            } else if (label !== f.category.trim().toLowerCase()) return false
+        }
         return true
     })
 }
