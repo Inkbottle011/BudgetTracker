@@ -79,7 +79,7 @@ export async function splitBudgetItem({ item, into, share, existing }: {
     into: [string, string]
     share: number
     existing: { id: string; name: string; type: string }[]
-}): Promise<void> {
+}): Promise<SplitUndo> {
     const user = await userId()
     const [first, second] = into.map(n => n.trim()) as [string, string]
     const same = (a: string, b: string) => a.trim().toLowerCase() === b.toLowerCase()
@@ -89,6 +89,7 @@ export async function splitBudgetItem({ item, into, share, existing }: {
 
     // The second part: one you already have, or a new item
     let secondId = existing.find(e => e.id !== item.id && e.type === item.type && same(e.name, second))?.id
+    const reused = !!secondId
     const { data: rows, error: loadError } = await supabase.from('budget_amounts').select('*')
         .in('budget_item_id', secondId ? [item.id, secondId] : [item.id])
     fail(loadError)
@@ -117,6 +118,25 @@ export async function splitBudgetItem({ item, into, share, existing }: {
         const { error } = await supabase.from('budget_amounts').upsert(upserts, { onConflict: 'budget_item_id,month,year' })
         fail(error)
     }
+    // What Undo needs: the old name, the item that was added (or the one that was added to), and every old amount
+    const before = all.filter(r => r.budget_item_id === item.id || r.budget_item_id === secondId)
+    const touched = upserts.filter(r => r.budget_item_id === secondId && !before.some(b => b.budget_item_id === secondId && b.year === r.year && b.month === r.month))
+    return {
+        itemId: item.id, oldName: item.name, createdId: reused ? null : secondId!,
+        rows: [...before.map(r => ({ ...r })), ...(reused ? touched.map(r => ({ ...r, amount: 0 })) : [])],
+    }
+}
+
+/** Everything needed to undo a split. */
+export interface SplitUndo { itemId: string; oldName: string; createdId: string | null; rows: Record<string, any>[] }
+
+/** Undoes splitBudgetItem: the old name back, the added item removed (or the one added to put back), old amounts restored. */
+export async function undoSplit({ itemId, oldName, createdId, rows }: SplitUndo): Promise<void> {
+    const fail = (e: { message: string } | null | undefined) => { if (e) throw new Error(`Couldn't undo the split: ${e.message}`) }
+    fail((await supabase.from('budget_items').update({ name: oldName }).eq('id', itemId)).error)
+    if (createdId) fail((await supabase.from('budget_items').delete().eq('id', createdId)).error)
+    const keep = rows.filter(r => r.budget_item_id !== createdId)
+    if (keep.length) fail((await supabase.from('budget_amounts').upsert(keep, { onConflict: 'budget_item_id,month,year' })).error)
 }
 
 /** Everything needed to put a deleted budget item back exactly as it was. */

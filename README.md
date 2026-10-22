@@ -41,6 +41,11 @@ A personal finance app for planning a budget, tracking every transaction (typed 
 - Split an expense with others; "Owed to you" tracks who still has to pay you back
 - Paybacks reduce spending in that category (in the month of the expense) instead of counting as income
 
+**Safe deleting**
+- Deleting a budget item or forgetting what someone owes asks first, as deleting transactions and subscriptions already did
+- Every delete (budget items, transactions, subscriptions, what someone owes) and every category split shows an **Undo** button for a few seconds, which puts everything back as it was, including the links (who owes you for an expense, paybacks, a subscription's past charges)
+- Unlinking a bank and removing an authenticator can't be undone, and say so before you confirm
+
 **Security and accounts**
 - Email and password sign-in, password reset, and two-factor sign-in with an authenticator app (required for linking banks)
 - Add a **backup authenticator** so losing your phone doesn't lock you out

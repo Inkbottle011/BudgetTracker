@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, within } from '@testing-library/react-native'
+import { render, screen, fireEvent, within, act } from '@testing-library/react-native'
 import { StyleSheet } from 'react-native'
 import { light } from '../../../shared/theme/theme'
 import TransactionsScreen from '../screens/TransactionsScreen'
@@ -256,7 +256,31 @@ describe('deleting', () => {
         expect(deleteCalls()).toHaveLength(0)
         await fireEvent.press(screen.getByText('Yes, delete 2'))
         expect(deleteCalls()[0].ops).toContainEqual({ method: 'in', args: ['id', ['t2', 't3']] })
-        expect(showToast).toHaveBeenCalledWith('2 transactions deleted')
+        expect(showToast).toHaveBeenCalledWith('2 transactions deleted', 'success', expect.objectContaining({ label: 'Undo' }))
+    })
+
+    it('Undo puts deleted transactions back as they were, with who owes you and payback links', async () => {
+        fake.table('split_shares', call => call.ops.some(o => o.method === 'upsert') ? { data: null } : { data: [{ id: 'sh1', expense_id: 't3', person: 'Sam', amount: 20, settled_by: null }] })
+        fake.table('transactions', call => {
+            if (call.ops.some(o => o.method === 'in' && o.args[0] === 'reimburses_id')) return { data: [{ id: 'pay1', reimburses_id: 't3' }] }
+            if (call.ops.some(o => ['delete', 'insert', 'update'].includes(o.method))) return { data: null }
+            return { data: saved }
+        })
+        await renderScreen()
+        await fireEvent.press(screen.getByText('Select'))
+        await fireEvent.press(screen.getByText('Groceries'))
+        await fireEvent.press(screen.getByText('Delete 1'))
+        await fireEvent.press(screen.getByText('Yes, delete 1'))
+        const action = showToast.mock.calls.find(c => c[0] === '1 transaction deleted')![2]
+        await act(async () => { await action.onPress() })
+
+        const inserted = fake.calls('transactions').flatMap(c => c.ops.filter(o => o.method === 'insert').map(o => o.args[0]))[0]
+        expect(inserted).toEqual([saved.find(t => t.id === 't3')])
+        expect(fake.arg('split_shares', 'upsert')).toEqual([{ id: 'sh1', expense_id: 't3', person: 'Sam', amount: 20, settled_by: null }])
+        const relink = fake.calls('transactions').find(c => c.ops.some(o => o.method === 'update'))!
+        expect(relink.ops).toContainEqual({ method: 'update', args: [{ reimburses_id: 't3' }] })
+        expect(relink.ops).toContainEqual({ method: 'in', args: ['id', ['pay1']] })
+        expect(showToast).toHaveBeenLastCalledWith('The transaction is back')
     })
 
     it('tapping a selected row again unselects it, and nothing can be deleted with none selected', async () => {

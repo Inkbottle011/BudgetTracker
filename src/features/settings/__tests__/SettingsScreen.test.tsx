@@ -330,7 +330,7 @@ describe('linked banks', () => {
         fake.table('bank_connections', { data: [connection] })
         await renderSettings()
         await fireEvent.press(await screen.findByText('Unlink'))
-        expect(screen.getByText('Unlink Chase? Transactions already imported stay.')).toBeTruthy()
+        expect(screen.getByText("Unlink Chase? Transactions already imported stay. This can't be undone: to sync it again you'd link it again.")).toBeTruthy()
         await fireEvent.press(screen.getByText('Yes, unlink'))
         expect(invoke).toHaveBeenCalledWith('bank', { body: { action: 'unlink', connectionId: 'conn-1' } })
     })

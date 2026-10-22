@@ -155,11 +155,21 @@ export async function dismissSuggestion(merchantKey: string): Promise<void> {
     if (error) throw new Error(error.message)
 }
 
-/** When a category is split, its subscriptions move to whichever part `pick` chooses by name. */
-export async function moveSubscriptionsOutOf(category: string, pick: (name: string) => string): Promise<void> {
+/** When a category is split, its subscriptions move to whichever part `pick` chooses by name. Returns the ones moved. */
+export async function moveSubscriptionsOutOf(category: string, pick: (name: string) => string): Promise<string[]> {
     const subs = await fetchSubscriptions()
+    const moved: string[] = []
     for (const sub of subs.filter(x => (x.category_label ?? '').trim().toLowerCase() === category.trim().toLowerCase())) {
         const { error } = await supabase.from('subscriptions').update({ category_label: pick(sub.name) }).eq('id', sub.id)
         if (error) throw new Error(`Couldn't update ${sub.name}: ${error.message}`)
+        moved.push(sub.id)
     }
+    return moved
+}
+
+/** Puts subscriptions back in a category (undoing a split). */
+export async function moveSubscriptionsBack(ids: string[], category: string): Promise<void> {
+    if (!ids.length) return
+    const { error } = await supabase.from('subscriptions').update({ category_label: category }).in('id', ids)
+    if (error) throw new Error(`Couldn't move subscriptions back: ${error.message}`)
 }

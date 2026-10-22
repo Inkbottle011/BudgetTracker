@@ -128,8 +128,20 @@ export default function BudgetScreen() {
                     items={logic.items}
                     monthly={amountFor(splitting.id)}
                     onClose={() => setSplitting(null)}
-                    onDone={([a, b]) => {
-                        showToast(`${splitting.name} is now ${a} and ${b}`)
+                    onDone={([a, b], undo) => {
+                        const name = splitting.name
+                        showToast(`${name} is now ${a} and ${b}`, 'success', {
+                            label: 'Undo',
+                            onPress: async () => {
+                                try {
+                                    await undo()
+                                    showToast(`${name} is back`)
+                                } catch (e: any) {
+                                    showToast(e?.message ?? `Couldn't undo the split`, 'error')
+                                }
+                                logic.reload()
+                            },
+                        })
                         setSplitting(null)
                         logic.reload()
                     }}

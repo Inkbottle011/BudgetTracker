@@ -7,8 +7,8 @@ import { Button, Field, useIsWide } from '../../../shared/ui/ui'
 import { formatMoney } from '../../../shared/money/format'
 import { parseAmount, keywordCategory } from '../../../shared/money/entry'
 import { useTransactionStore, loadAllTransactions, groupForSplit, recategorize } from '../../transactions/api'
-import { moveSubscriptionsOutOf } from '../../subscriptions/api'
-import { splitBudgetItem } from '../logic/data'
+import { moveSubscriptionsOutOf, moveSubscriptionsBack } from '../../subscriptions/api'
+import { splitBudgetItem, undoSplit } from '../logic/data'
 import { BudgetItem } from '../logic/types'
 
 const dollars = (n: number) => formatMoney(n, { cents: false })
@@ -27,7 +27,8 @@ export function SplitCategory({ item, items, monthly, onClose, onDone }: {
     /** What the item is planned at per month now */
     monthly: number
     onClose: () => void
-    onDone: (names: [string, string]) => void
+    /** After splitting; `undo` puts everything back */
+    onDone: (names: [string, string], undo: () => Promise<void>) => void
 }) {
     const wide = useIsWide()
     const { c: C } = useTheme()
@@ -76,9 +77,14 @@ export function SplitCategory({ item, items, monthly, onClose, onDone }: {
             const ids: [string[], string[]] = [[], []]
             for (const g of groups) ids[sideOf(g)].push(...g.ids)
             await recategorize([{ category: into[0], ids: ids[0] }, { category: into[1], ids: ids[1] }].filter(c => c.ids.length))
-            await moveSubscriptionsOutOf(item.name, name => keywordCategory(name, into) ?? into[1])
-            await splitBudgetItem({ item, into, share, existing: items })
-            onDone(into)
+            const subs = await moveSubscriptionsOutOf(item.name, name => keywordCategory(name, into) ?? into[1])
+            const budget = await splitBudgetItem({ item, into, share, existing: items })
+            const all = [...ids[0], ...ids[1]]
+            onDone(into, async () => {
+                if (all.length) await recategorize([{ category: item.name, ids: all }])
+                await moveSubscriptionsBack(subs, item.name)
+                await undoSplit(budget)
+            })
         } catch (e: any) {
             setError(e?.message ?? `Couldn't split ${item.name}`)
             setSaving(false)

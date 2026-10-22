@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { Button } from '../../../shared/ui/ui'
+import { ConfirmDialog } from '../../../shared/ui/ConfirmDialog'
 import { useStyles, Palette, tabular } from '../../../shared/theme/theme'
 import { formatMoney } from '../../../shared/money/format'
 import { displayDate } from '../logic/listLogic'
@@ -25,6 +26,7 @@ export function OwedPanel({ transactions, onChanged }: Props) {
     const [shares, setShares] = useState<SplitShare[]>([])
     const [open, setOpen] = useState(false)
     const [busy, setBusy] = useState(false)
+    const [forgetting, setForgetting] = useState<SplitShare | null>(null)
 
     async function loadShares() {
         const { data, error } = await supabase.from('split_shares').select('*')
@@ -87,6 +89,15 @@ export function OwedPanel({ transactions, onChanged }: Props) {
     async function forget(share: SplitShare) {
         const { error } = await supabase.from('split_shares').delete().eq('id', share.id)
         if (error) { showToast(`Couldn't remove that: ${error.message}`, 'error'); return }
+        showToast(`Forgot what ${share.person} owes`, 'success', {
+            label: 'Undo',
+            onPress: async () => {
+                const { error: restoreError } = await supabase.from('split_shares').insert(share)
+                if (restoreError) showToast(`Couldn't bring that back: ${restoreError.message}`, 'error')
+                else showToast(`${share.person} owes you again`)
+                await loadShares()
+            },
+        })
         await loadShares()
     }
 
@@ -135,7 +146,7 @@ export function OwedPanel({ transactions, onChanged }: Props) {
                                                 variant="ghost"
                                                 label="Forget"
                                                 accessibilityLabel={`Forget what ${share.person} owes`}
-                                                onPress={() => forget(share)}
+                                                onPress={() => setForgetting(share)}
                                                 disabled={busy}
                                             />
                                         </View>
@@ -159,6 +170,14 @@ export function OwedPanel({ transactions, onChanged }: Props) {
                     ))}
                 </View>
             )}
+            <ConfirmDialog
+                visible={!!forgetting}
+                title={`Forget what ${forgetting?.person} owes?`}
+                message={`The ${money(forgetting?.amount ?? 0)} ${forgetting?.person} owes you won't be tracked any more. You can undo it straight after.`}
+                confirmLabel="Forget"
+                onCancel={() => setForgetting(null)}
+                onConfirm={() => { const share = forgetting!; setForgetting(null); forget(share) }}
+            />
         </View>
     )
 }
