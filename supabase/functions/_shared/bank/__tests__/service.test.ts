@@ -498,6 +498,69 @@ describe('weekend purchase dates, fixed once for transactions imported before', 
     })
 })
 
+describe('the bank charge for a subscription the app already added', () => {
+    it('updates the app\'s entry to the real charge (amount, date, bank link) instead of adding a second one', async () => {
+        await databaseWithConnection()
+        fake.table('transactions', call => {
+            const upsert = call.ops.find(o => o.method === 'upsert')
+            if (upsert) return { data: upsert.args[0].map((_: any, i: number) => ({ id: `new-${i}` })), error: null }
+            if (call.ops.some(o => o.method === 'update')) return { data: null, error: null }
+            if (call.ops.some(o => o.method === 'is' && o.args[0] === 'external_id'))
+                return { data: [{ id: 'sub-entry', date: '2026-10-01', amount: 15.49, name: 'Netflix', type: 'expense', subscription_id: 's1' }], error: null }
+            return { data: [], error: null }
+        })
+        const provider = fakeProvider({
+            listTransactions: jest.fn(async (_t: string, accountId: string) => accountId === 'acc_checking'
+                ? [{ externalId: 'nf', providerAccountId: 'acc_checking', date: '2026-10-02', amount: -17.99, description: 'NETFLIX.COM', pending: false }]
+                : []),
+        })
+        const result = await syncConnection(deps(provider), 'conn-1')
+        const saved = ops('transactions', 'upsert').flatMap(u => u.args[0])
+        expect(saved.map((r: any) => r.external_id)).not.toContain('nf')
+        const update = ops('transactions', 'update').find(u => u.args[0].external_id === 'nf')!
+        expect(update.args[0]).toMatchObject({ amount: 17.99, date: '2026-10-02', provider: 'teller', external_id: 'nf', bank_account_id: 'db-acc-1', original_name: 'NETFLIX.COM' })
+        expect(update.call.ops.find(o => o.method === 'eq' && o.args[0] === 'id')!.args[1]).toBe('sub-entry')
+        expect(update.call.ops.find(o => o.method === 'eq' && o.args[0] === 'user_id')!.args[1]).toBe('user-1')
+        expect(result.skipped).toMatchObject({ subscriptionCharge: 1 })
+    })
+})
+
+describe('pending charges', () => {
+    const withPending = () => fakeProvider({
+        listTransactions: jest.fn(async (_t: string, accountId: string) => accountId === 'acc_checking'
+            ? [
+                { externalId: 'posted', providerAccountId: 'acc_checking', date: '2026-10-02', amount: -9, description: 'Bakery', pending: false },
+                { externalId: 'p1', providerAccountId: 'acc_checking', date: '2026-10-05', amount: -12.5, description: 'Lunch', pending: true },
+                { externalId: 'p2', providerAccountId: 'acc_checking', date: '2026-10-05', amount: 40, description: 'Refund', pending: true },
+            ]
+            : []),
+    })
+
+    it('replaces the saved list with the bank\'s current pending charges on every sync', async () => {
+        await databaseWithConnection()
+        fake.table('bank_pending_transactions', { data: null, error: null })
+        await syncConnection(deps(withPending()), 'conn-1')
+        const calls = fake.calls('bank_pending_transactions')
+        const del = calls.find(c => c.ops.some(o => o.method === 'delete'))!
+        expect(del.ops.find(o => o.method === 'eq')!.args).toEqual(['connection_id', 'conn-1'])
+        const insert = calls.find(c => c.ops.some(o => o.method === 'insert'))!.ops.find(o => o.method === 'insert')!.args[0]
+        expect(insert).toEqual([
+            { user_id: 'user-1', connection_id: 'conn-1', bank_account_id: 'db-acc-1', external_id: 'p1', date: '2026-10-05', amount: 12.5, money_in: false, name: 'Lunch' },
+            { user_id: 'user-1', connection_id: 'conn-1', bank_account_id: 'db-acc-1', external_id: 'p2', date: '2026-10-05', amount: 40, money_in: true, name: 'Refund' },
+        ])
+        // Deleted before the new list goes in
+        expect(calls.indexOf(del)).toBeLessThan(calls.findIndex(c => c.ops.some(o => o.method === 'insert')))
+    })
+
+    it('keeps syncing if pending charges can\'t be saved yet (setup not run)', async () => {
+        await databaseWithConnection()
+        fake.table('bank_pending_transactions', { data: null, error: { message: 'relation "bank_pending_transactions" does not exist' } })
+        const result = await syncConnection(deps(withPending()), 'conn-1')
+        expect(result.status).toBe('active')
+        expect(ops('transactions', 'upsert')[0].args[0].map((r: any) => r.external_id)).toEqual(['posted'])
+    })
+})
+
 describe('balances', () => {
     it('saves each account\'s balance on every sync', async () => {
         await databaseWithConnection()

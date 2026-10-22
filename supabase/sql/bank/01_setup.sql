@@ -15,6 +15,7 @@
 --     saved and raises your balance (the opposite of 'savings').
 --   * bank_possible_duplicates: bank transactions that look like ones you already have
 --     (same amount, a few days apart, different name), held back until you decide
+--   * bank_pending_transactions: charges your bank hasn't posted yet, replaced on every sync
 -- Reading bank details also requires having passed two-factor sign-in.
 -- Nothing existing is changed or deleted, except widening a limit on transaction types if you have one.
 
@@ -211,3 +212,34 @@ $$;
 
 revoke all on function public.resolve_possible_duplicate(uuid, text) from public, anon;
 grant execute on function public.resolve_possible_duplicate(uuid, text) to authenticated, service_role;
+
+-- 6. Pending charges ------------------------------------------------------------------
+-- Charges your bank hasn't posted yet. The sync replaces this list every time; once a charge posts,
+-- it arrives as a normal transaction and drops off this list, so nothing is counted twice.
+-- Shown in the app marked "pending"; not included in totals.
+create table if not exists public.bank_pending_transactions (
+  id               uuid primary key default gen_random_uuid(),
+  user_id          uuid not null references auth.users (id) on delete cascade,
+  connection_id    uuid not null references public.bank_connections (id) on delete cascade,
+  bank_account_id  uuid references public.bank_accounts (id) on delete cascade,
+  external_id      text not null,
+  date             date not null,
+  amount           numeric(14, 2) not null,       -- always positive; money_in says which way
+  money_in         boolean not null default false,
+  name             text,
+  created_at       timestamptz not null default now(),
+  unique (connection_id, external_id)
+);
+
+create index if not exists bank_pending_transactions_user_id_idx on public.bank_pending_transactions (user_id);
+
+revoke all on public.bank_pending_transactions from anon, authenticated;
+grant select on public.bank_pending_transactions to authenticated;
+grant all on public.bank_pending_transactions to service_role;
+
+alter table public.bank_pending_transactions enable row level security;
+
+drop policy if exists "Users see their own pending charges" on public.bank_pending_transactions;
+create policy "Users see their own pending charges"
+  on public.bank_pending_transactions for select to authenticated
+  using (user_id = (select auth.uid()) and (select auth.jwt() ->> 'aal') = 'aal2');

@@ -1,81 +1,72 @@
 # BudgetTracker
 
-A cross-platform personal finance app for planning a yearly budget, tracking transactions, and seeing how actual spending compares to the plan. It runs on iOS, Android, and the web from one TypeScript codebase.
+A personal finance app for planning a budget, tracking every transaction (typed in, imported from a CSV, or synced from your bank), and seeing how the day, week, month or year is going against the plan. It runs on the web (live on Netlify), iOS and Android from one TypeScript codebase.
 
-**Stack:** TypeScript · React Native (Expo) · Supabase (Auth, PostgreSQL, Edge Functions) · Zustand · Victory Native
+**Stack:** TypeScript · React Native (Expo) · Supabase (Auth, PostgreSQL, Edge Functions) · Plaid · Zustand
 
 ## Features
 
 **Dashboard**
-- Balance and current-year totals for income, expenses, and savings
-- Actual vs. planned spending per budget item, switchable between monthly and yearly views
-- Spending by category (bar or pie), monthly trend chart, and top spending categories
-- Recent transactions and upcoming subscription charges for the next 30 days
+- Day, week (Monday to Sunday), month or year, with arrows to step back and forward
+- What you spent against your plan, with a marker for where you'd be if you spent evenly, plus what you earned, saved and have left
+- Budget bars per category, colored by how you're doing: on track, getting close (from 85%), or over
+- Balances from your linked banks (checking, savings, owed on cards), a monthly trend chart, coming-up subscription charges and recent activity
+- Charges your bank hasn't posted yet are shown as pending, not counted until they post
 
 **Transactions**
-- Add, edit, duplicate, and multi-select delete
-- Search, filter by type and date range, and sort by date, type, or amount
-- Running balance, summary bar for the visible rows, and pagination (20 per page)
-- **CSV export** and a **CSV bank-import wizard**: pick a file, match columns (auto-guessed, including separate money-in / money-out columns), then review before importing. It reads common bank date and amount formats, skips transactions you already have, leaves out credit card payments, suggests categories from how you categorized the same merchant before, and reports any rows it couldn't save
-- Fast entry: name suggestions from past transactions fill in amount, type and category; date picker with Today / Yesterday; amounts like "$1,234.50" accepted; Enter to save
+- Add, edit, duplicate, split and delete; search, filter and sort; CSV export
+- **CSV import wizard**: match columns (auto-guessed), review, then import; skips what you already have, leaves out card payments, suggests categories
+- **Categorize in bulk**: uncategorized transactions are grouped by place with a suggested category
+- **Rename** a place once ("SQ *BLUE BOTTLE #12" → "Blue Bottle") and future transactions use your name
+- Pending charges from your bank appear in their own section until they post
 
-**Linked banks and security**
-- Link bank accounts through Plaid (Teller also supported); new transactions are added every morning through the same rules as the CSV import (no duplicates, card payments left out, categories from your history)
-- Read-only access; bank tokens are encrypted and never readable by the app; provider-neutral design, so providers can be swapped
-- Two-factor sign-in with an authenticator app, required for bank linking
-- Setup: [docs/linking-banks.md](docs/linking-banks.md)
-
-**Split expenses and paybacks**
-- Split an expense with others when adding it (per person, or split evenly); the full amount stays the expense so it matches your bank
-- "Owed to you" lists who still has to pay you back, per expense and per person
-- Mark someone paid to record a **reimbursement**, or link a Venmo deposit you already imported so it isn't counted twice
-- Reimbursements reduce spending in their category instead of counting as income, and count in the month of the expense they pay back
+**Linked banks** ([setup](docs/linking-banks.md))
+- Plaid (Teller also supported); syncs every morning and on demand, read-only, tokens encrypted and never readable by the app
+- Imports history from January 1; purchases are dated on the day you made them, not the day they posted
+- Finds money moving between your own accounts: transfers aren't counted twice, money put into savings counts as saved and money taken out counts as a withdrawal
+- Likely duplicates of transactions you entered yourself are held for you to review
 
 **Subscriptions**
-- Repeating charges and income (weekly, every 2 weeks, monthly, yearly) with optional end dates
-- Monthly and yearly cost totals, next charge date, and pause, resume, cancel or delete
-- Each charge is added to transactions once, on its real date; charges missed while the app or database was offline are filled in automatically
+- Repeating charges and income with totals per month and year; each charge is added once, on its real date
+- **Spotted for you**: charges that repeat on a schedule, from well-known services (Netflix, Spotify, Claude…) from the first charge, from bank wording like "recurring", or two exact charges a month apart. Add with one tap or dismiss for good
+- **Price changes**: when the bank charges a different amount, update the subscription in one tap; the bank's real charge replaces the app's entry so it isn't counted twice
 
 **Budget planner**
-- Yearly grid by month across Income, Expense, Savings, and Investment
-- Cell editing with "save one" or "fill right" to copy a value across the remaining months
-- Row totals, monthly totals, a net row, and year navigation
-- Budget items feed the category list in the transaction form, so plan and actuals stay linked
+- Yearly grid by month across income, spending, savings and investment, with "fill right", totals and "left over each month"
 
-**Accounts and polish**
-- Email/password sign-up and login with validation and password-strength rules
-- Sign out, toast notifications, and an error boundary so a crash doesn't blank the screen
+**Split expenses and paybacks**
+- Split an expense with others; "Owed to you" tracks who still has to pay you back
+- Paybacks reduce spending in that category (in the month of the expense) instead of counting as income
+
+**Security and accounts**
+- Email and password sign-in, password reset, and two-factor sign-in with an authenticator app (required for linking banks)
+- Add a **backup authenticator** so losing your phone doesn't lock you out
+- Row-level security: each person only ever sees their own data
+
+**Look and feel**
+- Five color themes (Night sky, Ocean, Forest, Sunset, Classic) in light or dark; money colors mean the same in all of them
+- An optional moving space background (stars, warp or nebula) that holds still if your device asks for reduced motion
 
 ## How it works
 
 ```
-Expo app (React Native + web)
-  ├─ Screens ──────── Dashboard · Transactions · Subscriptions · Budget · Settings
-  ├─ Hooks ────────── useDashboardLogic · useTransactionLogic · useBudgetLogic
-  │                    (data fetching and calculations, kept out of the UI components)
-  ├─ Zustand store ── shared transaction state
-  └─ Supabase client ─ auth (PKCE, persisted session) + PostgreSQL queries
-                                   │
-Supabase ─────────────────────────┘
-  ├─ Auth
-  ├─ PostgreSQL: transactions · subscriptions · budget_items · budget_amounts
-  │    └─ generate_subscription_transactions()  adds due charges
-  └─ Edge Function (Deno): generate-recurring  calls it on a schedule
+Expo app (web on Netlify, iOS, Android)
+  ├─ src/features/*   one folder per part of the app (see Project structure)
+  ├─ src/shared/*     UI pieces, themes, money rules, dates, Supabase client
+  └─ Zustand store    shared transaction state
+                │
+Supabase ───────┘
+  ├─ Auth (PKCE sessions, two-factor)
+  ├─ PostgreSQL with row-level security
+  │    transactions · budget_items · budget_amounts · subscriptions · split_shares
+  │    bank_connections · bank_accounts · bank_possible_duplicates · bank_pending_transactions …
+  └─ Edge Functions (Deno)
+       bank                 linking, syncing (daily via cron) and unlinking, through Plaid
+       generate-recurring   adds due subscription charges on a schedule
 ```
 
-- **Data isolation:** every row carries a `user_id`, and the database is designed around Supabase row-level security so each user only sees their own data.
-- **Subscriptions:** each subscription lives in its own table. The database function `generate_subscription_transactions()` adds every charge that's due and not added yet, linked by `subscription_id`. Charge dates are always counted from the start date (so monthly dates don't drift), and a unique index on `(subscription_id, date)` means a charge can never be added twice. The app runs it for the signed-in user on open, and the `generate-recurring` edge function runs it for everyone on a schedule, so downtime is caught up either way.
-- **Separation of concerns:** each screen has a logic hook for fetching and calculations, so the UI components stay mostly presentational.
-
-## Tech stack
-
-| Layer | Tools |
-|---|---|
-| App | TypeScript, React Native 0.85, Expo 56, React Navigation, React Native Web |
-| State | Zustand |
-| Charts | Victory Native, React Native SVG |
-| Backend | Supabase Auth, PostgreSQL, Edge Functions (Deno) |
-| CSV | PapaParse, Expo Document Picker |
+- **Bank syncing** happens only on the server: the `bank` function decrypts the stored token, fetches transactions, applies the same rules as the CSV import, pairs transfers, saves pending charges and refreshes balances.
+- **Subscriptions** live in their own table; `generate_subscription_transactions()` adds every charge that's due, counted from the start date so monthly dates never drift, and a unique index means a charge is never added twice.
 
 ## Getting started
 
@@ -97,66 +88,39 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 Then start the app:
 
 ```bash
-npm run web       # browser
-npm run ios       # iOS simulator (macOS)
-npm run android   # Android emulator
-npm start         # Expo dev menu (scan the QR code with Expo Go)
+npm start         # then press w for the browser, or scan the QR code with Expo Go
+npm run web       # straight to the browser
 ```
 
-### Backend setup
+### Backend setup (automatic)
 
-The app expects the tables `transactions`, `budget_items`, and `budget_amounts`. Enable row-level security on each, with policies that limit access to rows where `user_id = auth.uid()`.
+Database setup and the bank function deploy themselves: merging to `master` runs `.github/workflows/deploy-backend.yml`, which applies every new or changed file listed in `scripts/apply-database-setup.mjs` (each is safe to run more than once) and deploys the `bank` function. It needs two GitHub Actions secrets: `SUPABASE_DB_URL` (the Session pooler connection string) and `SUPABASE_ACCESS_TOKEN`.
 
-For subscriptions, run the files in `supabase/sql/subscriptions/` in order in the Supabase SQL Editor:
+For a brand-new Supabase project, the app also expects the tables `transactions`, `budget_items` and `budget_amounts` with row-level security limited to `user_id = auth.uid()`. Linking banks needs a Plaid account and a few function secrets: see [docs/linking-banks.md](docs/linking-banks.md).
 
-1. `01_setup.sql` creates the `subscriptions` table, its security rules, and the charge function
-2. `02_preview_subscriptions.sql` and `03_preview_deletions.sql` are read-only previews of the conversion
-3. `04_convert_old_recurring.sql` converts transactions from the old recurring system (only needed if you used it)
-
-For split expenses and reimbursements, run `supabase/sql/reimbursements/01_setup.sql`.
-
-For linked banks, follow [docs/linking-banks.md](docs/linking-banks.md).
-
-Then deploy the edge function and schedule it, for example daily with Supabase cron:
-
-```bash
-supabase functions deploy generate-recurring
-```
-
-The function reads `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`, which Supabase provides automatically. Never put the service-role key in the app or in `.env`.
+Never put the service-role key or the database connection string in the app or in an `EXPO_PUBLIC_` variable.
 
 ## Testing
 
 ```bash
 npm test               # everything: app tests (Jest) + database tests (Node)
 npm run test:watch     # re-run app tests as you save
-npm run test:coverage  # app tests with a coverage report
 npm run test:db        # just the database SQL tests
 ```
 
-Tests also run on every pull request (GitHub Actions: type-check, then `npm test`).
-
-**What's covered**
+Tests also run on every pull request (type-check, then `npm test`).
 
 | Where | What the tests check |
 |---|---|
-| `src/shared/money/__tests__/`, `src/features/*/__tests__/*.test.ts` | Reading typed amounts and bank dates, merchant matching, subscription dates (month ends, leap years, daylight saving), dashboard and budget totals, search, sort, CSV export |
-| `src/features/transactions/__tests__/importLogic` | Bank CSV formats (Chase, Capital One, Amex, UK banks), duplicate detection, card payments |
-| `src/__tests__/architecture.test.ts` | The app's structure: features only use each other through their front doors, and only the owner of a table uses it |
-| Screen tests (`*.test.tsx`) | Sign-in, sign-up and forgot password; reset password; adding, editing and deleting transactions; CSV import; subscriptions; budget grid; dashboard; app routing and email links |
-| `supabase/sql/__tests__/` | The real subscription SQL run against an in-memory Postgres: catch-up, no duplicates, row-level security, conversion of old data |
+| `src/features/*/__tests__/` | Each feature's screens and logic: dashboard periods and totals, budget, transactions (CSV import, splits, renaming, categories), subscriptions (including spotting them and price changes), two-factor, linked banks, appearance |
+| `src/shared/**/__tests__/` | Money rules (amounts, dates, merchant matching), themes, loading every row past Supabase's 1,000-row limit, shared UI |
+| `src/__tests__/architecture.test.ts` | The app's structure: features use each other only through their front doors, and only the owner of a table uses it |
+| `supabase/functions/_shared/bank/__tests__/` | The bank function: Plaid and Teller against fake banks, conversion, duplicate and transfer matching, pending charges, subscription charges |
+| `supabase/sql/__tests__/` | The real SQL run against an in-memory Postgres: row-level security, subscription catch-up, setup that can run twice |
 
-Tests run in US Eastern time on purpose, so date bugs that only appear west of UTC get caught. Screen tests use a fake Supabase client (`test/fakeSupabase.ts`) instead of a real database.
+Tests run in US Eastern time on purpose, so date bugs that only appear west of UTC get caught. Screen tests use a fake Supabase client (`test/fakeSupabase.ts`).
 
-**Working test-first**
-
-For a new feature or a bug fix:
-
-1. Write a test that describes what should happen, and run it. It should fail, for the reason you expect.
-2. Write the smallest change that makes it pass.
-3. Tidy the code with the tests still passing.
-
-Keep calculations in plain functions (like `src/features/dashboard/logic/calculations.ts`) rather than inside screens or hooks: they're quicker to test and easier to reuse.
+**Working test-first:** write a test that describes what should happen and watch it fail, make the smallest change that passes, then tidy up. Keep calculations in plain functions (in a feature's `logic/`) rather than inside screens.
 
 ## Project structure
 
@@ -169,23 +133,24 @@ src/features/<feature>/      One part of the app:
     index.ts                   front door: everything other parts may use, screens included
     api.ts                     front door for other features' logic: data and logic only, no screens
     screens/                   what you see
-    logic/                     calculations, hooks and database calls (data.ts)
+    logic/                     calculations, hooks and database calls
     __tests__/
   account/                   sign-in, password reset, two-factor
   appearance/                the moving space background
-  bank/                      linking banks, balances, possible duplicates
+  bank/                      linking banks, balances, possible duplicates, pending charges
   budget/                    the yearly plan
   dashboard/                 the summary of a day, week, month or year
   settings/                  the Settings page (built from other features' sections)
-  subscriptions/             regular charges
+  subscriptions/             regular charges, spotting them, price changes
   transactions/              the list, adding/editing, CSV import, splits, categories, renaming
 src/shared/                  used by everything, depends on no feature
   ui/                        buttons, sections, date field, toasts, error screen
   theme/                     colors, themes, light/dark, background settings
   money/                     money rules (entry.ts is copied to the bank function), formatting
-  dates.ts, supabase.ts
+  dates.ts, fetchAllRows.ts, supabase.ts
 supabase/sql/<feature>/      database setup, applied automatically on merge
-supabase/functions/          the bank function (Plaid) and generate-recurring
+supabase/functions/          the bank function and generate-recurring
+docs/                        design notes and bank-linking setup
 ```
 
 The rules (checked by `src/__tests__/architecture.test.ts`):
@@ -195,18 +160,9 @@ The rules (checked by `src/__tests__/architecture.test.ts`):
 
 ## What's next
 
-**Foundation**
-- Commit database migrations and seed data to the repo so a new Supabase project can be set up in one step
-- Show clear errors when a CSV import row fails, instead of skipping it silently
-- Deploy the web version so the app can be tried without installing anything
-
-**Features**
-- Date picker in place of typing dates by hand
+- Reminders: a subscription due tomorrow, a category past 85%, a high card balance
+- Smarter automatic categories, to shrink the uncategorized pile
+- Add to your phone's home screen as an app (full screen, with an icon)
 - Undo after deleting a transaction
-- Custom categories beyond budget items
-- Budget templates (such as 50/30/20) and copy-last-year's-budget
-- Alerts when a category is close to or over budget, plus a savings rate and budget health score
-
-**Polish**
-- Dark mode, pull to refresh, and full data export
-- Login lockout after repeated failed attempts, and account deletion
+- Copy last year's budget, budget templates (such as 50/30/20) and reordering budget items
+- Full data export (transactions and budget in one file) and account deletion

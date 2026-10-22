@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../shared/supabase'
+import { loadAllTransactions } from './data'
 import { loadCategoryNames } from '../../budget/api'
 import { useTransactionStore } from './useTransactionStore'
 import { EditingTransaction } from './types'
@@ -58,10 +59,7 @@ export function useTransactionLogic() {
     }, [])
 
     async function fetchTransactions() {
-        const { data } = await supabase
-            .from('transactions')
-            .select('*')
-            .order('date', { ascending: false })
+        const data = await loadAllTransactions()
         if (data) setTransactions(data)
     }
     

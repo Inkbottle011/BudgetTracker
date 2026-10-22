@@ -13,7 +13,7 @@ const OWNERS: Record<string, string> = {
     transactions: 'transactions', split_shares: 'transactions', merchant_renames: 'transactions', rename_transactions: 'transactions',
     budget_items: 'budget', budget_amounts: 'budget',
     subscriptions: 'subscriptions', generate_subscription_transactions: 'subscriptions', dismissed_subscription_suggestions: 'subscriptions',
-    bank_connections: 'bank', bank_accounts: 'bank', bank_possible_duplicates: 'bank', resolve_possible_duplicate: 'bank', bank: 'bank',
+    bank_connections: 'bank', bank_accounts: 'bank', bank_possible_duplicates: 'bank', bank_pending_transactions: 'bank', resolve_possible_duplicate: 'bank', bank: 'bank',
 }
 
 function files(dir: string): string[] {

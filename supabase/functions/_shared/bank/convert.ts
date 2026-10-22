@@ -26,6 +26,14 @@ export interface ExistingTransaction {
     note?: string | null
     original_name?: string | null
     type?: string | null
+    /** Set when the app added it for a subscription (not typed in by you) */
+    subscription_id?: string | null
+}
+
+/** The bank's charge for a subscription the app already added: it takes the place of the app's entry. */
+export interface Replacement {
+    existing_transaction_id: string
+    row: TransactionRow
 }
 
 /** A bank transaction that might be one you already have: you decide (see bank_possible_duplicates). */
@@ -43,6 +51,12 @@ export const MONEY_IN_TYPES = new Set(['income', 'reimbursement'])
 
 function daysApart(a: string, b: string) {
     return Math.abs(Date.parse(`${a.slice(0, 10)}T00:00:00Z`) - Date.parse(`${b.slice(0, 10)}T00:00:00Z`)) / 86_400_000
+}
+
+/** A subscription's name ("Claude") found in the bank's wording ("ANTHROPIC* CLAUDE SUB"). */
+function namesSubscription(subName: unknown, bankName: unknown) {
+    const brand = merchantKey(subName).split(' ')[0]
+    return !!brand && brand.length > 1 && (samePlace(subName, bankName) || merchantKey(bankName).split(' ').includes(brand))
 }
 
 /** "Blue Bottle" and "SQ *BLUE BOTTLE #12" are the same place; so are "Starbucks" and "STARBUCKS STORE 123". */
@@ -72,7 +86,7 @@ export function convertBankTransactions(
     account: { id: string; type: string; providerAccountId: string },
     ctx: ConvertContext,
 ) {
-    const skipped = { pending: 0, beforeStart: 0, duplicate: 0, cardPayment: 0, alreadyImported: 0 }
+    const skipped = { pending: 0, beforeStart: 0, duplicate: 0, cardPayment: 0, alreadyImported: 0, subscriptionCharge: 0 }
     const guess = buildCategoryGuesser(ctx.history)
 
     // Some providers show card purchases as positive. Card payments are money IN to a card,
@@ -143,6 +157,7 @@ export function convertBankTransactions(
 
     const rows: TransactionRow[] = []
     const reviews: PossibleDuplicate[] = []
+    const replacements: Replacement[] = []
     for (const row of candidates) {
         if (matched.has(row)) continue
         const isIn = moneyIn.has(row.external_id)
@@ -152,6 +167,18 @@ export function convertBankTransactions(
             .sort((a, b) => daysApart(a.date, row.date) - daysApart(b.date, row.date))
         const same = sameAmount.find(m => samePlace(m.original_name || m.name || m.note, row.original_name || row.name))
         if (same) { same.used = true; skipped.duplicate++; continue }
+        // A charge the app added for a subscription, at the same place within a week but a different amount
+        // (the price changed): the bank's real charge takes its place, so it isn't counted twice
+        const subCharge = isIn ? undefined : mine
+            .filter(m => !m.used && m.subscription_id && m.id && !m.moneyIn && daysApart(m.date, row.date) <= SAME_PLACE_DAYS
+                && namesSubscription(m.name, row.original_name || row.name))
+            .sort((a, b) => daysApart(a.date, row.date) - daysApart(b.date, row.date))[0]
+        if (subCharge) {
+            subCharge.used = true
+            replacements.push({ existing_transaction_id: subCharge.id!, row })
+            skipped.subscriptionCharge++
+            continue
+        }
         const near = sameAmount.find(m => daysApart(m.date, row.date) <= MATCH_DAYS)
         if (near) {
             // Same amount around the same day but a different name: probably yours, but you decide
@@ -161,5 +188,5 @@ export function convertBankTransactions(
         }
         rows.push(row)
     }
-    return { rows, reviews, skipped, moneyIn }
+    return { rows, reviews, replacements, skipped, moneyIn }
 }

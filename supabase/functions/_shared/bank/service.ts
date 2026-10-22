@@ -1,6 +1,6 @@
 // Linking, syncing and unlinking banks. Runs only on the server (service role); provider-neutral.
 import { encryptToken, decryptToken } from './crypto.ts'
-import { convertBankTransactions, SAME_PLACE_DAYS, MONEY_IN_TYPES, type PossibleDuplicate, type TransactionRow } from './convert.ts'
+import { convertBankTransactions, SAME_PLACE_DAYS, MONEY_IN_TYPES, type PossibleDuplicate, type Replacement, type TransactionRow } from './convert.ts'
 import { findTransferPairs, TRANSFER_DAYS, type TransferCandidate } from './transfers.ts'
 import { isCardPayment } from '../entry.ts'
 import { BankProvider, ProviderError } from './types.ts'
@@ -138,10 +138,16 @@ export async function syncConnection(deps: BankDeps, connectionId: string) {
         const rows: TransactionRow[] = []
         const moneyIn = new Set<string>()
         const reviews: PossibleDuplicate[] = []
-        const skipped = { pending: 0, beforeStart: 0, duplicate: 0, cardPayment: 0, alreadyImported: 0 }
+        const replacements: Replacement[] = []
+        const pending: PendingRow[] = []
+        const skipped = { pending: 0, beforeStart: 0, duplicate: 0, cardPayment: 0, alreadyImported: 0, subscriptionCharge: 0 }
         for (const acc of (accounts ?? []).filter((a: any) => a.connection_id === conn.id)) {
             const txs = await deps.provider.listTransactions(token, acc.provider_account_id, since)
             if (acc.type !== 'credit') for (const t of txs) fetchedMoneyIn.set(t.externalId, t.amount > 0)
+            for (const t of txs) if (t.pending) pending.push({
+                user_id: conn.user_id, connection_id: conn.id, bank_account_id: acc.id, external_id: t.externalId, date: t.date,
+                amount: Math.round(Math.abs(t.amount) * 100) / 100, money_in: t.amount > 0, name: t.description,
+            })
             for (const t of txs) if (t.postedDate && t.postedDate !== t.date) purchaseDates.set(t.externalId, { date: t.date, posted: t.postedDate })
             await saveBalance(deps, token, acc)
             const r = convertBankTransactions(txs, { id: acc.id, type: acc.type, providerAccountId: acc.provider_account_id }, {
@@ -150,6 +156,7 @@ export async function syncConnection(deps: BankDeps, connectionId: string) {
             })
             rows.push(...r.rows)
             reviews.push(...r.reviews)
+            replacements.push(...r.replacements)
             r.moneyIn.forEach(id => moneyIn.add(id))
             for (const k of Object.keys(skipped) as (keyof typeof skipped)[]) skipped[k] += r.skipped[k]
         }
@@ -167,6 +174,17 @@ export async function syncConnection(deps: BankDeps, connectionId: string) {
                 .upsert(rows, { onConflict: 'user_id,provider,external_id', ignoreDuplicates: true }).select('id')
             if (error) throw new Error(`Couldn't save transactions: ${error.message}`)
             added = (data ?? []).length
+        }
+
+        await savePending(deps, conn.id, pending)
+
+        // The bank's charge for a subscription the app already added (price changed): it becomes that entry
+        for (const { existing_transaction_id, row } of replacements) {
+            const { error } = await deps.db.from('transactions').update({
+                amount: row.amount, date: row.date, provider: row.provider, external_id: row.external_id,
+                bank_account_id: row.bank_account_id, original_name: row.original_name ?? row.name,
+            }).eq('user_id', conn.user_id).eq('id', existing_transaction_id)
+            if (error) throw new Error(`Couldn't update a subscription charge: ${error.message}`)
         }
 
         let toReview = 0
@@ -195,6 +213,26 @@ export async function syncConnection(deps: BankDeps, connectionId: string) {
         const status = e instanceof ProviderError && e.kind === 'needs_relink' ? 'needs_relink' : 'error'
         await deps.db.from('bank_connections').update({ status, last_error: safeMessage(e, token) }).eq('id', conn.id)
         return { added: 0, toReview: 0, transfers: 0, skipped: null, status }
+    }
+}
+
+interface PendingRow {
+    user_id: string; connection_id: string; bank_account_id: string; external_id: string
+    date: string; amount: number; money_in: boolean; name: string
+}
+
+/**
+ * Charges the bank hasn't posted yet, shown in the app marked pending. The list is replaced each sync:
+ * once a charge posts, it arrives as a normal transaction and isn't pending any more. A problem here
+ * (like the table not being set up yet) never stops the sync.
+ */
+async function savePending(deps: BankDeps, connectionId: string, rows: PendingRow[]) {
+    try {
+        const { error } = await deps.db.from('bank_pending_transactions').delete().eq('connection_id', connectionId)
+        if (error || !rows.length) return
+        await deps.db.from('bank_pending_transactions').insert(rows)
+    } catch {
+        // keep syncing
     }
 }
 

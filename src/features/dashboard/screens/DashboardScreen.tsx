@@ -56,6 +56,7 @@ export default function Dashboard() {
                 />
                 <SpendingSummary
                     heading={logic.heading}
+                    pending={logic.pendingSpent}
                     spent={logic.summary.spent}
                     planned={logic.plannedTotal}
                     elapsed={logic.elapsed}

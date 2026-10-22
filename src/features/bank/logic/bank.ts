@@ -186,3 +186,13 @@ export async function loadAccountBalances(): Promise<BankAccountRow[]> {
         .select('id, name, last_four, type, subtype, balance_current, balance_available, balance_updated_at')
     return (data ?? []) as BankAccountRow[]
 }
+
+export interface PendingCharge { id: string; date: string; amount: number; money_in: boolean; name: string | null }
+
+/** Charges your bank hasn't posted yet, newest first. Empty if there are none, or before the setup has run. */
+export async function loadPendingCharges(): Promise<PendingCharge[]> {
+    const { data, error } = await supabase.from('bank_pending_transactions')
+        .select('id, date, amount, money_in, name').order('date', { ascending: false })
+    if (error) return []
+    return (data ?? []).map((r: any) => ({ ...r, amount: Number(r.amount) }))
+}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { View, Text, TextInput, Image, StyleSheet, Platform } from 'react-native'
-import { twoFactorStatus, startTwoFactorSetup, verifyCode, turnOffTwoFactor } from '../logic/twoFactor'
+import { twoFactorStatus, startTwoFactorSetup, verifyCode, turnOffTwoFactor, removeAuthenticator, type Authenticator } from '../logic/twoFactor'
 import { useToastContext } from '../../../shared/ui/ToastContext'
 import { useTheme, useStyles, Palette, light } from '../../../shared/theme/theme'
 import { Section, Button, Segmented } from '../../../shared/ui/ui'
@@ -36,11 +36,12 @@ export function TwoFactorSection({ onChange }: { onChange: (on: boolean) => void
     const { c: C } = useTheme()
     const styles = useStyles(makeStyles)
     const { showToast } = useToastContext()
-    const [status, setStatus] = useState<{ on: boolean; factorId: string | null } | null>(null)
+    const [status, setStatus] = useState<Awaited<ReturnType<typeof twoFactorStatus>> | null>(null)
     const [setup, setSetup] = useState<{ factorId: string; qrCode: string; secret: string } | null>(null)
     const [code, setCode] = useState('')
     const [error, setError] = useState<string | null>(null)
     const [confirmOff, setConfirmOff] = useState(false)
+    const [confirmRemove, setConfirmRemove] = useState<Authenticator | null>(null)
     const [busy, setBusy] = useState(false)
     const [phone, setPhone] = useState<Phone>(guessPhone)
     const [copied, setCopied] = useState(false)
@@ -73,10 +74,24 @@ export function TwoFactorSection({ onChange }: { onChange: (on: boolean) => void
         if (!setup) return
         setBusy(true); setError(null)
         try {
+            const wasOn = !!status?.on
             await verifyCode(setup.factorId, code)
             setSetup(null); setCode('')
             await refresh()
-            showToast('Two-factor sign-in is on')
+            showToast(wasOn ? 'Backup authenticator added' : 'Two-factor sign-in is on')
+        } catch (e: any) {
+            setError(e?.message)
+        }
+        setBusy(false)
+    }
+
+    async function remove(a: Authenticator) {
+        setBusy(true); setError(null)
+        try {
+            await removeAuthenticator(a.id)
+            setConfirmRemove(null)
+            await refresh()
+            showToast(`${a.name} removed`)
         } catch (e: any) {
             setError(e?.message)
         }
@@ -84,10 +99,10 @@ export function TwoFactorSection({ onChange }: { onChange: (on: boolean) => void
     }
 
     async function turnOff() {
-        if (!status?.factorId) return
+        if (!status?.on) return
         setBusy(true); setError(null)
         try {
-            await turnOffTwoFactor(status.factorId)
+            await turnOffTwoFactor()
             setConfirmOff(false)
             await refresh()
             showToast('Two-factor sign-in is off')
@@ -165,7 +180,35 @@ export function TwoFactorSection({ onChange }: { onChange: (on: boolean) => void
                 </View>
             )}
 
-            {status?.on && !confirmOff && (
+            {status?.on && !setup && (
+                <View style={styles.authList}>
+                    <Text style={styles.listTitle}>Your authenticators</Text>
+                    {status.authenticators.map(a => (
+                        <View key={a.id} style={styles.authRow}>
+                            <Text style={styles.authName}>{a.name}</Text>
+                            {status.authenticators.length > 1 && confirmRemove?.id !== a.id && (
+                                <Button variant="ghost" small label="Remove" accessibilityLabel={`Remove ${a.name}`} onPress={() => setConfirmRemove(a)} />
+                            )}
+                        </View>
+                    ))}
+                    {confirmRemove && (
+                        <View style={styles.confirm}>
+                            <Text style={styles.confirmText}>Remove {confirmRemove.name}? You can still sign in with your other authenticator.</Text>
+                            <View style={styles.row}>
+                                <Button variant="danger" small label="Yes, remove" onPress={() => remove(confirmRemove)} loading={busy} />
+                                <Button variant="ghost" small label="Keep it" onPress={() => setConfirmRemove(null)} />
+                            </View>
+                        </View>
+                    )}
+                    <Text style={styles.backupHelp}>
+                        Add a second one, like another phone or a password manager, so you can still sign in if you lose your phone.
+                    </Text>
+                    <Button variant="secondary" small label={status.authenticators.length > 1 ? 'Add another authenticator' : 'Add a backup authenticator'}
+                        accessibilityLabel={status.authenticators.length > 1 ? 'Add another authenticator' : 'Add a backup authenticator'}
+                        onPress={begin} loading={busy} style={styles.start} />
+                </View>
+            )}
+            {status?.on && !confirmOff && !setup && (
                 <Button variant="secondary" small label="Turn off" onPress={() => setConfirmOff(true)} style={styles.start} />
             )}
             {confirmOff && (
@@ -186,6 +229,11 @@ export function TwoFactorSection({ onChange }: { onChange: (on: boolean) => void
 const makeStyles = (C: Palette) => StyleSheet.create({
     ...makeSettingsStyles(C),
     badge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
+    authList: { gap: 6, marginBottom: 14 },
+    listTitle: { fontSize: 14, fontWeight: '700', color: C.ink },
+    authRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4, borderBottomWidth: 1, borderColor: C.line },
+    authName: { fontSize: 14, color: C.text },
+    backupHelp: { fontSize: 13, color: C.muted, lineHeight: 18, marginTop: 6 },
     badgeOn: { backgroundColor: C.goodSoft },
     badgeOff: { backgroundColor: C.track },
     badgeText: { fontSize: 12, fontWeight: '600' },

@@ -1,4 +1,5 @@
 import { supabase } from '../../../shared/supabase'
+import { fetchAllRows } from '../../../shared/fetchAllRows'
 import {
     parseAmount, parseDate, detectDateOrder, DateOrder, buildCategoryGuesser, duplicateKey, PastTransaction, isCardPayment, isRefund, renameFor,
 } from '../../../shared/money/entry'
@@ -181,18 +182,6 @@ export function convertRows(
     })
 
     return { ready, duplicates, problems, categorized, dateOrder }
-}
-
-/** Reads every row a query returns, past Supabase's 1,000-row limit per request. */
-async function fetchAllRows<T>(makeQuery: () => any): Promise<T[]> {
-    const PAGE = 1000
-    const out: T[] = []
-    for (let from = 0; ; from += PAGE) {
-        const { data, error } = await makeQuery().range(from, from + PAGE - 1)
-        if (error) throw error
-        out.push(...(data ?? []))
-        if (!data || data.length < PAGE) return out
-    }
 }
 
 /** Loads what's needed from the database, then converts the rows. */
