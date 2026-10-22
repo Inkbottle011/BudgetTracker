@@ -206,3 +206,26 @@ export async function undoMerge({ source, rows }: MergeUndo): Promise<void> {
         if (e) throw new Error(`${source.name} is back, but its amounts couldn't be restored: ${e.message}`)
     }
 }
+
+// ---- Copying a year ----
+
+/** Copies every planned amount from one year into another (for items you still have). Returns what was added. */
+export async function copyYear(from: number, to: number, itemIds: string[]) {
+    const user = await userId()
+    const { data, error } = await supabase.from('budget_amounts').select('*').eq('year', from)
+    if (error) throw new Error(`Couldn't copy ${from}: ${error.message}`)
+    const rows = ((data ?? []) as any[])
+        .filter(r => r.year === from && itemIds.includes(r.budget_item_id))
+        .map(r => ({ user_id: user, budget_item_id: r.budget_item_id as string, month: r.month as number, year: to, amount: Number(r.amount) }))
+    if (rows.length) {
+        const { error: e } = await supabase.from('budget_amounts').upsert(rows, { onConflict: 'budget_item_id,month,year' })
+        if (e) throw new Error(`Couldn't copy ${from}: ${e.message}`)
+    }
+    return rows
+}
+
+/** Clears a year's planned amounts for these items (undoing a copy into an empty year). */
+export async function clearYear(year: number, itemIds: string[]): Promise<void> {
+    const { error } = await supabase.from('budget_amounts').delete().eq('year', year).in('budget_item_id', itemIds)
+    if (error) throw new Error(`Couldn't undo the copy: ${error.message}`)
+}

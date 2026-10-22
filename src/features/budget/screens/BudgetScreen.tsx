@@ -151,6 +151,15 @@ export default function BudgetScreen() {
                 options={[{ value: 'simple', label: 'Simple' }, { value: 'months', label: 'By month' }]}
                 style={{ marginBottom: 14 }}
             />
+            {!logic.loading && logic.yearIsEmpty && (
+                <View style={styles.copyCard}>
+                    <View style={{ flex: 1, minWidth: 200 }}>
+                        <Text style={styles.copyTitle}>Nothing planned for {logic.year} yet</Text>
+                        <Text style={styles.copyBody}>Start from last year's amounts and change what's different, or answer a few questions.</Text>
+                    </View>
+                    <Button label={`Copy ${logic.year - 1}'s budget`} onPress={logic.handleCopyLastYear} />
+                </View>
+            )}
             {logic.loading ? (
                 <View style={styles.loading}>
                     <ActivityIndicator color={C.primary} />
@@ -230,6 +239,9 @@ export default function BudgetScreen() {
 
 const makeStyles = (C: Palette) => StyleSheet.create({
     actions: { flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap' },
+    copyCard: { flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap', backgroundColor: C.primarySoft, borderRadius: 14, padding: 16, marginBottom: 14 },
+    copyTitle: { fontSize: 15, fontWeight: '700', color: C.ink },
+    copyBody: { fontSize: 13, color: C.text, marginTop: 2, lineHeight: 18 },
     yearGroup: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     arrow: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
     arrowText: { fontSize: 26, lineHeight: 28, color: C.muted },

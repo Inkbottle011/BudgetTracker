@@ -3,7 +3,7 @@ import { supabase } from '../../../shared/supabase'
 import { BudgetItem, BudgetAmount, BudgetType } from './types'
 import { useToastContext } from '../../../shared/ui/ToastContext'
 import { cellAmount, rowTotal, monthTotal, sectionTotal, netByMonth, netTotal, parseBudgetInput, varies } from './calculations'
-import { setEveryMonth, deleteBudgetItem, restoreBudgetItem, DeletedBudgetItem } from './data'
+import { setEveryMonth, deleteBudgetItem, restoreBudgetItem, DeletedBudgetItem, copyYear, clearYear } from './data'
 import { formatMoney } from '../../../shared/money/format'
 
 export function useBudgetLogic() {
@@ -113,6 +113,24 @@ export function useBudgetLogic() {
         showToast(`${name}: ${formatMoney(amount, { cents: amount % 1 !== 0 })} every month`)
     }
 
+    /** Fills an empty year with last year's plan, with Undo. */
+    async function handleCopyLastYear() {
+        const from = year - 1, to = year
+        const ids = items.map(i => i.id)
+        let rows: Awaited<ReturnType<typeof copyYear>>
+        try { rows = await copyYear(from, to, ids) } catch (e: any) { showToast(e?.message ?? `Couldn't copy ${from}`, 'error'); return }
+        if (!rows.length) { showToast(`Nothing was planned in ${from} to copy`, 'info'); return }
+        setAmounts(prev => [...prev.filter(a => a.year !== to), ...rows.map(r => ({ id: '', ...r }))])
+        showToast(`Copied ${from}'s budget into ${to}`, 'success', {
+            label: 'Undo',
+            onPress: async () => {
+                try { await clearYear(to, ids); showToast(`${to} is empty again`) }
+                catch (e: any) { showToast(e?.message ?? "Couldn't undo the copy", 'error') }
+                await fetchData()
+            },
+        })
+    }
+
     async function handleAddItem() {
         if (!newItemName.trim()) return
         const { data: { session } } = await supabase.auth.getSession()
@@ -172,7 +190,8 @@ export function useBudgetLogic() {
         editingCell, setEditingCell,
         editingValue, setEditingValue,
         getAmount, getRowTotal, getMonthTotal, getSectionTotal,
-        handleCellSave, handleAddItem, handleDeleteItem, handleSetEveryMonth,
+        handleCellSave, handleAddItem, handleDeleteItem, handleSetEveryMonth, handleCopyLastYear,
+        yearIsEmpty: items.length > 0 && !amounts.some(a => a.year === year && Number(a.amount) !== 0),
         varies: (itemId: string) => varies(amounts, itemId),
         getNetByMonth, getNetTotal,
         reload: fetchData,
