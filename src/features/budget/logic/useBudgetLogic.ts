@@ -3,7 +3,7 @@ import { supabase } from '../../../shared/supabase'
 import { BudgetItem, BudgetAmount, BudgetType } from './types'
 import { useToastContext } from '../../../shared/ui/ToastContext'
 import { cellAmount, rowTotal, monthTotal, sectionTotal, netByMonth, netTotal, parseBudgetInput, varies } from './calculations'
-import { setEveryMonth } from './data'
+import { setEveryMonth, deleteBudgetItem, restoreBudgetItem, DeletedBudgetItem } from './data'
 import { formatMoney } from '../../../shared/money/format'
 
 export function useBudgetLogic() {
@@ -135,12 +135,32 @@ export function useBudgetLogic() {
         }
     }
 
+    /** Deletes an item (after you've confirmed), with Undo in the message. */
     async function handleDeleteItem(id: string) {
-        const { error } = await supabase.from('budget_items').delete().eq('id', id)
-        if (error) { fetchData(); showToast('Failed to delete', 'error'); return }
+        const item = items.find(i => i.id === id)
+        if (!item) return
+        let deleted: DeletedBudgetItem
+        try {
+            deleted = await deleteBudgetItem(item)
+        } catch {
+            fetchData()
+            showToast('Failed to delete', 'error')
+            return
+        }
         setItems(prev => prev.filter(i => i.id !== id))
         setAmounts(prev => prev.filter(a => a.budget_item_id !== id))
-        showToast('Budget item deleted')
+        showToast(`${item.name} deleted`, 'success', {
+            label: 'Undo',
+            onPress: async () => {
+                try {
+                    await restoreBudgetItem(deleted)
+                    showToast(`${item.name} is back`)
+                } catch (e: any) {
+                    showToast(e?.message ?? `Couldn't bring back ${item.name}`, 'error')
+                }
+                await fetchData()
+            },
+        })
     }
 
     return {

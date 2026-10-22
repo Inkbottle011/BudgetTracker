@@ -135,7 +135,7 @@ export function LinkedBanksSection({ twoFactorOn }: { twoFactorOn: boolean }) {
                             <Text style={[styles.status, bank.status !== 'active' && styles.statusBad]}>{describeStatus(bank)}</Text>
                             {confirmUnlink === bank.id && (
                                 <View style={[styles.confirm, { marginTop: 10 }]}>
-                                    <Text style={styles.confirmText}>Unlink {bank.institution_name ?? 'this bank'}? Transactions already imported stay.</Text>
+                                    <Text style={styles.confirmText}>Unlink {bank.institution_name ?? 'this bank'}? Transactions already imported stay. This can't be undone: to sync it again you'd link it again.</Text>
                                     <View style={styles.row}>
                                         <Button variant="danger" small label="Yes, unlink" onPress={() => unlink(bank)} loading={busy === bank.id} disabled={!!busy} />
                                         <Button variant="ghost" small label="Cancel" onPress={() => setConfirmUnlink(null)} />

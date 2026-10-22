@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
 import { supabase } from '../../../shared/supabase'
-import { useTransactionStore, loadAllTransactions } from '../../transactions/api'
+import { useTransactionStore, loadAllTransactions, subscriptionChargeIds, linkSubscriptionCharges } from '../../transactions/api'
 import { loadCategoryNames } from '../../budget/api'
 import { useToastContext } from '../../../shared/ui/ToastContext'
 import {
@@ -164,9 +164,26 @@ export function useSubscriptions() {
     }
 
     async function remove(sub: Subscription) {
+        // Its past charges stay but lose their link to it; remember them so Undo can link them again
+        const charges = await subscriptionChargeIds(sub.id).catch(() => [] as string[])
         const { error } = await supabase.from('subscriptions').delete().eq('id', sub.id)
         if (error) { showToast('Could not delete subscription', 'error'); return }
-        showToast('Subscription deleted')
+        showToast(`${sub.name} deleted`, 'success', {
+            label: 'Undo',
+            onPress: async () => {
+                const { error: restoreError } = await supabase.from('subscriptions').insert(sub)
+                if (restoreError) showToast(`Couldn't bring back ${sub.name}: ${restoreError.message}`, 'error')
+                else {
+                    try {
+                        await linkSubscriptionCharges(charges, sub.id)
+                        showToast(`${sub.name} is back`)
+                    } catch (e: any) {
+                        showToast(`${sub.name} is back, but its past charges couldn't be linked: ${e.message}`, 'error')
+                    }
+                }
+                await load()
+            },
+        })
         await load()
     }
 

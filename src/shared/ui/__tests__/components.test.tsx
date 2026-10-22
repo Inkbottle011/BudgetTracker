@@ -4,6 +4,8 @@ import { render, screen, fireEvent, renderHook, act } from '@testing-library/rea
 import { ErrorBoundary } from '../ErrorBoundary'
 import { DateField } from '../DateField'
 import { useToast } from '../useToast'
+import { Toast } from '../Toast'
+import { ConfirmDialog } from '../ConfirmDialog'
 
 describe('ErrorBoundary', () => {
     function Bomb(): any { throw new Error('Kaboom') }
@@ -69,5 +71,42 @@ describe('useToast', () => {
         expect(result.current.toast).toEqual({ message: 'Saved', type: 'error', visible: true })
         await act(() => result.current.hideToast())
         expect(result.current.toast.visible).toBe(false)
+    })
+})
+
+describe('Toast with an Undo button', () => {
+    it('shows the button, runs it once and goes away', async () => {
+        const undo = jest.fn(), hide = jest.fn()
+        await render(<Toast message="Food deleted" visible onHide={hide} action={{ label: 'Undo', onPress: undo }} />)
+        expect(screen.getByText('Food deleted')).toBeTruthy()
+        await fireEvent.press(screen.getByRole('button', { name: 'Undo' }))
+        expect(undo).toHaveBeenCalledTimes(1)
+        expect(hide).toHaveBeenCalled()
+    })
+
+    it('useToast keeps the action with the message', async () => {
+        const { result } = await renderHook(() => useToast())
+        const action = { label: 'Undo', onPress: () => {} }
+        await act(() => result.current.showToast('Deleted', 'success', action))
+        expect(result.current.toast).toEqual({ message: 'Deleted', type: 'success', visible: true, action })
+    })
+})
+
+describe('ConfirmDialog', () => {
+    it('asks first, and only goes ahead when you confirm', async () => {
+        const yes = jest.fn(), no = jest.fn()
+        await render(<ConfirmDialog visible title="Delete Food?" message="Its planned amounts go too." confirmLabel="Delete" onConfirm={yes} onCancel={no} />)
+        expect(screen.getByText('Delete Food?')).toBeTruthy()
+        expect(screen.getByText('Its planned amounts go too.')).toBeTruthy()
+        await fireEvent.press(screen.getByRole('button', { name: 'Cancel' }))
+        expect(no).toHaveBeenCalled()
+        expect(yes).not.toHaveBeenCalled()
+        await fireEvent.press(screen.getByRole('button', { name: 'Delete' }))
+        expect(yes).toHaveBeenCalled()
+    })
+
+    it('shows nothing when closed', async () => {
+        await render(<ConfirmDialog visible={false} title="Delete Food?" confirmLabel="Delete" onConfirm={() => {}} onCancel={() => {}} />)
+        expect(screen.queryByText('Delete Food?')).toBeNull()
     })
 })

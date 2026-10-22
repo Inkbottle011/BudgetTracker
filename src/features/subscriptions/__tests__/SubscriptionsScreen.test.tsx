@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react-native'
+import { render, screen, fireEvent, act } from '@testing-library/react-native'
 import SubscriptionsScreen from '../screens/SubscriptionsScreen'
 import { ToastContext } from '../../../shared/ui/ToastContext'
 import { fake, supabase } from '../../../../test/fakeSupabase'
@@ -172,6 +172,24 @@ it('asks before cancelling or deleting', async () => {
     await fireEvent.press(screen.getByLabelText('Delete Gym'))
     await fireEvent.press(screen.getByText('Yes, delete'))
     expect(fake.calls('subscriptions').some(c => c.ops.some(o => o.method === 'delete'))).toBe(true)
+})
+
+it('Undo brings a deleted subscription back, still linked to its past charges', async () => {
+    await renderScreen()
+    await screen.findByText('Netflix')
+    fake.table('transactions', call => call.ops.some(o => o.method === 'eq' && o.args[0] === 'subscription_id')
+        ? { data: [{ id: 'c1', subscription_id: 'n' }, { id: 'c2', subscription_id: 'n' }] }
+        : { data: [], error: null })
+    await fireEvent.press(screen.getByLabelText('Delete Netflix'))
+    await fireEvent.press(screen.getByText('Yes, delete'))
+    const [message, , action] = showToast.mock.calls.at(-1)!
+    expect([message, action.label]).toEqual(['Netflix deleted', 'Undo'])
+    await act(async () => { await action.onPress() })
+    expect(fake.arg('subscriptions', 'insert')).toEqual(expect.objectContaining({ id: 'n', name: 'Netflix' }))
+    const relink = fake.calls('transactions').find(c => c.ops.some(o => o.method === 'update'))!
+    expect(relink.ops).toContainEqual({ method: 'update', args: [{ subscription_id: 'n' }] })
+    expect(relink.ops).toContainEqual({ method: 'in', args: ['id', ['c1', 'c2']] })
+    expect(showToast).toHaveBeenLastCalledWith('Netflix is back')
 })
 
 describe('subscriptions spotted in your spending', () => {
