@@ -177,6 +177,7 @@ export default function BudgetScreen() {
                     onPlan={() => setGuideOpen(true)}
                     onSplit={setSplitting}
                     onRename={setRenaming}
+                    onMove={logic.handleMoveItem}
                     footer={<UnplannedCategories categories={unplanned} choices={logic.items.filter(i => i.type === 'expense').map(i => i.name)} onMove={moveUnplanned} onAdd={addUnplanned} />}
                 />
             ) : wide ? (

@@ -1,11 +1,12 @@
 // The budget's own tables (budget_items, budget_amounts). Other features read the budget through these.
 import { supabase } from '../../../shared/supabase'
 import { fetchAllRows } from '../../../shared/fetchAllRows'
+import { sortItems } from './calculations'
 
 /** Every budget category (income, spending, savings, investment), oldest first. */
 export async function loadBudgetItems() {
     const { data } = await supabase.from('budget_items').select('*').order('created_at')
-    return data ?? null
+    return data ? sortItems(data as any[]) : null
 }
 
 /** Planned amounts for every month of every year. */
@@ -228,4 +229,12 @@ export async function copyYear(from: number, to: number, itemIds: string[]) {
 export async function clearYear(year: number, itemIds: string[]): Promise<void> {
     const { error } = await supabase.from('budget_amounts').delete().eq('year', year).in('budget_item_id', itemIds)
     if (error) throw new Error(`Couldn't undo the copy: ${error.message}`)
+}
+
+/** Saves the order of items in a section. */
+export async function saveOrder(order: { id: string; position: number }[]): Promise<void> {
+    for (const { id, position } of order) {
+        const { error } = await supabase.from('budget_items').update({ position }).eq('id', id)
+        if (error) throw new Error(`Couldn't save the order: ${error.message}`)
+    }
 }

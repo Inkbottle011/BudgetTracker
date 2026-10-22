@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../shared/supabase'
 import { BudgetItem, BudgetAmount, BudgetType } from './types'
 import { useToastContext } from '../../../shared/ui/ToastContext'
-import { cellAmount, rowTotal, monthTotal, sectionTotal, netByMonth, netTotal, parseBudgetInput, varies } from './calculations'
-import { setEveryMonth, deleteBudgetItem, restoreBudgetItem, DeletedBudgetItem, copyYear, clearYear } from './data'
+import { cellAmount, rowTotal, monthTotal, sectionTotal, netByMonth, netTotal, parseBudgetInput, varies, sortItems } from './calculations'
+import { setEveryMonth, deleteBudgetItem, restoreBudgetItem, DeletedBudgetItem, copyYear, clearYear, saveOrder } from './data'
 import { formatMoney } from '../../../shared/money/format'
 
 export function useBudgetLogic() {
@@ -39,7 +39,7 @@ export function useBudgetLogic() {
             .eq('user_id', session.user.id)
             .eq('year', year)
 
-        if (itemsData) setItems(itemsData)
+        if (itemsData) setItems(sortItems(itemsData))
         if (amountsData) setAmounts(amountsData)
         setLoading(false)
     }
@@ -131,6 +131,21 @@ export function useBudgetLogic() {
         })
     }
 
+    /** Moves an item one place up (-1) or down (1) within its section, and saves the order. */
+    async function handleMoveItem(id: string, step: -1 | 1) {
+        const item = items.find(i => i.id === id)
+        if (!item) return
+        const section = items.filter(i => i.type === item.type)
+        const at = section.findIndex(i => i.id === id)
+        const swap = at + step
+        if (swap < 0 || swap >= section.length) return
+        const reordered = [...section]
+        ;[reordered[at], reordered[swap]] = [reordered[swap], reordered[at]]
+        const order = reordered.map((i, position) => ({ id: i.id, position }))
+        setItems(prev => sortItems(prev.map(i => ({ ...i, position: order.find(o => o.id === i.id)?.position ?? i.position }))))
+        try { await saveOrder(order) } catch (e: any) { showToast(e?.message ?? "Couldn't save the order", 'error'); fetchData() }
+    }
+
     async function handleAddItem() {
         if (!newItemName.trim()) return
         const { data: { session } } = await supabase.auth.getSession()
@@ -190,7 +205,7 @@ export function useBudgetLogic() {
         editingCell, setEditingCell,
         editingValue, setEditingValue,
         getAmount, getRowTotal, getMonthTotal, getSectionTotal,
-        handleCellSave, handleAddItem, handleDeleteItem, handleSetEveryMonth, handleCopyLastYear,
+        handleCellSave, handleAddItem, handleDeleteItem, handleSetEveryMonth, handleCopyLastYear, handleMoveItem,
         yearIsEmpty: items.length > 0 && !amounts.some(a => a.year === year && Number(a.amount) !== 0),
         varies: (itemId: string) => varies(amounts, itemId),
         getNetByMonth, getNetTotal,

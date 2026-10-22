@@ -68,3 +68,9 @@ export function unplannedCategories(
         .map(f => ({ name: [...f.names.entries()].sort((a, b) => b[1] - a[1])[0][0], count: f.count }))
         .sort((a, b) => b.count - a.count)
 }
+
+/** Budget items in the order you chose: moved ones by position, the rest after them by when they were added. */
+export function sortItems<T extends { position?: number | null; created_at?: string | null }>(items: T[]): T[] {
+    const pos = (i: T) => (i.position ?? Number.POSITIVE_INFINITY)
+    return [...items].sort((a, b) => pos(a) - pos(b) || String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')))
+}

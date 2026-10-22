@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native'
 import { useTheme, useStyles, Palette, tabular } from '../../../shared/theme/theme'
 import { Button, Section, EmptyState, useIsWide } from '../../../shared/ui/ui'
-import { BudgetType, MONTHS, MONTH_NAMES, SECTIONS } from '../logic/types'
+import { BudgetType, MONTHS, MONTH_NAMES, SECTIONS, SECTION_LABELS } from '../logic/types'
 import { BudgetViewProps, SectionHeading, AddItemRow, DeleteButton, dollars } from './BudgetTable'
 
 interface Props extends BudgetViewProps {
@@ -19,6 +19,7 @@ interface Props extends BudgetViewProps {
     onPlan: () => void
     onSplit: (item: BudgetViewProps['items'][number]) => void
     onRename: (item: BudgetViewProps['items'][number]) => void
+    onMove: (id: string, step: -1 | 1) => void
     /** Shown under the sections (categories not in your budget) */
     footer?: React.ReactNode
 }
@@ -73,17 +74,30 @@ function Stat({ label, value, color, s, strong }: { label: string; value: number
 
 function SimpleSection({ type, ...p }: Props & { type: BudgetType }) {
     const s = useStyles(makeStyles)
+    const [reordering, setReordering] = useState(false)
     const items = p.items.filter(i => i.type === type)
+    const title = SECTION_LABELS[type].title
     return (
         <Section>
-            <SectionHeading type={type} right={<Text style={[s.sectionTotal, tabular]}>{dollars(p.getMonthTotal(type, p.month))} a month</Text>} />
-            {items.map((item, i) => <SimpleRow key={item.id} item={item} first={i === 0} {...p} />)}
+            <SectionHeading type={type} right={
+                <View style={s.headRight}>
+                    <Text style={[s.sectionTotal, tabular]}>{dollars(p.getMonthTotal(type, p.month))} a month</Text>
+                    {items.length > 1 && (
+                        <Button small variant="ghost" label={reordering ? 'Done' : 'Reorder'} accessibilityLabel={reordering ? 'Done reordering' : `Reorder ${title}`}
+                            onPress={() => setReordering(!reordering)} />
+                    )}
+                </View>
+            } />
+            {items.map((item, i) => (
+                <SimpleRow key={item.id} item={item} first={i === 0} {...p}
+                    reorder={reordering ? { up: i > 0, down: i < items.length - 1 } : null} />
+            ))}
             <AddItemRow type={type} {...p} />
         </Section>
     )
 }
 
-function SimpleRow({ item, first, ...p }: Props & { item: BudgetViewProps['items'][number]; first: boolean }) {
+function SimpleRow({ item, first, reorder, ...p }: Props & { item: BudgetViewProps['items'][number]; first: boolean; reorder: { up: boolean; down: boolean } | null }) {
     const { c: C } = useTheme()
     const s = useStyles(makeStyles)
     const [editing, setEditing] = useState(false)
@@ -120,7 +134,14 @@ function SimpleRow({ item, first, ...p }: Props & { item: BudgetViewProps['items
                         <Text style={s.per}>{varies ? MONTHS[p.month - 1].toLowerCase() : '/mo'}</Text>
                     </TouchableOpacity>
                 )}
-                <DeleteButton name={item.name} onPress={() => p.onDeleteItem(item.id)} />
+                {reorder ? (
+                    <View style={s.arrows}>
+                        {reorder.up ? <ArrowButton label={`Move ${item.name} up`} glyph="↑" onPress={() => p.onMove(item.id, -1)} /> : <View style={s.arrowSpace} />}
+                        {reorder.down ? <ArrowButton label={`Move ${item.name} down`} glyph="↓" onPress={() => p.onMove(item.id, 1)} /> : <View style={s.arrowSpace} />}
+                    </View>
+                ) : (
+                    <DeleteButton name={item.name} onPress={() => p.onDeleteItem(item.id)} />
+                )}
             </View>
 
             {editing && (
@@ -159,6 +180,15 @@ function SimpleRow({ item, first, ...p }: Props & { item: BudgetViewProps['items
     )
 }
 
+function ArrowButton({ label, glyph, onPress }: { label: string; glyph: string; onPress: () => void }) {
+    const s = useStyles(makeStyles)
+    return (
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={s.arrow} hitSlop={4}>
+            <Text style={s.arrowText}>{glyph}</Text>
+        </TouchableOpacity>
+    )
+}
+
 type Styles = ReturnType<typeof makeStyles>
 
 const makeStyles = (C: Palette) => StyleSheet.create({
@@ -170,6 +200,11 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     statValue: { fontSize: 20, fontWeight: '700', marginTop: 4 },
     statStrong: { fontSize: 24, fontWeight: '800' },
     note: { fontSize: 13, fontWeight: '600', marginTop: 10 },
+    headRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    arrows: { flexDirection: 'row', gap: 4 },
+    arrow: { width: 32, height: 32, borderRadius: 8, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center', backgroundColor: C.surfaceAlt },
+    arrowSpace: { width: 32, height: 32 },
+    arrowText: { fontSize: 16, color: C.ink, fontWeight: '700' },
     sectionTotal: { fontSize: 14, fontWeight: '600', color: C.muted },
     row: { paddingVertical: 10 },
     rowBorder: { borderTopWidth: 1, borderColor: C.line },
