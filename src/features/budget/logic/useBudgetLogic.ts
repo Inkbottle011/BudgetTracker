@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../shared/supabase'
 import { BudgetItem, BudgetAmount, BudgetType } from './types'
 import { useToastContext } from '../../../shared/ui/ToastContext'
-import { cellAmount, rowTotal, monthTotal, sectionTotal, netByMonth, netTotal, parseBudgetInput } from './calculations'
+import { cellAmount, rowTotal, monthTotal, sectionTotal, netByMonth, netTotal, parseBudgetInput, varies } from './calculations'
+import { setEveryMonth } from './data'
+import { formatMoney } from '../../../shared/money/format'
 
 export function useBudgetLogic() {
     const { showToast } = useToastContext()
@@ -93,6 +95,24 @@ export function useBudgetLogic() {
         setEditingCell(null)
     }
 
+    /** One amount for every month of the year. */
+    async function handleSetEveryMonth(itemId: string, value: string) {
+        const amount = parseBudgetInput(value)
+        try {
+            await setEveryMonth(itemId, year, amount)
+        } catch {
+            fetchData()
+            showToast('Failed to save', 'error')
+            return
+        }
+        setAmounts(prev => [
+            ...prev.filter(a => !(a.budget_item_id === itemId && a.year === year)),
+            ...Array.from({ length: 12 }, (_, i) => ({ id: '', user_id: '', budget_item_id: itemId, month: i + 1, year, amount })),
+        ])
+        const name = items.find(i => i.id === itemId)?.name ?? 'Saved'
+        showToast(`${name}: ${formatMoney(amount, { cents: amount % 1 !== 0 })} every month`)
+    }
+
     async function handleAddItem() {
         if (!newItemName.trim()) return
         const { data: { session } } = await supabase.auth.getSession()
@@ -132,7 +152,8 @@ export function useBudgetLogic() {
         editingCell, setEditingCell,
         editingValue, setEditingValue,
         getAmount, getRowTotal, getMonthTotal, getSectionTotal,
-        handleCellSave, handleAddItem, handleDeleteItem,
+        handleCellSave, handleAddItem, handleDeleteItem, handleSetEveryMonth,
+        varies: (itemId: string) => varies(amounts, itemId),
         getNetByMonth, getNetTotal,
         reload: fetchData,
     }

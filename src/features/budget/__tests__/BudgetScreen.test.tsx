@@ -16,6 +16,7 @@ function setWidth(width: number) {
 async function renderScreen() {
     await render(<ToastContext.Provider value={{ showToast }}><BudgetScreen /></ToastContext.Provider>)
     await screen.findByText('Rent')
+    await fireEvent.press(screen.getByRole('button', { name: 'By month' }))
 }
 
 const upserts = () => fake.calls('budget_amounts').flatMap(c => c.ops.filter(o => o.method === 'upsert').map(o => o.args[0]))

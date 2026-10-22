@@ -1,4 +1,4 @@
-import { cellAmount, rowTotal, monthTotal, sectionTotal, netByMonth, netTotal, parseBudgetInput } from '../logic/calculations'
+import { cellAmount, rowTotal, monthTotal, sectionTotal, netByMonth, netTotal, parseBudgetInput, varies } from '../logic/calculations'
 
 const items = [
     { id: 'pay', type: 'income' },
@@ -54,5 +54,15 @@ describe('parseBudgetInput', () => {
         ['-50', 50],
     ])('%p -> %p', (input, expected) => {
         expect(parseBudgetInput(input)).toBe(expected)
+    })
+})
+
+describe('varies', () => {
+    const every = (amount: number) => Array.from({ length: 12 }, (_, i) => ({ budget_item_id: 'rent', month: i + 1, amount }))
+    it('is false when every month has the same amount, true when any month differs or is missing', () => {
+        expect(varies(every(900), 'rent')).toBe(false)
+        expect(varies([], 'rent')).toBe(false)
+        expect(varies([...every(900).slice(0, 11), { budget_item_id: 'rent', month: 12, amount: 950 }], 'rent')).toBe(true)
+        expect(varies(every(900).slice(1), 'rent')).toBe(true)
     })
 })

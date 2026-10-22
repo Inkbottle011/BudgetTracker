@@ -41,3 +41,9 @@ export function parseBudgetInput(value: string): number {
     const n = parseAmount(value)
     return n === null ? 0 : Math.abs(n)
 }
+
+/** True when an item isn't the same amount every month of the year (an empty month counts as $0). */
+export function varies(amounts: Amount[], itemId: string): boolean {
+    const first = cellAmount(amounts, itemId, 1)
+    return MONTH_NUMBERS.some(m => cellAmount(amounts, itemId, m) !== first)
+}
