@@ -60,7 +60,7 @@ it('splits Food into Groceries and Eating out: past purchases, the budget, and w
 
     await fireEvent.press(screen.getByRole('button', { name: 'Split Food' }))
 
-    const updates = ops('transactions', 'update').map(o => ({ category: o.args[0].category_label, ids: o.call.ops.find(x => x.method === 'in')!.args[1] }))
+    const updates = ops('transactions', 'update').map(o => ({ category: o.args[0].category_label, ids: [...o.call.ops.find(x => x.method === 'in')!.args[1]].sort() }))
     expect(updates).toEqual([{ category: 'Groceries', ids: ['g1', 'g2', 'o1'] }, { category: 'Eating out', ids: ['t1'] }])
     expect(ops('budget_items', 'update').map(o => o.args[0])).toEqual([{ name: 'Groceries' }])
     expect(ops('budget_items', 'insert').map(o => o.args[0].name)).toEqual(['Eating out'])
