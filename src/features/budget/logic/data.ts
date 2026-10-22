@@ -118,3 +118,25 @@ export async function splitBudgetItem({ item, into, share, existing }: {
         fail(error)
     }
 }
+
+/** Everything needed to put a deleted budget item back exactly as it was. */
+export interface DeletedBudgetItem { item: Record<string, any>; amounts: Record<string, any>[] }
+
+/** Deletes a budget item and its planned amounts, and returns them so it can be undone. */
+export async function deleteBudgetItem(item: { id: string } & Record<string, any>): Promise<DeletedBudgetItem> {
+    const { data: rows, error: loadError } = await supabase.from('budget_amounts').select('*').eq('budget_item_id', item.id)
+    if (loadError) throw new Error(`Couldn't delete ${item.name}: ${loadError.message}`)
+    const { error } = await supabase.from('budget_items').delete().eq('id', item.id)
+    if (error) throw new Error(`Couldn't delete ${item.name}: ${error.message}`)
+    return { item, amounts: ((rows ?? []) as any[]).filter(r => r.budget_item_id === item.id) }
+}
+
+/** Puts a deleted budget item back: the same item (same id, so transactions still match it) and every amount. */
+export async function restoreBudgetItem({ item, amounts }: DeletedBudgetItem): Promise<void> {
+    const { error } = await supabase.from('budget_items').insert(item)
+    if (error) throw new Error(`Couldn't bring back ${item.name}: ${error.message}`)
+    if (amounts.length) {
+        const { error: amountsError } = await supabase.from('budget_amounts').upsert(amounts, { onConflict: 'budget_item_id,month,year' })
+        if (amountsError) throw new Error(`${item.name} is back, but its amounts couldn't be restored: ${amountsError.message}`)
+    }
+}

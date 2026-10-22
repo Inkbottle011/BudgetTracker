@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native'
 import { useTheme, useStyles, Palette } from '../../../shared/theme/theme'
 import { Page, PageTitle, Button, Segmented, useIsWide } from '../../../shared/ui/ui'
+import { ConfirmDialog } from '../../../shared/ui/ConfirmDialog'
 import { useToastContext } from '../../../shared/ui/ToastContext'
 import { useBudgetLogic } from '../logic/useBudgetLogic'
 import { BudgetTable, BudgetViewProps } from './BudgetTable'
@@ -19,6 +20,7 @@ export default function BudgetScreen() {
     const [month, setMonth] = useState(new Date().getMonth() + 1)
     const [guideOpen, setGuideOpen] = useState(false)
     const [splitting, setSplitting] = useState<BudgetItem | null>(null)
+    const [deleting, setDeleting] = useState<BudgetItem | null>(null)
     const [layout, setLayout] = useState<'simple' | 'months'>('simple')
     const { showToast } = useToastContext()
     // An item's monthly amount right now: this month's, or its first planned month in another year
@@ -46,7 +48,7 @@ export default function BudgetScreen() {
         },
         onNewItemName: logic.setNewItemName,
         onAddItem: logic.handleAddItem,
-        onDeleteItem: logic.handleDeleteItem,
+        onDeleteItem: id => setDeleting(logic.items.find(i => i.id === id) ?? null),
         onCellPress: (itemId, m, current) => {
             logic.setEditingCell({ itemId, month: m })
             logic.setEditingValue(current > 0 ? String(current) : '')
@@ -112,6 +114,14 @@ export default function BudgetScreen() {
             ) : (
                 <BudgetMonthView {...view} month={month} onMonthChange={m => { logic.setEditingCell(null); setMonth(m) }} />
             )}
+            <ConfirmDialog
+                visible={!!deleting}
+                title={`Delete ${deleting?.name}?`}
+                message={`This removes ${deleting?.name} and its planned amounts for every month and year. Your transactions stay. You can undo it straight after.`}
+                confirmLabel="Delete"
+                onCancel={() => setDeleting(null)}
+                onConfirm={() => { const id = deleting!.id; setDeleting(null); logic.handleDeleteItem(id) }}
+            />
             {splitting && (
                 <SplitCategory
                     item={splitting}
