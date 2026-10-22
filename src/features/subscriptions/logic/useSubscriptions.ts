@@ -6,7 +6,10 @@ import { loadCategoryNames } from '../../budget/api'
 import { useToastContext } from '../../../shared/ui/ToastContext'
 import {
     Subscription, fetchSubscriptions, syncSubscriptionCharges, localToday, addDays, monthlyAmount, hasEnded, nextCharge,
+    fetchDismissed, dismissSuggestion,
 } from './subscriptions'
+import { findRecurringCharges, findPriceChanges, type RecurringSuggestion, type PriceChange } from './detect'
+import { formatMoney } from '../../../shared/money/format'
 
 export interface SubscriptionDraft {
     id?: string
@@ -45,8 +48,15 @@ export function draftFrom(s: Subscription): SubscriptionDraft {
     }
 }
 
+/** The add form, filled in from a suggestion. It starts at the next expected charge, so charges your
+ * bank already imported aren't added a second time. */
+export function draftFromSuggestion(s: RecurringSuggestion): SubscriptionDraft {
+    return { ...emptyDraft(), type: 'Expense', name: s.name, amount: String(s.amount), category: s.category ?? '', frequency: s.frequency, startDate: s.nextDate }
+}
+
 export function useSubscriptions() {
-    const { setTransactions } = useTransactionStore()
+    const { transactions, setTransactions } = useTransactionStore()
+    const [dismissed, setDismissed] = useState<string[]>([])
     const { showToast } = useToastContext()
     const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
     const [loading, setLoading] = useState(true)
@@ -94,7 +104,27 @@ export function useSubscriptions() {
     useFocusEffect(useCallback(() => {
         load()
         loadCategories()
+        // Your spending, to spot repeating charges
+        refreshTransactions()
+        fetchDismissed().then(setDismissed)
     }, []))
+
+    async function dismiss(s: RecurringSuggestion) {
+        setDismissed(d => [...d, s.key])
+        try {
+            await dismissSuggestion(s.key)
+            showToast(`${s.name} won't be suggested again`)
+        } catch {
+            showToast(`Hidden for now. To remember it, the database setup needs to run (it does when changes are merged).`, 'error')
+        }
+    }
+
+    async function updatePrice(change: PriceChange) {
+        const { error } = await supabase.from('subscriptions').update({ amount: change.amount }).eq('id', change.subscription.id)
+        if (error) { showToast('Could not update the price', 'error'); return }
+        showToast(`${change.subscription.name} is now ${formatMoney(change.amount)}`)
+        await load()
+    }
 
     async function save(draft: SubscriptionDraft): Promise<boolean> {
         const row = {
@@ -150,8 +180,12 @@ export function useSubscriptions() {
     const monthlyOut = active.filter(s => s.type === 'expense').reduce((sum, s) => sum + monthlyAmount(s), 0)
     const monthlyIn = active.filter(s => s.type === 'income').reduce((sum, s) => sum + monthlyAmount(s), 0)
 
+    const suggestions = findRecurringCharges(transactions as any[], subscriptions, dismissed, today)
+    const priceChanges = findPriceChanges(subscriptions, transactions as any[], today)
+
     return {
         loading, loadError, active, paused, ended, monthlyOut, monthlyIn, budgetCategories,
         save, setStatus, remove, reload: syncAndReload,
+        suggestions, priceChanges, dismiss, updatePrice,
     }
 }

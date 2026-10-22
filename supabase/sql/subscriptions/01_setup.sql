@@ -9,6 +9,7 @@
 --   * `generate_subscription_transactions()`: adds every charge that's due and missing.
 --     The app calls it when it opens, and the scheduled job calls it daily, so charges
 --     missed while the project was paused get filled in once, on their real dates.
+--   * `dismissed_subscription_suggestions`: places you said are not subscriptions, so they aren't suggested again
 -- Nothing existing is changed or deleted by this file.
 
 -- 1. Subscriptions table ------------------------------------------------
@@ -134,3 +135,26 @@ $$;
 -- Signed-in users and the scheduled job may run it; the public (anon) key may not
 revoke all on function public.generate_subscription_transactions(date) from public, anon;
 grant execute on function public.generate_subscription_transactions(date) to authenticated, service_role;
+
+-- 6. Places you said are not subscriptions -------------------------------------
+-- The app suggests subscriptions it spots in your spending; "Not a subscription" is remembered here
+-- (by place, e.g. 'spotify') so it isn't suggested again, on any device.
+create table if not exists public.dismissed_subscription_suggestions (
+  user_id       uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  merchant_key  text not null check (length(trim(merchant_key)) > 0),
+  created_at    timestamptz not null default now(),
+  primary key (user_id, merchant_key)
+);
+
+grant select, insert, delete on public.dismissed_subscription_suggestions to authenticated;
+grant all on public.dismissed_subscription_suggestions to service_role;
+
+alter table public.dismissed_subscription_suggestions enable row level security;
+
+drop policy if exists "Users manage their own dismissed suggestions" on public.dismissed_subscription_suggestions;
+create policy "Users manage their own dismissed suggestions"
+  on public.dismissed_subscription_suggestions
+  for all
+  to authenticated
+  using (user_id = (select auth.uid()))
+  with check (user_id = (select auth.uid()));

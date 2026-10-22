@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Modal } from 'react-native'
-import { useSubscriptions, emptyDraft, draftFrom, shortDate, SubscriptionDraft } from '../logic/useSubscriptions'
+import { useSubscriptions, emptyDraft, draftFrom, draftFromSuggestion, shortDate, SubscriptionDraft } from '../logic/useSubscriptions'
+import type { RecurringSuggestion, PriceChange } from '../logic/detect'
 import { SubscriptionForm } from './SubscriptionForm'
 import { Subscription, FREQUENCY_SHORT, FREQUENCY_LABELS, nextCharge, localToday } from '../logic/subscriptions'
 import { useTheme, useStyles, Palette, tabular } from '../../../shared/theme/theme'
@@ -32,7 +33,7 @@ export default function SubscriptionsScreen() {
                 <Button variant="ghost" label="Try again" onPress={s.reload} style={styles.retry} />
             </Section>
         )
-    } else if (total === 0) {
+    } else if (total === 0 && s.suggestions.length === 0) {
         body = (
             <Section>
                 <EmptyState title="No subscriptions yet" body="Add things that repeat, like Spotify or rent, and they'll be added to your transactions on their dates." />
@@ -41,12 +42,14 @@ export default function SubscriptionsScreen() {
     } else {
         body = (
             <>
-                <Section>
+                <PriceChanges changes={s.priceChanges} onUpdate={s.updatePrice} />
+                <Suggestions suggestions={s.suggestions} onAdd={sg => setEditing(draftFromSuggestion(sg))} onDismiss={s.dismiss} />
+                {total > 0 && <Section>
                     <View style={styles.summary}>
                         <SummaryFigure label="Per month" out={s.monthlyOut} income={s.monthlyIn} />
                         <SummaryFigure label="Per year" out={s.monthlyOut * 12} income={s.monthlyIn * 12} />
                     </View>
-                </Section>
+                </Section>}
                 <Group title="Active" subs={s.active} onEdit={edit} onStatus={s.setStatus} onDelete={s.remove} />
                 <Group title="Paused" subs={s.paused} onEdit={edit} onStatus={s.setStatus} onDelete={s.remove} />
                 <Group title="Ended" subs={s.ended} onEdit={edit} onStatus={s.setStatus} onDelete={s.remove} />
@@ -77,6 +80,63 @@ export default function SubscriptionsScreen() {
                 </Modal>
             )}
         </Page>
+    )
+}
+
+/** What we saw, and why it looks like a subscription. */
+function suggestionLine(sg: RecurringSuggestion): string {
+    const amount = formatMoney(sg.amount)
+    const next = `next around ${shortDate(sg.nextDate)}`
+    if (sg.reason === 'twoCharges') return `${amount} twice, a month apart · ${next}`
+    if (sg.reason === 'knownService') return `${amount} on ${shortDate(sg.lastDate)} · usually a monthly subscription · ${next}`
+    if (sg.reason === 'bankSays') return `${amount} on ${shortDate(sg.lastDate)} · your bank says it repeats · ${next}`
+    return `${amount} ${FREQUENCY_LABELS[sg.frequency].toLowerCase()} · charged ${sg.count} times · ${next}`
+}
+
+/** Charges that repeat but aren't subscriptions yet. */
+function Suggestions({ suggestions, onAdd, onDismiss }: { suggestions: RecurringSuggestion[]; onAdd: (s: RecurringSuggestion) => void; onDismiss: (s: RecurringSuggestion) => void }) {
+    const styles = useStyles(makeStyles)
+    if (suggestions.length === 0) return null
+    return (
+        <Section title="Looks like a subscription">
+            <Text style={styles.sectionHelp}>These charge you about the same amount on a schedule. Add them to see them coming and count them in your totals.</Text>
+            {suggestions.map((sg, i) => (
+                <View key={sg.key} style={[styles.row, i > 0 && styles.rowBorder]}>
+                    <View style={styles.rowMain}>
+                        <View style={styles.rowText}>
+                            <Text style={styles.name} numberOfLines={1}>{sg.name}</Text>
+                            <Text style={[styles.meta, tabular]}>
+                                {suggestionLine(sg)}
+                            </Text>
+                        </View>
+                    </View>
+                    <View style={styles.actions}>
+                        <Button small label="Add" accessibilityLabel={`Add ${sg.name} as a subscription`} onPress={() => onAdd(sg)} />
+                        <TextButton label="Not a subscription" a11y={`${sg.name} is not a subscription`} onPress={() => onDismiss(sg)} />
+                    </View>
+                </View>
+            ))}
+        </Section>
+    )
+}
+
+/** Subscriptions whose latest charge from your bank is a different amount. */
+function PriceChanges({ changes, onUpdate }: { changes: PriceChange[]; onUpdate: (c: PriceChange) => void }) {
+    const styles = useStyles(makeStyles)
+    if (changes.length === 0) return null
+    return (
+        <Section title="Price changed">
+            {changes.map((ch, i) => (
+                <View key={ch.subscription.id} style={[styles.row, i > 0 && styles.rowBorder]}>
+                    <Text style={styles.changeText}>
+                        {`${ch.subscription.name} charged ${formatMoney(ch.amount)} on ${shortDate(ch.date)}. It's saved as ${formatMoney(Number(ch.subscription.amount))}, so update it to keep your totals right.`}
+                    </Text>
+                    <View style={styles.actions}>
+                        <Button small label={`Update to ${formatMoney(ch.amount)}`} accessibilityLabel={`Update ${ch.subscription.name} to ${formatMoney(ch.amount)}`} onPress={() => onUpdate(ch)} />
+                    </View>
+                </View>
+            ))}
+        </Section>
     )
 }
 
@@ -201,4 +261,6 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     textBtn: { paddingVertical: 4 },
     textBtnLabel: { fontSize: 13, fontWeight: '600' },
     confirmText: { fontSize: 13, color: C.text, flexBasis: '100%' },
+    sectionHelp: { fontSize: 13, color: C.muted, lineHeight: 18, marginBottom: 4 },
+    changeText: { fontSize: 14, color: C.text, lineHeight: 20 },
 })

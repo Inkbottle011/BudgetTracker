@@ -139,3 +139,18 @@ export async function syncSubscriptionCharges(): Promise<number> {
     }
     return typeof data === 'number' ? data : 0
 }
+
+// ---- Places you said are not subscriptions (so they aren't suggested again) ----
+
+/** Empty when the table isn't set up yet, so suggestions still work. */
+export async function fetchDismissed(): Promise<string[]> {
+    const { data, error } = await supabase.from('dismissed_subscription_suggestions').select('merchant_key')
+    if (error) return []
+    return (data ?? []).map((r: any) => r.merchant_key)
+}
+
+export async function dismissSuggestion(merchantKey: string): Promise<void> {
+    const { error } = await supabase.from('dismissed_subscription_suggestions')
+        .upsert({ merchant_key: merchantKey }, { onConflict: 'user_id,merchant_key', ignoreDuplicates: true })
+    if (error) throw new Error(error.message)
+}

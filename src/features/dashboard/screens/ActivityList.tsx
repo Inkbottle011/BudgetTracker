@@ -1,5 +1,5 @@
 import { useTheme, useStyles, Palette } from '../../../shared/theme/theme'
-import { View, Text, StyleSheet } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { shortDate } from '../../bank/api'
 import { activityDirection } from '../logic/summary'
 import { tabular, money } from '../logic/display'
@@ -7,12 +7,26 @@ import { tabular, money } from '../logic/display'
 interface Item { id: string; name?: string | null; category_label?: string | null; date: string; type: string; amount: number | string; sub?: string }
 
 /** A short list of transactions: upcoming bills or recent activity. */
-export function ActivityList({ title, items, empty }: { title: string; items: Item[]; empty: string }) {
+export function ActivityList({ title, items, empty, notice }: {
+    title: string
+    items: Item[]
+    empty: string
+    /** A short note with a link, shown above the list */
+    notice?: { text: string; action: string; a11y: string; onPress: () => void } | null
+}) {
     const { c: C } = useTheme()
     const styles = useStyles(makeStyles)
     return (
         <View style={styles.section}>
             <Text style={styles.title}>{title}</Text>
+            {notice && (
+                <View style={styles.notice}>
+                    <Text style={styles.noticeText}>{notice.text}</Text>
+                    <TouchableOpacity accessibilityRole="button" accessibilityLabel={notice.a11y} onPress={notice.onPress} hitSlop={6}>
+                        <Text style={styles.noticeAction}>{notice.action}</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
             {items.length === 0 && <Text style={styles.empty}>{empty}</Text>}
             {items.map((t, i) => {
                 const dir = activityDirection(t.type)
@@ -38,6 +52,9 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     section: { backgroundColor: C.surface, borderRadius: 14, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: C.line },
     title: { fontSize: 18, fontWeight: '700', color: C.ink, marginBottom: 6 },
     empty: { fontSize: 14, color: C.muted, marginTop: 4 },
+    notice: { backgroundColor: C.primarySoft, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginTop: 4, marginBottom: 6, gap: 4 },
+    noticeText: { fontSize: 13, color: C.text, lineHeight: 18 },
+    noticeAction: { fontSize: 13, color: C.primary, fontWeight: '700' },
     row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 9 },
     rowLine: { borderTopWidth: 1, borderColor: C.line },
     date: { width: 46, fontSize: 12, color: C.muted },
