@@ -1,5 +1,5 @@
 import { keywordCategory, buildCategoryGuesser } from '../../../shared/money/entry'
-import { groupUncategorized } from '../logic/categorize'
+import { groupUncategorized, groupForSplit } from '../logic/categorize'
 
 const mine = ['Food', 'Subscriptions', 'Transportation', 'Entertainment', 'Rent/Utilities', 'Misc']
 
@@ -36,7 +36,8 @@ describe('keywordCategory (common merchants, matched to your own categories)', (
     })
 
     it('uses your spelling of the category, and only categories you have', () => {
-        expect(keywordCategory('Chipotle', ['dining out', 'food'])).toBe('food')
+        expect(keywordCategory('Chipotle', ['Food'])).toBe('Food')
+        expect(keywordCategory('Chipotle', ['dining out', 'food'])).toBe('dining out')   // the more specific one
         expect(keywordCategory('Chipotle', ['Dining', 'Groceries'])).toBe('Dining')
         expect(keywordCategory('Chipotle', ['Rent'])).toBeNull()
     })
@@ -100,5 +101,46 @@ describe('groupUncategorized', () => {
     it('suggests from your categories for that type: refunds use spending categories', () => {
         const groups = groupUncategorized([tx('1', 'Fandango', 43.38, 'reimbursement')], { expense: mine }, buildCategoryGuesser([]))
         expect(groups[0].suggestion).toBe('Entertainment')
+    })
+})
+
+describe('groceries vs eating out', () => {
+    const split = ['Groceries', 'Eating out']
+    it.each([
+        ['GIANT FOOD # 6573', 'Groceries'], ['Giant', 'Groceries'], ['ALDI 60161 PHILADELPHI', 'Groceries'], ['Weis Markets', 'Groceries'],
+        ['WHOLE FOODS MKT', 'Groceries'], ["TRADER JOE'S #544", 'Groceries'], ['WEGMANS #93', 'Groceries'], ['ACME 7821', 'Groceries'],
+        ['Taco Bell', 'Eating out'], ['Chipotle', 'Eating out'], ['UBER EATS', 'Eating out'], ['TST*ROSA ROSA PIZZERIA', 'Eating out'],
+        ['WAWA# 8491', 'Eating out'], ['Conestoga Restaurant', 'Eating out'], ['Mexican Food Truck', 'Eating out'], ['Burger King', 'Eating out'],
+    ])('%p -> %p', (name, expected) => expect(keywordCategory(name, split)).toBe(expected))
+
+    it('still uses one Food category when that is all you have', () => {
+        expect(keywordCategory('Giant', ['Food'])).toBe('Food')
+        expect(keywordCategory('Taco Bell', ['Food'])).toBe('Food')
+        expect(keywordCategory('Giant', ['Dining', 'Groceries'])).toBe('Groceries')
+        expect(keywordCategory('Giant', ['Dining'])).toBe('Dining')
+    })
+})
+
+describe('groupForSplit (sorting one category into two, a place at a time)', () => {
+    const t = (id: string, name: string, amount: number, category_label = 'Food', type = 'expense', original_name?: string) => ({ id, name, amount, category_label, type, original_name })
+    const list = [
+        t('1', 'Giant', 80), t('2', 'GIANT 6065', 40, 'Food', 'expense'), t('3', 'Taco Bell', 9), t('4', 'Taco Bell', 11),
+        t('5', 'Owl Breakfast', 15), t('6', 'Spotify', 11, 'Subscriptions'), t('7', 'Giant', 5, 'food', 'reimbursement'),
+        t('8', 'My Corner Store', 6, 'Food', 'expense', 'CORNER MKT 22'),
+    ]
+
+    it('groups the category\'s purchases (and paybacks) by place, biggest first, with a guess for each', () => {
+        const groups = groupForSplit(list, 'Food', ['Groceries', 'Eating out'])
+        expect(groups.map(g => [g.name, g.ids, g.total, g.suggestion])).toEqual([
+            ['Giant', ['1', '2', '7'], 125, 'Groceries'],
+            ['Taco Bell', ['3', '4'], 20, 'Eating out'],
+            ['Owl Breakfast', ['5'], 15, null],
+            ['My Corner Store', ['8'], 6, null],
+        ])
+    })
+
+    it('what is spent at each place counts paybacks off', () => {
+        const groups = groupForSplit(list, 'Food', ['Groceries', 'Eating out'])
+        expect(groups[0].spent).toBe(115)   // 80 + 40 - 5
     })
 })
