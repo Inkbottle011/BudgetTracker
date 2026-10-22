@@ -15,6 +15,7 @@ import { SpaceBackground } from './features/appearance'
 import { ErrorBoundary } from './shared/ui/ErrorBoundary'
 import { Ionicons } from '@expo/vector-icons'
 import { Toast } from './shared/ui/Toast'
+import { UpdateBanner } from './shared/ui/UpdateBanner'
 import { ToastContext } from './shared/ui/ToastContext'
 import { useToast } from './shared/ui/useToast'
 import { useToastContext } from './shared/ui/ToastContext'
@@ -127,6 +128,7 @@ function MainApp({ userEmail }: { userEmail: string }) {
   return (
     <View style={{ flex: 1, backgroundColor: backdrop }}>
       <AppHeader userEmail={userEmail} />
+      <UpdateBanner />
       <NavigationContainer theme={navTheme}>
         <Tab.Navigator
           screenLayout={tabScreenLayout}

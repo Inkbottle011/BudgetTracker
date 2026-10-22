@@ -403,3 +403,19 @@ describe('linked banks', () => {
         expect(await screen.findByText('Link banks from the website version of the app.')).toBeTruthy()
     })
 })
+
+describe('About this app', () => {
+    it('shows the version and checks for a newer one', async () => {
+        const version = require('../../../shared/version')
+        jest.spyOn(version, 'currentVersion').mockReturnValue('3f9a2c1')
+        const check = jest.spyOn(version, 'checkForUpdate').mockResolvedValue('same')
+        await renderSettings()
+        expect(screen.getByText('Version 3f9a2c1')).toBeTruthy()
+        await fireEvent.press(screen.getByRole('button', { name: 'Check for updates' }))
+        expect(check).toHaveBeenCalled()
+        expect(await screen.findByText("You're on the latest version.")).toBeTruthy()
+        check.mockResolvedValue('new')
+        await fireEvent.press(screen.getByRole('button', { name: 'Check for updates' }))
+        expect(await screen.findByText('A newer version is online. Reload the page to get it.')).toBeTruthy()
+    })
+})
