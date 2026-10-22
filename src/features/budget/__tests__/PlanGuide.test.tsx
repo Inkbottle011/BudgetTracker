@@ -111,3 +111,16 @@ it('can go back a step, or close without saving', async () => {
     expect(screen.queryByText('Your income')).toBeNull()
     expect(ops('budget_amounts', 'upsert')).toEqual([])
 })
+
+it('counts what is already in your budget and not in the plan, so left over is real', async () => {
+    fake.table('budget_amounts', call => call.ops.some(o => o.method === 'upsert')
+        ? { data: null, error: null }
+        : { data: [{ budget_item_id: 'rent', month: 10, year: 2026, amount: 900 }, { budget_item_id: 'pay', month: 10, year: 2026, amount: 2000 }], error: null })
+    await openGuide()
+    await fireEvent.press(screen.getByRole('button', { name: 'Next' }))
+    await fireEvent.press(await screen.findByRole('button', { name: 'Next' }))
+    await fireEvent.press(await screen.findByRole('button', { name: 'Next' }))
+    expect(await screen.findByText('Already in your budget, staying as they are')).toBeTruthy()
+    expect(screen.getByText('+$2,000.00/mo')).toBeTruthy()
+    expect(screen.getByText('$1,100.00')).toBeTruthy()   // 2,000 pay - 900 rent
+})

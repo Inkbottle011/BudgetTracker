@@ -90,7 +90,12 @@ export function PlanGuide({ year, items, amountFor, onClose, onSaved }: {
     const reviewItems: PlanItem[] = review
         .map(r => ({ name: r.name, type: r.type, monthly: Math.abs(parseAmount(r.text) ?? 0) }))
         .filter(r => r.monthly > 0)
-    const totals = planTotals(reviewItems)
+    // What's already in the budget and isn't part of the plan stays as it is, so it still counts
+    const untouched: PlanItem[] = items
+        .filter(i => !reviewItems.some(r => r.type === i.type && r.name.trim().toLowerCase() === i.name.trim().toLowerCase()))
+        .map(i => ({ name: i.name, type: i.type, monthly: amountFor(i.id) }))
+        .filter(i => i.monthly > 0)
+    const totals = planTotals([...reviewItems, ...untouched])
     const canStartLater = year === thisYear && thisMonth > 1
     const fromMonth = canStartLater && start === 'from' ? thisMonth : 1
 
@@ -255,6 +260,17 @@ export function PlanGuide({ year, items, amountFor, onClose, onSaved }: {
                 )
             })}
             {!review.length && <Text style={s.help}>Nothing to add yet. Go back and fill in a few amounts.</Text>}
+            {!!untouched.length && (
+                <View style={{ marginBottom: 14 }}>
+                    <Text style={s.sectionTitle}>Already in your budget, staying as they are</Text>
+                    {untouched.map(u => (
+                        <View key={u.type + u.name} style={s.keptRow}>
+                            <Text style={s.keptName} numberOfLines={1}>{u.name}</Text>
+                            <Text style={[s.keptAmount, tabular]}>{u.type === 'income' ? '+' : '-'}{money(u.monthly)}/mo</Text>
+                        </View>
+                    ))}
+                </View>
+            )}
 
             <View style={s.totals}>
                 <TotalLine label="Coming in" value={totals.income} color={C.good} s={s} />
@@ -471,6 +487,9 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     dollar: { fontSize: 15, color: C.muted },
     reviewInput: { width: 96, textAlign: 'right', fontSize: 15, color: C.ink, backgroundColor: C.surfaceAlt, borderRadius: 8, borderWidth: 1, borderColor: C.line, paddingHorizontal: 8, paddingVertical: 6 },
     perMonth: { fontSize: 12, color: C.muted, width: 28 },
+    keptRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
+    keptName: { flex: 1, fontSize: 14, color: C.muted },
+    keptAmount: { fontSize: 14, color: C.muted },
     totals: { backgroundColor: C.surfaceAlt, borderRadius: 12, padding: 14, gap: 6, marginTop: 4 },
     totalLine: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
     totalLabel: { fontSize: 14, color: C.text },
