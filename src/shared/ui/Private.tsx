@@ -30,7 +30,7 @@ function addWebStyle() {
     styled = true
     const style = document.createElement('style')
     style.textContent = `
-[data-private="on"] { filter: blur(7px); display: inline-block; cursor: pointer; border-radius: 4px; transition: filter .15s ease; user-select: none; }
+[data-private="on"] { filter: blur(0.42em); display: inline-block; cursor: pointer; border-radius: 4px; transition: filter .15s ease; user-select: none; }
 [data-private="on"]:hover, [data-private="on"]:focus { filter: none; outline: none; user-select: auto; }
 @media (prefers-reduced-motion: reduce) { [data-private="on"] { transition: none; } }`
     document.head.appendChild(style)
