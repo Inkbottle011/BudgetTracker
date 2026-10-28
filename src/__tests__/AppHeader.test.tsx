@@ -54,7 +54,7 @@ describe('privacy mode', () => {
         await renderHeader()
         await fireEvent.press(screen.getByRole('button', { name: 'Hide amounts' }))
         expect(usePrivacy.getState().hidden).toBe(true)
-        expect(showToast).toHaveBeenLastCalledWith('Amounts hidden. Tap the eye to show them.', 'info')   // the phone app's wording
+        expect(showToast).toHaveBeenLastCalledWith('Privacy mode on. Choose what it hides in Settings.', 'info')   // the phone app's wording
         await fireEvent.press(screen.getByRole('button', { name: 'Show amounts' }))
         expect(usePrivacy.getState().hidden).toBe(false)
     })

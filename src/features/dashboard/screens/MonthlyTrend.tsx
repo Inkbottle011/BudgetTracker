@@ -44,10 +44,10 @@ export function MonthlyTrend({ transactions, selectedYear }: Props) {
         {picked ? (
             <>
             <Text style={styles.detailTitle}>{picked.label} {picked.year}</Text>
-            <Text style={[styles.detailText, { color: C.good }]}>Income <Private>{money(picked.income)}</Private></Text>
-            <Text style={[styles.detailText, { color: C.bad }]}>Spent <Private>{money(picked.expense)}</Private></Text>
+            <Text style={[styles.detailText, { color: C.good }]}>Income <Private kind="totals">{money(picked.income)}</Private></Text>
+            <Text style={[styles.detailText, { color: C.bad }]}>Spent <Private kind="totals">{money(picked.expense)}</Private></Text>
             <Text style={[styles.detailText, { color: picked.net >= 0 ? C.good : C.bad }]}>
-            Net <Private>{picked.net >= 0 ? '+' : '-'}{money(Math.abs(picked.net))}</Private>
+            Net <Private kind="totals">{picked.net >= 0 ? '+' : '-'}{money(Math.abs(picked.net))}</Private>
             </Text>
             </>
         ) : (
@@ -72,7 +72,7 @@ export function MonthlyTrend({ transactions, selectedYear }: Props) {
             </View>
             <Text style={styles.monthLabel}>{d.label}</Text>
             <Text style={[styles.monthAmt, { color: d.net >= 0 ? C.good : C.bad }]}>
-            <Private>{d.net >= 0 ? '+' : ''}${Math.round(Math.abs(d.net))}</Private>
+            <Private kind="totals">{d.net >= 0 ? '+' : ''}${Math.round(Math.abs(d.net))}</Private>
             </Text>
             </Pressable>
         ))}
