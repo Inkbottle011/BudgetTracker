@@ -114,3 +114,24 @@ export async function linkSubscriptionCharges(ids: string[], subscriptionId: str
         if (error) throw new Error(error.message)
     }
 }
+
+/** Which transaction types use a budget item's categories: spending and its paybacks, savings and withdrawals... */
+const TYPES_FOR_KIND: Record<string, string[]> = {
+    expense: ['expense', 'reimbursement'], savings: ['savings', 'withdrawal'], income: ['income'], investment: ['investment'],
+}
+
+/**
+ * Moves every transaction in one category to another (for renaming or combining categories), only the
+ * types that use that kind of category. Returns the ids moved, for Undo.
+ */
+export async function moveCategory({ from, to, kind }: { from: string; to: string; kind: string }): Promise<string[]> {
+    const escaped = from.trim().replace(/[\\%_]/g, m => `\\${m}`)
+    const { data, error } = await supabase.from('transactions').select('id, category_label, type').ilike('category_label', escaped)
+    if (error) throw new Error(`Couldn't move transactions: ${error.message}`)
+    const types = TYPES_FOR_KIND[kind] ?? [kind]
+    const ids = ((data ?? []) as any[])
+        .filter(t => String(t.category_label ?? '').trim().toLowerCase() === from.trim().toLowerCase() && types.includes(t.type))
+        .map(t => t.id as string)
+    if (ids.length) await recategorize([{ category: to, ids }])
+    return ids
+}

@@ -51,6 +51,7 @@ describe('BudgetList', () => {
         goals: [{ name: 'Fenner', type: 'income', planned: 1800, actual: 900 }, { name: 'Sofi Savings', type: 'savings', planned: 500, actual: 600 }],
         onCategorize: jest.fn(),
         onEditBudget: jest.fn(),
+        onOpenCategory: jest.fn(),
     }
 
     it('shows what\'s left or over in each category, and hides categories with no plan and no spending', async () => {

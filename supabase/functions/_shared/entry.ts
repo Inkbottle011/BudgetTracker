@@ -207,6 +207,34 @@ const KEYWORD_RULES: { pattern: RegExp; categories: string[] }[] = [
     },
 ]
 
+/** Which common-merchant rule a place matches (-1 for none): "Amazon" is shopping, "Amazon Prime" a subscription. */
+function placeKind(key: string): number {
+    return KEYWORD_RULES.findIndex(r => r.pattern.test(key))
+}
+
+/**
+ * Groups spellings of the same place: a name whose words start another's is the same place
+ * ("giant" and "giant food", "weis" and "weis markets"), unless the two are clearly different kinds of
+ * thing ("amazon" and "amazon prime"). Returns each key -> the shortest name for its place.
+ */
+export function placeGroups(keys: string[]): Map<string, string> {
+    const unique = [...new Set(keys.filter(Boolean))].sort((a, b) => a.split(' ').length - b.split(' ').length || a.length - b.length)
+    const out = new Map<string, string>()
+    for (const key of unique) {
+        const words = key.split(' ')
+        const parent = unique.find(other => {
+            if (other === key || out.get(other) !== other) return false
+            const o = other.split(' ')
+            if (o.length >= words.length || o[0].length < 3) return false
+            if (!o.every((w, i) => words[i] === w)) return false
+            const a = placeKind(other), b = placeKind(key)
+            return a === b || a === -1 || b === -1   // same kind of place, or we can't tell
+        })
+        out.set(key, parent ?? key)
+    }
+    return out
+}
+
 /**
  * A category for a well-known kind of place, picked from `available` (your own category names),
  * or null. Your spelling is kept: with "dining" and "food" both available, the first rule match wins.

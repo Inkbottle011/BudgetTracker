@@ -7,6 +7,8 @@ export interface BudgetItem {
     type: BudgetType
     is_fixed: boolean
     created_at: string
+    /** Where it sits in its section; empty if never moved */
+    position?: number | null
 }
 
 export interface BudgetAmount {

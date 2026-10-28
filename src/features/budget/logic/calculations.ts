@@ -47,3 +47,30 @@ export function varies(amounts: Amount[], itemId: string): boolean {
     const first = cellAmount(amounts, itemId, 1)
     return MONTH_NUMBERS.some(m => cellAmount(amounts, itemId, m) !== first)
 }
+
+/** Spending categories your transactions use that aren't in your budget ("Subscribtions"), most used first. */
+export function unplannedCategories(
+    transactions: { type: string; category_label?: string | null }[],
+    items: { name: string; type: string }[],
+): { name: string; count: number }[] {
+    const planned = new Set(items.filter(i => i.type === 'expense').map(i => i.name.trim().toLowerCase()))
+    const found = new Map<string, { names: Map<string, number>; count: number }>()
+    for (const t of transactions) {
+        if (t.type !== 'expense' && t.type !== 'reimbursement') continue
+        const label = String(t.category_label ?? '').trim()
+        if (!label || planned.has(label.toLowerCase())) continue
+        const f = found.get(label.toLowerCase()) ?? { names: new Map<string, number>(), count: 0 }
+        f.names.set(label, (f.names.get(label) ?? 0) + 1)
+        f.count++
+        found.set(label.toLowerCase(), f)
+    }
+    return [...found.values()]
+        .map(f => ({ name: [...f.names.entries()].sort((a, b) => b[1] - a[1])[0][0], count: f.count }))
+        .sort((a, b) => b.count - a.count)
+}
+
+/** Budget items in the order you chose: moved ones by position, the rest after them by when they were added. */
+export function sortItems<T extends { position?: number | null; created_at?: string | null }>(items: T[]): T[] {
+    const pos = (i: T) => (i.position ?? Number.POSITIVE_INFINITY)
+    return [...items].sort((a, b) => pos(a) - pos(b) || String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')))
+}

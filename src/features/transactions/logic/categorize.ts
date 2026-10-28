@@ -1,6 +1,6 @@
 // Finding transactions without a category and suggesting one, so they can be categorized a whole
 // place at a time ("TACOS TEXAS x3 -> Food") instead of one by one.
-import { merchantKey, keywordCategory } from '../../../shared/money/entry'
+import { merchantKey, keywordCategory, placeGroups } from '../../../shared/money/entry'
 
 export interface UncategorizedGroup {
     key: string
@@ -24,12 +24,17 @@ export function groupUncategorized(
     guess: (name: unknown) => { type: string; category: string } | null,
 ): UncategorizedGroup[] {
     const groups = new Map<string, { names: Map<string, number>; type: string; ids: string[]; total: number; key: string }>()
-    for (const t of transactions) {
-        if (t.type === 'transfer' || (t.category_label ?? '').trim()) continue
+    const wanted = transactions.filter(t => t.type !== 'transfer' && !(t.category_label ?? '').trim())
+    // Grouped by the bank's wording, so renamed and not-yet-renamed ones stay together,
+    // and spellings of the same place ("Aldi", "ALDI 60161") together too
+    const rawKey = (t: (typeof transactions)[number]) => {
+        const matchOn = String(t.original_name || String(t.name || t.note || '').trim())
+        return merchantKey(matchOn) || matchOn.toLowerCase()
+    }
+    const place = placeGroups(wanted.map(rawKey))
+    for (const t of wanted) {
         const label = String(t.name || t.note || '').trim()
-        // Grouped by the bank's wording, so renamed and not-yet-renamed ones stay together
-        const matchOn = String(t.original_name || label)
-        const key = merchantKey(matchOn) || matchOn.toLowerCase()
+        const key = place.get(rawKey(t)) ?? rawKey(t)
         const id = `${t.type}|${key}`
         const g = groups.get(id) ?? { names: new Map<string, number>(), type: t.type, ids: [] as string[], total: 0, key }
         g.names.set(label, (g.names.get(label) ?? 0) + 1)
@@ -73,12 +78,14 @@ export function groupForSplit(
 ): SplitGroup[] {
     const wanted = from.trim().toLowerCase()
     const groups = new Map<string, { names: Map<string, number>; ids: string[]; total: number; spent: number; bank: string }>()
-    for (const t of transactions) {
-        if (t.type !== 'expense' && t.type !== 'reimbursement') continue
-        if ((t.category_label ?? '').trim().toLowerCase() !== wanted) continue
+    const inCategory = transactions.filter(t => (t.type === 'expense' || t.type === 'reimbursement') && (t.category_label ?? '').trim().toLowerCase() === wanted)
+    const bankOf = (t: (typeof transactions)[number]) => String(t.original_name || String(t.name || t.note || '').trim())
+    const rawKey = (t: (typeof transactions)[number]) => merchantKey(bankOf(t)) || bankOf(t).toLowerCase()
+    const place = placeGroups(inCategory.map(rawKey))
+    for (const t of inCategory) {
         const label = String(t.name || t.note || '').trim()
-        const bank = String(t.original_name || label)
-        const key = merchantKey(bank) || bank.toLowerCase()
+        const bank = bankOf(t)
+        const key = place.get(rawKey(t)) ?? rawKey(t)
         const g = groups.get(key) ?? { names: new Map<string, number>(), ids: [] as string[], total: 0, spent: 0, bank }
         g.names.set(label, (g.names.get(label) ?? 0) + 1)
         g.ids.push(t.id)

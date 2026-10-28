@@ -6,6 +6,9 @@ import { Page, PageTitle, Section, Segmented } from '../../../shared/ui/ui'
 import { useTheme, useStyles, Palette, Preference } from '../../../shared/theme/theme'
 import { SCENES, SPEEDS, AMOUNTS, TINTS, tintSwatch, Scene, Speed, Amount } from '../../../shared/theme/background'
 import { THEME_LIST, Theme } from '../../../shared/theme/themes'
+import * as version from '../../../shared/version'
+import { UpdateBanner } from '../../../shared/ui/UpdateBanner'
+import { Button } from '../../../shared/ui/ui'
 
 const APPEARANCE: { value: Preference; label: string }[] = [
     { value: 'system', label: 'Match device' },
@@ -34,6 +37,7 @@ export default function SettingsScreen() {
             <BackgroundSection />
             <TwoFactorSection onChange={setTwoFactorOn} />
             <LinkedBanksSection twoFactorOn={twoFactorOn} />
+            <AboutSection />
         </Page>
     )
 }
@@ -158,3 +162,27 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     knob: { width: 16, height: 16, borderRadius: 8, backgroundColor: C.surface },
     knobOn: { alignSelf: 'flex-end' },
 })
+
+/** Which version is running, and checking for a newer one. */
+function AboutSection() {
+    const styles = useStyles(makeStyles)
+    const current = version.currentVersion()
+    const [checking, setChecking] = useState(false)
+    const [result, setResult] = useState<string | null>(null)
+    async function check() {
+        setChecking(true)
+        const answer = await version.checkForUpdate(current)
+        setResult(answer === 'same' ? "You're on the latest version."
+            : answer === 'new' ? 'A newer version is online. Reload the page to get it.'
+            : "Couldn't check right now. Try again in a moment.")
+        if (answer === 'new') UpdateBanner.checkNow()
+        setChecking(false)
+    }
+    return (
+        <Section title="About this app">
+            <Text style={styles.help}>{current ? `Version ${current}` : 'Version: the app installed on this device'}</Text>
+            {current && <Button small variant="secondary" label="Check for updates" onPress={check} loading={checking} style={{ alignSelf: 'flex-start', marginTop: 8 }} />}
+            {result && <Text style={[styles.help, { marginTop: 8 }]}>{result}</Text>}
+        </Section>
+    )
+}

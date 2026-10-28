@@ -1,5 +1,7 @@
 import { ScrollView, View, StyleSheet, useWindowDimensions } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
+import { showTransactionsFor } from '../../transactions/api'
+import { addDays } from '../../../shared/dates'
 import { useDashboardLogic } from '../logic/useDashboardLogic'
 import { PeriodHeader } from './PeriodHeader'
 import { SpendingSummary } from './SpendingSummary'
@@ -27,6 +29,10 @@ export default function Dashboard() {
             goals={logic.goals}
             onCategorize={() => navigation?.navigate?.('Transactions')}
             onEditBudget={() => navigation?.navigate?.('Budget')}
+            onOpenCategory={name => {
+                showTransactionsFor({ category: name, from: logic.range.start, to: addDays(logic.range.end, -1) })
+                navigation?.navigate?.('Transactions')
+            }}
         />
     )
     const side = (

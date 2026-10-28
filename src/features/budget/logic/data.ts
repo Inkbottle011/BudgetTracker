@@ -1,11 +1,12 @@
 // The budget's own tables (budget_items, budget_amounts). Other features read the budget through these.
 import { supabase } from '../../../shared/supabase'
 import { fetchAllRows } from '../../../shared/fetchAllRows'
+import { sortItems } from './calculations'
 
 /** Every budget category (income, spending, savings, investment), oldest first. */
 export async function loadBudgetItems() {
     const { data } = await supabase.from('budget_items').select('*').order('created_at')
-    return data ?? null
+    return data ? sortItems(data as any[]) : null
 }
 
 /** Planned amounts for every month of every year. */
@@ -158,5 +159,82 @@ export async function restoreBudgetItem({ item, amounts }: DeletedBudgetItem): P
     if (amounts.length) {
         const { error: amountsError } = await supabase.from('budget_amounts').upsert(amounts, { onConflict: 'budget_item_id,month,year' })
         if (amountsError) throw new Error(`${item.name} is back, but its amounts couldn't be restored: ${amountsError.message}`)
+    }
+}
+
+// ---- Renaming and combining ----
+
+export async function renameBudgetItem(id: string, name: string): Promise<void> {
+    const { error } = await supabase.from('budget_items').update({ name: name.trim() }).eq('id', id)
+    if (error) throw new Error(`Couldn't rename it: ${error.message}`)
+}
+
+export async function addBudgetItem(name: string, type: string): Promise<void> {
+    const user = await userId()
+    const { error } = await supabase.from('budget_items').insert({ user_id: user, name: name.trim(), type }).select().single()
+    if (error) throw new Error(`Couldn't add ${name}: ${error.message}`)
+}
+
+/** Everything needed to undo combining two items. */
+export interface MergeUndo { source: Record<string, any>; rows: Record<string, any>[] }
+
+/** Combines `source` into `target`: every planned month is added to the target's, then the source is deleted. */
+export async function mergeBudgetItems(source: { id: string } & Record<string, any>, target: { id: string; name: string }): Promise<MergeUndo> {
+    const user = await userId()
+    const fail = (e: { message: string } | null | undefined) => { if (e) throw new Error(`Couldn't combine them: ${e.message}`) }
+    const { data, error } = await supabase.from('budget_amounts').select('*').in('budget_item_id', [source.id, target.id])
+    fail(error)
+    const all = ((data ?? []) as any[]).filter(r => r.budget_item_id === source.id || r.budget_item_id === target.id)
+    const mine = all.filter(r => r.budget_item_id === source.id)
+    const theirs = all.filter(r => r.budget_item_id === target.id)
+    const at = (year: number, month: number) => theirs.find(r => r.year === year && r.month === month)
+    const upserts = mine.map(r => ({
+        user_id: user, budget_item_id: target.id, year: r.year, month: r.month,
+        amount: Math.round((Number(r.amount) + Number(at(r.year, r.month)?.amount ?? 0)) * 100) / 100,
+    }))
+    if (upserts.length) fail((await supabase.from('budget_amounts').upsert(upserts, { onConflict: 'budget_item_id,month,year' })).error)
+    fail((await supabase.from('budget_items').delete().eq('id', source.id)).error)
+    // Undo: the target's months go back to what they were (0 where it had nothing)
+    const targetBefore = upserts.map(u => ({ ...u, amount: Number(at(u.year, u.month)?.amount ?? 0) }))
+    return { source, rows: [...mine.map(r => ({ ...r })), ...targetBefore] }
+}
+
+export async function undoMerge({ source, rows }: MergeUndo): Promise<void> {
+    const { error } = await supabase.from('budget_items').insert(source)
+    if (error) throw new Error(`Couldn't bring back ${source.name}: ${error.message}`)
+    if (rows.length) {
+        const { error: e } = await supabase.from('budget_amounts').upsert(rows, { onConflict: 'budget_item_id,month,year' })
+        if (e) throw new Error(`${source.name} is back, but its amounts couldn't be restored: ${e.message}`)
+    }
+}
+
+// ---- Copying a year ----
+
+/** Copies every planned amount from one year into another (for items you still have). Returns what was added. */
+export async function copyYear(from: number, to: number, itemIds: string[]) {
+    const user = await userId()
+    const { data, error } = await supabase.from('budget_amounts').select('*').eq('year', from)
+    if (error) throw new Error(`Couldn't copy ${from}: ${error.message}`)
+    const rows = ((data ?? []) as any[])
+        .filter(r => r.year === from && itemIds.includes(r.budget_item_id))
+        .map(r => ({ user_id: user, budget_item_id: r.budget_item_id as string, month: r.month as number, year: to, amount: Number(r.amount) }))
+    if (rows.length) {
+        const { error: e } = await supabase.from('budget_amounts').upsert(rows, { onConflict: 'budget_item_id,month,year' })
+        if (e) throw new Error(`Couldn't copy ${from}: ${e.message}`)
+    }
+    return rows
+}
+
+/** Clears a year's planned amounts for these items (undoing a copy into an empty year). */
+export async function clearYear(year: number, itemIds: string[]): Promise<void> {
+    const { error } = await supabase.from('budget_amounts').delete().eq('year', year).in('budget_item_id', itemIds)
+    if (error) throw new Error(`Couldn't undo the copy: ${error.message}`)
+}
+
+/** Saves the order of items in a section. */
+export async function saveOrder(order: { id: string; position: number }[]): Promise<void> {
+    for (const { id, position } of order) {
+        const { error } = await supabase.from('budget_items').update({ position }).eq('id', id)
+        if (error) throw new Error(`Couldn't save the order: ${error.message}`)
     }
 }

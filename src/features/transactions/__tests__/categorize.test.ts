@@ -1,4 +1,4 @@
-import { keywordCategory, buildCategoryGuesser } from '../../../shared/money/entry'
+import { keywordCategory, buildCategoryGuesser, placeGroups } from '../../../shared/money/entry'
 import { groupUncategorized, groupForSplit } from '../logic/categorize'
 
 const mine = ['Food', 'Subscriptions', 'Transportation', 'Entertainment', 'Rent/Utilities', 'Misc']
@@ -142,5 +142,30 @@ describe('groupForSplit (sorting one category into two, a place at a time)', () 
     it('what is spent at each place counts paybacks off', () => {
         const groups = groupForSplit(list, 'Food', ['Groceries', 'Eating out'])
         expect(groups[0].spent).toBe(115)   // 80 + 40 - 5
+    })
+})
+
+describe('the same place spelled differently is grouped together', () => {
+    it('placeGroups: a name that starts another is the same place, unless they are different kinds of thing', () => {
+        const g = placeGroups(['giant', 'giant food', 'weis markets', 'weis', 'aldi philadelphi', 'aldi', 'whole foods', 'whole earth', 'amazon', 'amazon prime', 'taco bell'])
+        expect(g.get('giant food')).toBe('giant')
+        expect(g.get('weis markets')).toBe('weis')
+        expect(g.get('aldi philadelphi')).toBe('aldi')
+        expect(g.get('whole earth')).toBe('whole earth')
+        expect(g.get('whole foods')).toBe('whole foods')
+        expect(g.get('amazon prime')).toBe('amazon prime')   // a subscription, not shopping
+        expect(g.get('taco bell')).toBe('taco bell')
+    })
+
+    it('when splitting a category, Giant and GIANT FOOD # 6573 are one place', () => {
+        const t = (id: string, name: string, amount: number) => ({ id, name, amount, type: 'expense', category_label: 'Food' })
+        const groups = groupForSplit([t('1', 'Giant', 10), t('2', 'Giant', 10), t('3', 'GIANT FOOD # 6573', 50), t('4', 'Weis Markets', 5), t('5', 'Weis', 5)], 'Food', ['Groceries', 'Eating out'])
+        expect(groups.map(g => [g.name, g.ids])).toEqual([['Giant', ['1', '2', '3']], ['Weis Markets', ['4', '5']]])
+    })
+
+    it('when giving uncategorized transactions a category too', () => {
+        const t = (id: string, name: string) => ({ id, name, amount: 5, type: 'expense', category_label: '' })
+        const groups = groupUncategorized([t('1', 'ALDI 60161 PHILADELPHI'), t('2', 'Aldi'), t('3', 'Aldi')], { expense: ['Groceries'] }, () => null)
+        expect(groups.map(g => [g.name, g.count])).toEqual([['Aldi', 3]])
     })
 })

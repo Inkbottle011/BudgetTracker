@@ -2,6 +2,7 @@ import { render, screen, fireEvent } from '@testing-library/react-native'
 import Dashboard from '../screens/DashboardScreen'
 import { useTransactionStore } from '../../transactions/logic/useTransactionStore'
 import { fake } from '../../../../test/fakeSupabase'
+import { useTransactionFilters } from '../../transactions/api'
 
 jest.mock('../../../shared/supabase', () => require('../../../../test/fakeSupabase').module)
 const mockNavigate = jest.fn()
@@ -115,4 +116,12 @@ describe('pending charges', () => {
         expect(screen.getByText('Lunch Spot')).toBeTruthy()
         expect(screen.getAllByText('Pending').length).toBeGreaterThan(0)
     })
+})
+
+it('tapping a budget bar opens its transactions for the period shown', async () => {
+    await render(<Dashboard />)
+    await fireEvent.press(await screen.findByRole('button', { name: 'See Food transactions' }))
+    expect(mockNavigate).toHaveBeenCalledWith('Transactions')
+    const f = useTransactionFilters.getState()
+    expect([f.category, f.preset, f.from, f.to]).toEqual(['Food', 'custom', '2026-10-01', '2026-10-31'])
 })

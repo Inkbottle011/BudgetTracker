@@ -119,3 +119,42 @@ describe('savings in the list', () => {
         expect(filterTransactions(list, { search: '', type: 'Withdrawal', from: '', to: '' }).map(t => t.id)).toEqual(['b'])
     })
 })
+
+import { presetRange, describeFilters, UNCATEGORIZED } from '../logic/listLogic'
+
+describe('date presets', () => {
+    const today = '2026-10-22'
+    it('turns a preset into dates, counted from today', () => {
+        expect(presetRange('all', today)).toEqual({ from: '', to: '' })
+        expect(presetRange('thisMonth', today)).toEqual({ from: '2026-10-01', to: '2026-10-31' })
+        expect(presetRange('lastMonth', today)).toEqual({ from: '2026-09-01', to: '2026-09-30' })
+        expect(presetRange('lastMonth', '2026-01-15')).toEqual({ from: '2025-12-01', to: '2025-12-31' })
+        expect(presetRange('last30', today)).toEqual({ from: '2026-09-23', to: '2026-10-22' })
+        expect(presetRange('thisYear', today)).toEqual({ from: '2026-01-01', to: '2026-12-31' })
+    })
+})
+
+describe('filtering by category', () => {
+    const list = [
+        tx('1', '2026-10-01', 'expense', 5, { category_label: 'Eating out' }),
+        tx('2', '2026-10-02', 'reimbursement', 2, { category_label: 'eating out' }),
+        tx('3', '2026-10-03', 'expense', 9, { category_label: 'Groceries' }),
+        tx('4', '2026-10-04', 'expense', 7, { category_label: '' }),
+        tx('5', '2026-10-05', 'transfer', 50, { category_label: '' }),
+    ]
+    const none = { search: '', type: null, from: '', to: '' }
+    it('keeps that category (paybacks too), ignoring case', () => {
+        expect(filterTransactions(list, { ...none, category: 'Eating Out' }).map(t => t.id)).toEqual(['1', '2'])
+    })
+    it('"Uncategorized" is spending with no category (not transfers)', () => {
+        expect(filterTransactions(list, { ...none, category: UNCATEGORIZED }).map(t => t.id)).toEqual(['4'])
+    })
+})
+
+describe('describeFilters (the line that says what is being shown)', () => {
+    it('names the category, type and dates', () => {
+        expect(describeFilters({ type: null, category: 'Eating out', from: '2026-10-01', to: '2026-10-31' }, '2026-10-22')).toBe('Eating out · Oct 1 – Oct 31')
+        expect(describeFilters({ type: 'Income', category: null, from: '2026-09-01', to: '' }, '2026-10-22')).toBe('Income · from Sep 1')
+        expect(describeFilters({ type: null, category: null, from: '', to: '' }, '2026-10-22')).toBe('')
+    })
+})
