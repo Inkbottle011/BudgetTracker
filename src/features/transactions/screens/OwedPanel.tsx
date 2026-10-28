@@ -111,9 +111,9 @@ export function OwedPanel({ transactions, onChanged }: Props) {
                 onPress={() => setOpen(o => !o)}
             >
                 <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={styles.barText}>Owed to you: <Private>{money(owed.total)}</Private></Text>
+                    <Text style={styles.barText}>Owed to you: <Private kind="totals">{money(owed.total)}</Private></Text>
                     <Text style={styles.barHint} numberOfLines={open ? undefined : 1}>
-                        <Private>{owed.byPerson.map(p => `${p.person} ${money(p.amount)}`).join(' · ')}</Private>
+                        <Private kind="transactions">{owed.byPerson.map(p => `${p.person} ${money(p.amount)}`).join(' · ')}</Private>
                     </Text>
                 </View>
                 <Text style={styles.toggle}>{open ? 'Hide' : 'Show'}</Text>
@@ -124,16 +124,16 @@ export function OwedPanel({ transactions, onChanged }: Props) {
                     {owed.expenses.map(({ expense, unpaid, outstanding }) => (
                         <View key={expense.id} style={styles.expense}>
                             <Text style={styles.expenseTitle}>
-                                {expense.name || 'Expense'} · {displayDate(expense.date, today)} · <Private>{money(expense.amount)}</Private>
+                                {expense.name || 'Expense'} · {displayDate(expense.date, today)} · <Private kind="transactions">{money(expense.amount)}</Private>
                             </Text>
-                            <Text style={styles.muted}><Private>{money(outstanding)}</Private> still owed</Text>
+                            <Text style={styles.muted}><Private kind="transactions">{money(outstanding)}</Private> still owed</Text>
                             {unpaid.map(share => {
                                 const matches = matchingPayments(share, expense, transactions, shares).slice(0, 2)
                                 return (
                                     <View key={share.id} style={styles.share}>
                                         <View style={styles.shareRow}>
                                             <Text style={styles.person}>{share.person}</Text>
-                                            <Text style={[styles.amount, tabular]}><Private>{money(share.amount)}</Private></Text>
+                                            <Text style={[styles.amount, tabular]}><Private kind="transactions">{money(share.amount)}</Private></Text>
                                             <Button
                                                 small
                                                 variant="secondary"

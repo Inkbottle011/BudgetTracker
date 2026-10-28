@@ -366,9 +366,9 @@ describe('pending charges', () => {
     })
 })
 
-it('privacy mode hides every amount in the list', async () => {
+it('privacy mode can hide every amount in the list', async () => {
     const { usePrivacy } = require('../../../shared/ui/Private')
-    usePrivacy.setState({ hidden: true, loaded: true })
+    usePrivacy.setState({ hidden: true, kinds: ['balances', 'totals', 'budget', 'transactions'], loaded: true })
     try {
         await renderScreen()
         expect(screen.queryAllByText(/\$\d/).map(t => [].concat(t.props.children).join(''))).toEqual([])

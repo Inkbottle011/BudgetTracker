@@ -63,7 +63,7 @@ export function AppHeader({ userEmail }: { userEmail: string }) {
         accessibilityState={{ selected: hidden }}
         onPress={() => {
           togglePrivacy()
-          if (!hidden) showToast(Platform.OS === 'web' ? 'Amounts hidden. Point at or tap one to see it.' : 'Amounts hidden. Tap the eye to show them.', 'info')
+          if (!hidden) showToast(Platform.OS === 'web' ? 'Privacy mode on. Point at or tap an amount to see it. Choose what it hides in Settings.' : 'Privacy mode on. Choose what it hides in Settings.', 'info')
         }}
         style={[styles.eye, hidden && styles.eyeOn]}
         hitSlop={8}
