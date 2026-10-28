@@ -8,6 +8,7 @@ import { buildCategoryGuesser } from '../../../shared/money/entry'
 import { groupUncategorized, categoriesFor, UncategorizedGroup } from '../logic/categorize'
 import { DEFAULT_CATEGORIES } from '../logic/types'
 import { useToastContext } from '../../../shared/ui/ToastContext'
+import { Private } from '../../../shared/ui/Private'
 
 interface Props {
     transactions: any[]
@@ -118,7 +119,7 @@ export function UncategorizedPanel({ transactions, budgetCategories, onChanged }
                                     <View style={{ flex: 1, minWidth: 0 }}>
                                         <Text style={styles.name} numberOfLines={2}>{g.name}</Text>
                                         <Text style={[styles.meta, tabular]}>
-                                            {g.count} transaction{g.count === 1 ? '' : 's'} · {money(g.total)}
+                                            {g.count} transaction{g.count === 1 ? '' : 's'} · <Private>{money(g.total)}</Private>
                                         </Text>
                                     </View>
                                     {busy === g.key ? <ActivityIndicator size="small" color={C.primary} /> : (

@@ -6,6 +6,7 @@ import { useTheme, useStyles, Palette, typeColors, tabular } from '../../../shar
 import { Button, Section } from '../../../shared/ui/ui'
 import { formatMoney } from '../../../shared/money/format'
 import { BudgetItem, BudgetType, MONTHS, SECTIONS, SECTION_LABELS, fillLabel } from '../logic/types'
+import { Private } from '../../../shared/ui/Private'
 
 export interface BudgetViewProps {
     items: BudgetItem[]
@@ -68,9 +69,9 @@ function LeftOverGrid({ getNetByMonth, getNetTotal }: Pick<BudgetViewProps, 'get
                         <View style={styles.colName}><Text style={styles.itemName}>Left over</Text></View>
                         {MONTH_NUMBERS.map(m => {
                             const net = getNetByMonth(m)
-                            return <Text key={m} style={[styles.cellText, styles.cellStatic, styles.bold, tone(net)]}>{dollars(net)}</Text>
+                            return <Text key={m} style={[styles.cellText, styles.cellStatic, styles.bold, tone(net)]}><Private>{dollars(net)}</Private></Text>
                         })}
-                        <Text style={[styles.colTotal, styles.bold, tone(total)]}>{dollars(total)}</Text>
+                        <Text style={[styles.colTotal, styles.bold, tone(total)]}><Private>{dollars(total)}</Private></Text>
                         <View style={styles.colAction} />
                     </View>
                 </View>
@@ -135,11 +136,11 @@ function GridSection({ type, ...p }: BudgetViewProps & { type: BudgetType }) {
                                 accessibilityLabel={where}
                                 onPress={() => { if (!p.editingCell) p.onCellPress(item.id, month, amount) }}
                             >
-                                <Text style={[styles.cellText, amount === 0 && styles.cellEmpty]}>{amount === 0 ? '–' : dollars(amount)}</Text>
+                                <Text style={[styles.cellText, amount === 0 && styles.cellEmpty]}>{amount === 0 ? '–' : <Private>{dollars(amount)}</Private>}</Text>
                             </TouchableOpacity>
                         )
                     })}
-                    <Text style={[styles.colTotal, styles.bold]}>{dollars(p.getRowTotal(item.id))}</Text>
+                    <Text style={[styles.colTotal, styles.bold]}><Private>{dollars(p.getRowTotal(item.id))}</Private></Text>
                     <View style={styles.colAction}><DeleteButton name={item.name} onPress={() => p.onDeleteItem(item.id)} /></View>
                 </View>
             ))}
@@ -149,9 +150,9 @@ function GridSection({ type, ...p }: BudgetViewProps & { type: BudgetType }) {
             <View style={[styles.row, styles.totalRow]}>
                 <View style={styles.colName}><Text style={[styles.itemName, styles.bold]}>Total</Text></View>
                 {MONTH_NUMBERS.map(month => (
-                    <Text key={month} style={[styles.cellText, styles.cellStatic, styles.bold]}>{dollars(p.getMonthTotal(type, month))}</Text>
+                    <Text key={month} style={[styles.cellText, styles.cellStatic, styles.bold]}><Private>{dollars(p.getMonthTotal(type, month))}</Private></Text>
                 ))}
-                <Text style={[styles.colTotal, styles.bold]}>{dollars(p.getSectionTotal(type))}</Text>
+                <Text style={[styles.colTotal, styles.bold]}><Private>{dollars(p.getSectionTotal(type))}</Private></Text>
                 <View style={styles.colAction} />
             </View>
         </View>

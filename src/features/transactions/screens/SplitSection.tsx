@@ -3,6 +3,7 @@ import { parseAmount } from '../../../shared/money/entry'
 import { totalShares } from '../logic/splits'
 import { formatMoney } from '../../../shared/money/format'
 import { useTheme, useStyles, Palette, tabular } from '../../../shared/theme/theme'
+import { Private } from '../../../shared/ui/Private'
 
 interface Props {
     open: boolean
@@ -80,7 +81,7 @@ export function SplitSection({ open, rows, total, error, onOpen, onClose, onChan
             </View>
             {owed > 0 && (
                 <Text style={styles.summary}>
-                    Others owe you {formatMoney(owed)} · your share {formatMoney(Math.max(0, amount - owed))}
+                    Others owe you <Private>{formatMoney(owed)}</Private> · your share <Private>{formatMoney(Math.max(0, amount - owed))}</Private>
                 </Text>
             )}
             {error && <Text style={styles.error}>{error}</Text>}

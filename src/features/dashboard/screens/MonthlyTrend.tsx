@@ -44,10 +44,10 @@ export function MonthlyTrend({ transactions, selectedYear }: Props) {
         {picked ? (
             <>
             <Text style={styles.detailTitle}>{picked.label} {picked.year}</Text>
-            <Text style={[styles.detailText, { color: C.good }]}>Income {money(picked.income)}</Text>
-            <Text style={[styles.detailText, { color: C.bad }]}>Spent {money(picked.expense)}</Text>
+            <Text style={[styles.detailText, { color: C.good }]}>Income <Private>{money(picked.income)}</Private></Text>
+            <Text style={[styles.detailText, { color: C.bad }]}>Spent <Private>{money(picked.expense)}</Private></Text>
             <Text style={[styles.detailText, { color: picked.net >= 0 ? C.good : C.bad }]}>
-            Net {picked.net >= 0 ? '+' : '-'}{money(Math.abs(picked.net))}
+            Net <Private>{picked.net >= 0 ? '+' : '-'}{money(Math.abs(picked.net))}</Private>
             </Text>
             </>
         ) : (
@@ -72,7 +72,7 @@ export function MonthlyTrend({ transactions, selectedYear }: Props) {
             </View>
             <Text style={styles.monthLabel}>{d.label}</Text>
             <Text style={[styles.monthAmt, { color: d.net >= 0 ? C.good : C.bad }]}>
-            {d.net >= 0 ? '+' : ''}${Math.round(Math.abs(d.net))}
+            <Private>{d.net >= 0 ? '+' : ''}${Math.round(Math.abs(d.net))}</Private>
             </Text>
             </Pressable>
         ))}
@@ -82,6 +82,7 @@ export function MonthlyTrend({ transactions, selectedYear }: Props) {
 }
 
 import React from 'react'
+import { Private } from '../../../shared/ui/Private'
 
 const money = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 

@@ -16,6 +16,7 @@ import {
 } from '../logic/planner'
 import { applyPlan } from '../logic/data'
 import { BudgetItem, BudgetType, SECTIONS, SECTION_LABELS, MONTH_NAMES } from '../logic/types'
+import { Private } from '../../../shared/ui/Private'
 
 const STEPS = ['Your income', 'Your regular costs', 'Saving goals', 'Review your plan']
 const STEP_INTROS = [
@@ -160,7 +161,7 @@ export function PlanGuide({ year, items, amountFor, onClose, onSaved }: {
                             value={job.taxPercent} onChangeText={taxPercent => update('jobs', i, { taxPercent })}
                             hint={job.payType === 'paycheck' ? 'Leave blank if that is what lands in your account.' : 'A rough guess is fine, often 10 to 25%. Leave blank if the amount above is already take-home.'}
                         />
-                        {monthly > 0 && <Text style={[s.result, { color: C.good }]}>About {money(monthly)} a month take-home</Text>}
+                        {monthly > 0 && <Text style={[s.result, { color: C.good }]}>About <Private>{money(monthly)}</Private> a month take-home</Text>}
                     </View>
                 )
             })}
@@ -173,7 +174,7 @@ export function PlanGuide({ year, items, amountFor, onClose, onSaved }: {
                     onChange={patch => update('otherIncome', i, patch)} onRemove={() => remove('otherIncome', i)} />
             ))}
             <Button small variant="secondary" label="+ Other income" onPress={() => set('otherIncome', [...answers.otherIncome, { name: '', amount: '', period: 'month' }])} style={{ alignSelf: 'flex-start' }} />
-            {income > 0 && <Text style={[s.total, { color: C.good }]}>Coming in: {money(income)} a month</Text>}
+            {income > 0 && <Text style={[s.total, { color: C.good }]}>Coming in: <Private>{money(income)}</Private> a month</Text>}
         </View>
     )
 
@@ -192,10 +193,10 @@ export function PlanGuide({ year, items, amountFor, onClose, onSaved }: {
                         onChange={patch => update('costs', i, patch)} onRemove={() => remove('costs', i)}
                         extra={lately > 0 ? (
                             <View style={s.lately}>
-                                <Text style={s.help}>You've spent about {money(lately)} a month on this lately</Text>
+                                <Text style={s.help}>You've spent about <Private>{money(lately)}</Private> a month on this lately</Text>
                                 <Button small variant="ghost" label="Use it" accessibilityLabel={`Use ${money(lately)} for ${c.name}`} onPress={() => update('costs', i, { amount: String(lately), period: 'month' })} />
                             </View>
-                        ) : c.name === 'Subscriptions' && subsMonthly > 0 ? <Text style={s.help}>Your subscriptions list adds up to {money(subsMonthly)} a month</Text> : null}
+                        ) : c.name === 'Subscriptions' && subsMonthly > 0 ? <Text style={s.help}>Your subscriptions list adds up to <Private>{money(subsMonthly)}</Private> a month</Text> : null}
                     />
                 )
             })}
@@ -204,7 +205,7 @@ export function PlanGuide({ year, items, amountFor, onClose, onSaved }: {
                 {COMMON_COSTS.filter(n => !have(n)).map(n => <SmallChoice key={n} label={`+ ${n}`} a11y={`Add ${n}`} onPress={() => addCost(n)} />)}
                 <SmallChoice label="+ Something else" a11y="Add your own cost" onPress={() => set('costs', [...answers.costs, { name: '', amount: '', period: 'month', _custom: true } as Amount])} />
             </View>
-            <Text style={[s.total, { color: C.bad }]}>Going out: {money(answers.costs.reduce((n, c) => n + toMonthly(c.amount, c.period), 0))} a month</Text>
+            <Text style={[s.total, { color: C.bad }]}>Going out: <Private>{money(answers.costs.reduce((n, c) => n + toMonthly(c.amount, c.period), 0))}</Private> a month</Text>
         </View>
     )
 
@@ -266,7 +267,7 @@ export function PlanGuide({ year, items, amountFor, onClose, onSaved }: {
                     {untouched.map(u => (
                         <View key={u.type + u.name} style={s.keptRow}>
                             <Text style={s.keptName} numberOfLines={1}>{u.name}</Text>
-                            <Text style={[s.keptAmount, tabular]}>{u.type === 'income' ? '+' : '-'}{money(u.monthly)}/mo</Text>
+                            <Text style={[s.keptAmount, tabular]}><Private>{u.type === 'income' ? '+' : '-'}{money(u.monthly)}/mo</Private></Text>
                         </View>
                     ))}
                 </View>
@@ -278,11 +279,11 @@ export function PlanGuide({ year, items, amountFor, onClose, onSaved }: {
                 <TotalLine label="Saving and investing" value={totals.saving + totals.investing} color={C.saved} s={s} />
                 <View style={[s.totalLine, s.leftLine]}>
                     <Text style={s.leftLabel}>Left over each month</Text>
-                    <Text style={[s.leftValue, tabular, { color: totals.left < 0 ? C.bad : C.good }]}>{money(totals.left)}</Text>
+                    <Text style={[s.leftValue, tabular, { color: totals.left < 0 ? C.bad : C.good }]}><Private>{money(totals.left)}</Private></Text>
                 </View>
                 {totals.left < 0 && (
                     <Text style={[s.warn, { color: C.bad }]}>
-                        You're planning {money(-totals.left)} a month more than comes in. Lower a cost or a goal, or add income.
+                        You're planning <Private>{money(-totals.left)}</Private> a month more than comes in. Lower a cost or a goal, or add income.
                     </Text>
                 )}
             </View>
@@ -380,7 +381,7 @@ function AmountRow({ row, named, fallback, onChange, onRemove, extra, s }: {
                     <Text style={s.xText}>✕</Text>
                 </TouchableOpacity>
             </View>
-            {row.period !== 'month' && monthly > 0 && <Text style={s.help}>{money(monthly)} a month</Text>}
+            {row.period !== 'month' && monthly > 0 && <Text style={s.help}><Private>{money(monthly)}</Private> a month</Text>}
             {extra}
         </View>
     )
@@ -415,7 +416,7 @@ function GoalCard({ goal, today, income, onChange, onRemove, s, C }: {
                     </View>
                     <Field label="By when (YYYY-MM)" accessibilityLabel={l('by when (YYYY-MM)')} placeholder={`${+today.slice(0, 4) + 1}-${today.slice(5, 7)}`} value={goal.by ?? ''} onChangeText={v => onChange({ by: v })}
                         hint="Leave blank to save it all this month." />
-                    {monthly > 0 && <Text style={[s.result, { color: C.saved }]}>{money(monthly)} a month for {monthsUntil(goal.by ?? '', today)} months</Text>}
+                    {monthly > 0 && <Text style={[s.result, { color: C.saved }]}><Private>{money(monthly)}</Private> a month for {monthsUntil(goal.by ?? '', today)} months</Text>}
                 </>
             )}
             {goal.kind === 'monthly' && (
@@ -425,7 +426,7 @@ function GoalCard({ goal, today, income, onChange, onRemove, s, C }: {
                 <>
                     <Field label="Percent of take-home pay" accessibilityLabel={l('percent of take-home pay')} keyboardType="decimal-pad" placeholder="e.g. 5" value={goal.percent ?? ''} onChangeText={v => onChange({ percent: v })}
                         hint={income > 0 ? undefined : 'Fill in your income on step 1 to work this out.'} />
-                    {monthly > 0 && <Text style={[s.result, { color: C.saved }]}>{money(monthly)} a month</Text>}
+                    {monthly > 0 && <Text style={[s.result, { color: C.saved }]}><Private>{money(monthly)}</Private> a month</Text>}
                 </>
             )}
         </View>
@@ -436,7 +437,7 @@ function TotalLine({ label, value, color, s }: { label: string; value: number; c
     return (
         <View style={s.totalLine}>
             <Text style={s.totalLabel}>{label}</Text>
-            <Text style={[s.totalValue, tabular, { color }]}>{money(value)}</Text>
+            <Text style={[s.totalValue, tabular, { color }]}><Private>{money(value)}</Private></Text>
         </View>
     )
 }

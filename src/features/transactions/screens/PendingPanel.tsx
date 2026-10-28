@@ -6,6 +6,7 @@ import { loadPendingCharges, shortDate, type PendingCharge } from '../../bank/ap
 import { useTheme, useStyles, Palette, tabular } from '../../../shared/theme/theme'
 import { Section } from '../../../shared/ui/ui'
 import { formatMoney } from '../../../shared/money/format'
+import { Private } from '../../../shared/ui/Private'
 
 /** `refreshWhen` changes whenever your transactions reload, so this list stays in step. */
 export function PendingPanel({ refreshWhen }: { refreshWhen: unknown }) {
@@ -21,7 +22,7 @@ export function PendingPanel({ refreshWhen }: { refreshWhen: unknown }) {
                 <View key={p.id} style={[styles.row, i > 0 && styles.rowLine]}>
                     <Text style={[styles.date, tabular]}>{shortDate(p.date)}</Text>
                     <Text style={styles.name} numberOfLines={1}>{p.name || 'Pending charge'}</Text>
-                    <Text style={[styles.amount, tabular, p.money_in && { color: C.good }]}>{p.money_in ? '+' : '-'}{formatMoney(p.amount)}</Text>
+                    <Text style={[styles.amount, tabular, p.money_in && { color: C.good }]}><Private>{p.money_in ? '+' : '-'}{formatMoney(p.amount)}</Private></Text>
                 </View>
             ))}
         </Section>

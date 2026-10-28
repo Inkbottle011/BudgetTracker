@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { shortDate } from '../../bank/api'
 import { activityDirection } from '../logic/summary'
 import { tabular, money } from '../logic/display'
+import { Private } from '../../../shared/ui/Private'
 
 interface Item { id: string; name?: string | null; category_label?: string | null; date: string; type: string; amount: number | string; sub?: string }
 
@@ -39,7 +40,7 @@ export function ActivityList({ title, items, empty, notice }: {
                             {(t.sub || dir === 'move') && <Text style={styles.sub}>{t.sub ?? 'Transfer between your accounts'}</Text>}
                         </View>
                         <Text style={[styles.amount, tabular, dir === 'in' && { color: C.good }, dir === 'move' && { color: C.move }]}>
-                            {dir === 'in' ? '+' : dir === 'out' ? '-' : ''}{money(amount)}
+                            <Private>{dir === 'in' ? '+' : dir === 'out' ? '-' : ''}{money(amount)}</Private>
                         </Text>
                     </View>
                 )

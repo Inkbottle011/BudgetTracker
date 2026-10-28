@@ -1,6 +1,7 @@
 import { useTheme, useStyles, Palette } from '../../../shared/theme/theme'
 import { View, Text, StyleSheet } from 'react-native'
 import { tabular, money, dollars } from '../logic/display'
+import { Private } from '../../../shared/ui/Private'
 
 interface Props {
     heading: string               // "Spent in October", "Spent this week"…
@@ -42,8 +43,8 @@ export function SpendingSummary({ heading, spent, planned, elapsed, income, save
             <View style={styles.main}>
                 <Text style={styles.label}>{heading}</Text>
                 <View style={styles.amountRow}>
-                    <Text style={[styles.amount, tabular]}>{money(spent)}</Text>
-                    {hasPlan && <Text style={[styles.of, tabular]}>of {money(planned)} planned</Text>}
+                    <Text style={[styles.amount, tabular]}><Private>{money(spent)}</Private></Text>
+                    {hasPlan && <Text style={[styles.of, tabular]}>of <Private>{money(planned)}</Private> planned</Text>}
                 </View>
                 {hasPlan && (
                     <View style={styles.meter} accessibilityLabel={`${Math.round(share * 100)}% of your plan spent`}>
@@ -51,8 +52,8 @@ export function SpendingSummary({ heading, spent, planned, elapsed, income, save
                         {elapsed > 0 && elapsed < 1 && <View style={[styles.today, { left: `${elapsed * 100}%` }]} accessibilityLabel="Today" />}
                     </View>
                 )}
-                <Text style={styles.note}>{note}</Text>
-                {pending > 0 && <Text style={styles.pending}>Plus {money(pending)} pending at your bank, not counted until it posts.</Text>}
+                <Text style={styles.note}><Private>{note}</Private></Text>
+                {pending > 0 && <Text style={styles.pending}>Plus <Private>{money(pending)}</Private> pending at your bank, not counted until it posts.</Text>}
             </View>
             <View style={[styles.side, wide && styles.sideWide]}>
                 <Figure label="Earned" value={income} tone="income" />
@@ -72,7 +73,7 @@ function Figure({ label, value, signed, tone }: { label: string; value: number; 
     return (
         <View style={styles.figure}>
             <Text style={styles.figLabel}>{label}</Text>
-            <Text style={[styles.figValue, tabular, { color }]}>{signed && value > 0 ? '+' : ''}{money(value)}</Text>
+            <Text style={[styles.figValue, tabular, { color }]}><Private>{signed && value > 0 ? '+' : ''}{money(value)}</Private></Text>
         </View>
     )
 }

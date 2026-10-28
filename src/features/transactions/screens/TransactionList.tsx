@@ -6,6 +6,7 @@ import { formatMoney } from '../../../shared/money/format'
 import { TRANSACTION_TYPES } from '../logic/types'
 import { listSummary, displayDate, amountText, describeFilters, DATE_PRESETS, DatePreset, UNCATEGORIZED } from '../logic/listLogic'
 import { ImportModal } from './ImportModal'
+import { Private } from '../../../shared/ui/Private'
 
 interface Props {
     rows: any[]
@@ -174,7 +175,7 @@ export function TransactionList({
                 <View style={styles.active}>
                     <View style={{ flex: 1, minWidth: 0 }}>
                         <Text style={styles.activeTitle}>{described}</Text>
-                        <Text style={[styles.activeTotals, tabular]}>{totalsLine}</Text>
+                        <Text style={[styles.activeTotals, tabular]}><Private>{totalsLine}</Private></Text>
                     </View>
                     <Button small variant="secondary" label="Clear" accessibilityLabel="Clear" onPress={onClearFilters} />
                 </View>
@@ -241,7 +242,7 @@ export function TransactionList({
                             </View>
                             {wide && <View style={styles.typeCol}><TypeBadge type={t.type} /></View>}
                             <Text style={[styles.amount, tabular, wide && styles.amountCol, { color: amountColor(amount.direction) }]}>
-                                {amount.text}
+                                <Private>{amount.text}</Private>
                             </Text>
                         </Pressable>
                     )
@@ -275,7 +276,7 @@ function SummaryItem({ label, value, color, bold, styles }: { label: string; val
     return (
         <View style={styles.summaryItem}>
             <Text style={styles.summaryLabel}>{label}</Text>
-            <Text style={[styles.summaryValue, tabular, color ? { color } : null, bold && { fontWeight: '700' }]}>{value}</Text>
+            <Text style={[styles.summaryValue, tabular, color ? { color } : null, bold && { fontWeight: '700' }]}><Private>{value}</Private></Text>
         </View>
     )
 }

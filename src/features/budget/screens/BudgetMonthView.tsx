@@ -4,6 +4,7 @@ import { useTheme, useStyles, Palette, tabular } from '../../../shared/theme/the
 import { Button, Section } from '../../../shared/ui/ui'
 import { BudgetType, MONTHS, MONTH_NAMES, SECTIONS, fillLabel } from '../logic/types'
 import { BudgetViewProps, SectionHeading, AddItemRow, DeleteButton, dollars } from './BudgetTable'
+import { Private } from '../../../shared/ui/Private'
 
 interface Props extends BudgetViewProps {
     month: number
@@ -32,7 +33,7 @@ export function BudgetMonthView({ month, onMonthChange, ...p }: Props) {
 
             <Section>
                 <Text style={styles.leftLabel}>Left over in {name}</Text>
-                <Text style={[styles.leftValue, net < 0 && { color: C.bad }, net > 0 && { color: C.good }]}>{dollars(net)}</Text>
+                <Text style={[styles.leftValue, net < 0 && { color: C.bad }, net > 0 && { color: C.good }]}><Private>{dollars(net)}</Private></Text>
                 <Text style={styles.muted}>Income minus spending, savings and investments.</Text>
             </Section>
 
@@ -59,12 +60,12 @@ function MonthSection({ type, month, ...p }: BudgetViewProps & { type: BudgetTyp
                         <View style={styles.itemRow}>
                             <View style={styles.itemText}>
                                 <Text style={styles.itemName} numberOfLines={2}>{item.name}</Text>
-                                <Text style={[styles.muted, tabular]}>Year: {dollars(p.getRowTotal(item.id))}</Text>
+                                <Text style={[styles.muted, tabular]}>Year: <Private>{dollars(p.getRowTotal(item.id))}</Private></Text>
                             </View>
                             {!isEditing && (
                                 <TouchableOpacity accessibilityRole="button" accessibilityLabel={where} style={styles.amountBtn}
                                     onPress={() => { if (!p.editingCell) p.onCellPress(item.id, month, amount) }}>
-                                    <Text style={[styles.amountText, amount === 0 && styles.amountEmpty]}>{dollars(amount)}</Text>
+                                    <Text style={[styles.amountText, amount === 0 && styles.amountEmpty]}><Private>{dollars(amount)}</Private></Text>
                                 </TouchableOpacity>
                             )}
                             <DeleteButton name={item.name} onPress={() => p.onDeleteItem(item.id)} />
@@ -99,7 +100,7 @@ function MonthSection({ type, month, ...p }: BudgetViewProps & { type: BudgetTyp
 
             <View style={styles.total}>
                 <Text style={styles.totalLabel}>Total for {MONTH_NAMES[month - 1]}</Text>
-                <Text style={[styles.totalValue, tabular]}>{dollars(p.getMonthTotal(type, month))}</Text>
+                <Text style={[styles.totalValue, tabular]}><Private>{dollars(p.getMonthTotal(type, month))}</Private></Text>
             </View>
         </Section>
     )

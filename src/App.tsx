@@ -16,6 +16,7 @@ import { ErrorBoundary } from './shared/ui/ErrorBoundary'
 import { Ionicons } from '@expo/vector-icons'
 import { Toast } from './shared/ui/Toast'
 import { UpdateBanner } from './shared/ui/UpdateBanner'
+import { usePrivacy } from './shared/ui/Private'
 import { ToastContext } from './shared/ui/ToastContext'
 import { useToast } from './shared/ui/useToast'
 import { useToastContext } from './shared/ui/ToastContext'
@@ -32,6 +33,9 @@ export function AppHeader({ userEmail }: { userEmail: string }) {
   const [signingOut, setSigningOut] = useState(false)
   const { showToast } = useToastContext()
   const initial = (userEmail || '?').charAt(0).toUpperCase()
+  const hidden = usePrivacy(p => p.hidden)
+  const togglePrivacy = usePrivacy(p => p.toggle)
+  useEffect(() => { usePrivacy.getState().load() }, [])
 
   async function handleSignOut() {
     setSigningOut(true)
@@ -52,6 +56,20 @@ export function AppHeader({ userEmail }: { userEmail: string }) {
         <BrandMark size={26} />
         <Text style={styles.title}>Budget Tracker</Text>
       </View>
+      <View style={styles.headerRight}>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel={hidden ? 'Show amounts' : 'Hide amounts'}
+        accessibilityState={{ selected: hidden }}
+        onPress={() => {
+          togglePrivacy()
+          if (!hidden) showToast(Platform.OS === 'web' ? 'Amounts hidden. Point at or tap one to see it.' : 'Amounts hidden. Tap the eye to show them.', 'info')
+        }}
+        style={[styles.eye, hidden && styles.eyeOn]}
+        hitSlop={8}
+      >
+        <Ionicons name={hidden ? 'eye-off-outline' : 'eye-outline'} size={20} color={styles.avatarText.color as string} />
+      </TouchableOpacity>
       <TouchableOpacity
         accessibilityRole="button"
         accessibilityLabel="Account menu"
@@ -61,6 +79,7 @@ export function AppHeader({ userEmail }: { userEmail: string }) {
       >
         <Text style={styles.avatarText}>{initial}</Text>
       </TouchableOpacity>
+      </View>
 
       <Modal visible={showProfile} transparent animationType="fade" onRequestClose={() => setShowProfile(false)}>
         <Pressable style={styles.overlay} onPress={() => setShowProfile(false)} accessibilityLabel="Close account menu">
@@ -91,6 +110,9 @@ const makeStyles = (C: Palette) => StyleSheet.create({
   brand: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   title: { fontSize: 17, fontWeight: '700', color: C.onBar },
   avatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.16)', alignItems: 'center', justifyContent: 'center' },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  eye: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  eyeOn: { backgroundColor: 'rgba(255,255,255,0.22)' },
   avatarText: { color: C.onBar, fontWeight: '700', fontSize: 15 },
   avatarLarge: { width: 44, height: 44, borderRadius: 22, backgroundColor: C.primarySoft, alignItems: 'center', justifyContent: 'center' },
   avatarLargeText: { color: C.primary, fontWeight: '700', fontSize: 18 },

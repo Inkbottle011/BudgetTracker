@@ -263,3 +263,13 @@ describe('subscriptions spotted in your spending', () => {
         expect(update.call.ops.find(o => o.method === 'eq')!.args).toEqual(['id', 'n'])
     })
 })
+
+it('privacy mode hides every amount', async () => {
+    const { usePrivacy } = require('../../../shared/ui/Private')
+    usePrivacy.setState({ hidden: true, loaded: true })
+    try {
+        await renderScreen()
+        await screen.findByText('Netflix')
+        expect(screen.queryAllByText(/\$\d/).map(t => [].concat(t.props.children).join(''))).toEqual([])
+    } finally { usePrivacy.setState({ hidden: false }) }
+})
