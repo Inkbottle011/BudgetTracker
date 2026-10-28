@@ -40,7 +40,7 @@ export function ActivityList({ title, items, empty, notice }: {
                             {(t.sub || dir === 'move') && <Text style={styles.sub}>{t.sub ?? 'Transfer between your accounts'}</Text>}
                         </View>
                         <Text style={[styles.amount, tabular, dir === 'in' && { color: C.good }, dir === 'move' && { color: C.move }]}>
-                            <Private>{dir === 'in' ? '+' : dir === 'out' ? '-' : ''}{money(amount)}</Private>
+                            <Private kind="transactions">{dir === 'in' ? '+' : dir === 'out' ? '-' : ''}{money(amount)}</Private>
                         </Text>
                     </View>
                 )

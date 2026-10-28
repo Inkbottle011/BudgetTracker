@@ -175,7 +175,7 @@ export function TransactionList({
                 <View style={styles.active}>
                     <View style={{ flex: 1, minWidth: 0 }}>
                         <Text style={styles.activeTitle}>{described}</Text>
-                        <Text style={[styles.activeTotals, tabular]}><Private>{totalsLine}</Private></Text>
+                        <Text style={[styles.activeTotals, tabular]}><Private kind="totals">{totalsLine}</Private></Text>
                     </View>
                     <Button small variant="secondary" label="Clear" accessibilityLabel="Clear" onPress={onClearFilters} />
                 </View>
@@ -242,7 +242,7 @@ export function TransactionList({
                             </View>
                             {wide && <View style={styles.typeCol}><TypeBadge type={t.type} /></View>}
                             <Text style={[styles.amount, tabular, wide && styles.amountCol, { color: amountColor(amount.direction) }]}>
-                                <Private>{amount.text}</Private>
+                                <Private kind="transactions">{amount.text}</Private>
                             </Text>
                         </Pressable>
                     )
@@ -276,7 +276,7 @@ function SummaryItem({ label, value, color, bold, styles }: { label: string; val
     return (
         <View style={styles.summaryItem}>
             <Text style={styles.summaryLabel}>{label}</Text>
-            <Text style={[styles.summaryValue, tabular, color ? { color } : null, bold && { fontWeight: '700' }]}><Private>{value}</Private></Text>
+            <Text style={[styles.summaryValue, tabular, color ? { color } : null, bold && { fontWeight: '700' }]}><Private kind="totals">{value}</Private></Text>
         </View>
     )
 }

@@ -107,7 +107,7 @@ function Suggestions({ suggestions, onAdd, onDismiss }: { suggestions: Recurring
                         <View style={styles.rowText}>
                             <Text style={styles.name} numberOfLines={1}>{sg.name}</Text>
                             <Text style={[styles.meta, tabular]}>
-                                <Private>{suggestionLine(sg)}</Private>
+                                <Private kind="transactions">{suggestionLine(sg)}</Private>
                             </Text>
                         </View>
                     </View>
@@ -130,7 +130,7 @@ function PriceChanges({ changes, onUpdate }: { changes: PriceChange[]; onUpdate:
             {changes.map((ch, i) => (
                 <View key={ch.subscription.id} style={[styles.row, i > 0 && styles.rowBorder]}>
                     <Text style={styles.changeText}>
-                        {ch.subscription.name} charged <Private>{formatMoney(ch.amount)}</Private> on {shortDate(ch.date)}. It's saved as <Private>{formatMoney(Number(ch.subscription.amount))}</Private>, so update it to keep your totals right.
+                        {ch.subscription.name} charged <Private kind="transactions">{formatMoney(ch.amount)}</Private> on {shortDate(ch.date)}. It's saved as <Private kind="transactions">{formatMoney(Number(ch.subscription.amount))}</Private>, so update it to keep your totals right.
                     </Text>
                     <View style={styles.actions}>
                         <Button small label={`Update to ${formatMoney(ch.amount)}`} accessibilityLabel={`Update ${ch.subscription.name} to ${formatMoney(ch.amount)}`} onPress={() => onUpdate(ch)} />
@@ -146,8 +146,8 @@ function SummaryFigure({ label, out, income }: { label: string; out: number; inc
     return (
         <View style={styles.figure}>
             <Text style={styles.figureLabel}>{label}</Text>
-            <Text style={[styles.figureValue, tabular]}><Private>{formatMoney(out)}</Private></Text>
-            {income > 0 && <Text style={[styles.figureIncome, tabular]}><Private>{formatMoney(income, { sign: true })}</Private> coming in</Text>}
+            <Text style={[styles.figureValue, tabular]}><Private kind="totals">{formatMoney(out)}</Private></Text>
+            {income > 0 && <Text style={[styles.figureIncome, tabular]}><Private kind="totals">{formatMoney(income, { sign: true })}</Private> coming in</Text>}
         </View>
     )
 }
@@ -195,7 +195,7 @@ function SubscriptionRow({ sub, first, onEdit, onStatus, onDelete }: { sub: Subs
                     <Text style={styles.meta}>{statusLine}</Text>
                 </View>
                 <View style={styles.amountBox}>
-                    <Text style={[styles.amount, tabular, sub.type === 'income' && { color: C.good }, ended && { color: C.muted }]}><Private>{formatMoney(Number(sub.amount))}</Private></Text>
+                    <Text style={[styles.amount, tabular, sub.type === 'income' && { color: C.good }, ended && { color: C.muted }]}><Private kind="transactions">{formatMoney(Number(sub.amount))}</Private></Text>
                     <Text style={styles.per}>/ {FREQUENCY_SHORT[sub.frequency]}</Text>
                 </View>
             </TouchableOpacity>

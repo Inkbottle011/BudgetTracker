@@ -264,9 +264,9 @@ describe('subscriptions spotted in your spending', () => {
     })
 })
 
-it('privacy mode hides every amount', async () => {
+it('privacy mode can hide every amount', async () => {
     const { usePrivacy } = require('../../../shared/ui/Private')
-    usePrivacy.setState({ hidden: true, loaded: true })
+    usePrivacy.setState({ hidden: true, kinds: ['balances', 'totals', 'budget', 'transactions'], loaded: true })
     try {
         await renderScreen()
         await screen.findByText('Netflix')
