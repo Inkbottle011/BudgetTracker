@@ -193,7 +193,7 @@ export function TwoFactorSection({ onChange }: { onChange: (on: boolean) => void
                     ))}
                     {confirmRemove && (
                         <View style={styles.confirm}>
-                            <Text style={styles.confirmText}>Remove {confirmRemove.name}? You can still sign in with your other authenticator.</Text>
+                            <Text style={styles.confirmText}>Remove {confirmRemove.name}? You can still sign in with your other authenticator. This can't be undone: to use it again you'd add it again.</Text>
                             <View style={styles.row}>
                                 <Button variant="danger" small label="Yes, remove" onPress={() => remove(confirmRemove)} loading={busy} />
                                 <Button variant="ghost" small label="Keep it" onPress={() => setConfirmRemove(null)} />
@@ -213,7 +213,7 @@ export function TwoFactorSection({ onChange }: { onChange: (on: boolean) => void
             )}
             {confirmOff && (
                 <View style={styles.confirm}>
-                    <Text style={styles.confirmText}>Turn off two-factor sign-in? Linked banks will stop syncing until you turn it back on.</Text>
+                    <Text style={styles.confirmText}>Turn off two-factor sign-in? Linked banks will stop syncing until you turn it back on. This can't be undone: to turn it back on you'd set up your authenticator again.</Text>
                     <View style={styles.row}>
                         <Button variant="danger" small label="Yes, turn off" onPress={turnOff} loading={busy} />
                         <Button variant="ghost" small label="Keep it on" onPress={() => setConfirmOff(false)} />

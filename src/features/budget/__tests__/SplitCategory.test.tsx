@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react-native'
+import { render, screen, fireEvent, act } from '@testing-library/react-native'
 import BudgetScreen from '../screens/BudgetScreen'
 import { ToastContext } from '../../../shared/ui/ToastContext'
 import { fake } from '../../../../test/fakeSupabase'
@@ -67,7 +67,7 @@ it('splits Food into Groceries and Eating out: past purchases, the budget, and w
     const rows = ops('budget_amounts', 'upsert')[0].args[0]
     expect(rows.filter((r: any) => r.budget_item_id === 'food').every((r: any) => r.amount === 300)).toBe(true)
     expect(rows.filter((r: any) => r.budget_item_id === 'out').every((r: any) => r.amount === 100)).toBe(true)
-    expect(showToast).toHaveBeenCalledWith('Food is now Groceries and Eating out')
+    expect(showToast).toHaveBeenCalledWith('Food is now Groceries and Eating out', 'success', expect.objectContaining({ label: 'Undo' }))
     expect(useTransactionStore.getState().transactions.find((t: any) => t.id === 't1')!.category_label).toBe('Eating out')
     expect(screen.queryByText('Split Food into two')).toBeNull()
 })
@@ -88,4 +88,24 @@ it('only spending can be split', async () => {
     await render(<ToastContext.Provider value={{ showToast }}><BudgetScreen /></ToastContext.Provider>)
     await fireEvent.press(await screen.findByRole('button', { name: 'Change Pay, $3,000 a month' }))
     expect(screen.queryByRole('button', { name: 'Split into two' })).toBeNull()
+})
+
+it('Undo puts Food back: its purchases, its budget item and amounts', async () => {
+    await openSplit()
+    await fireEvent.press(screen.getByRole('button', { name: 'Split Food' }))
+    const [message, , action] = showToast.mock.calls.at(-1)!
+    expect([message, action.label]).toEqual(['Food is now Groceries and Eating out', 'Undo'])
+    fake.reset()
+    fake.table('budget_items', { data: [{ id: 'food', name: 'Food', type: 'expense' }, { id: 'rent', name: 'Rent', type: 'expense' }] })
+    fake.table('budget_amounts', call => call.ops.some(o => o.method === 'upsert') ? { data: null } : { data: [...months('food', 400), ...months('rent', 900)] })
+    fake.table('subscriptions', { data: [] })
+    await act(async () => { await action.onPress() })
+
+    const back = ops('transactions', 'update').map(o => ({ category: o.args[0].category_label, ids: [...o.call.ops.find(x => x.method === 'in')!.args[1]].sort() }))
+    expect(back).toEqual([{ category: 'Food', ids: ['g1', 'g2', 'o1', 't1'] }])
+    expect(ops('budget_items', 'update').map(o => o.args[0])).toEqual([{ name: 'Food' }])
+    expect(ops('budget_items', 'delete')[0].call.ops).toContainEqual({ method: 'eq', args: ['id', 'out'] })
+    const rows = ops('budget_amounts', 'upsert')[0].args[0]
+    expect(rows.filter((r: any) => r.budget_item_id === 'food').map((r: any) => r.amount)).toEqual(Array(12).fill(400))
+    expect(showToast).toHaveBeenLastCalledWith('Food is back')
 })

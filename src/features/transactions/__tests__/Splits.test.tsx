@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, within } from '@testing-library/react-native'
+import { render, screen, fireEvent, within, act } from '@testing-library/react-native'
 import TransactionsScreen from '../screens/TransactionsScreen'
 import { ToastContext } from '../../../shared/ui/ToastContext'
 import { useTransactionStore } from '../logic/useTransactionStore'
@@ -174,11 +174,20 @@ describe('owed to you', () => {
         expect(ops('split_shares', 'update')[0].args[0]).toEqual({ settled_by: 'venmo-cashout' })
     })
 
-    it('can forget a share someone will not pay', async () => {
+    it('can forget a share someone will not pay, after asking, with Undo', async () => {
         const p = await panel()
         await fireEvent.press(within(p).getByLabelText('Forget what Sam owes'))
+        expect(screen.getByText('Forget what Sam owes?')).toBeTruthy()
+        expect(ops('split_shares', 'delete')).toHaveLength(0)
+        await fireEvent.press(screen.getByRole('button', { name: 'Forget' }))
         const del = ops('split_shares', 'delete')[0]
         expect(del.call.ops).toContainEqual({ method: 'eq', args: ['id', 's-sam'] })
+
+        const [message, , action] = showToast.mock.calls.at(-1)!
+        expect([message, action.label]).toEqual(["Forgot what Sam owes", 'Undo'])
+        await act(async () => { await action.onPress() })
+        expect(ops('split_shares', 'insert')[0].args[0]).toEqual(expect.objectContaining({ id: 's-sam', person: 'Sam' }))
+        expect(showToast).toHaveBeenLastCalledWith('Sam owes you again')
     })
 
     it('says nothing is owed when everyone has paid', async () => {

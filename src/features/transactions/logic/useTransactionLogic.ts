@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../shared/supabase'
-import { loadAllTransactions } from './data'
+import { loadAllTransactions, deleteTransactions, restoreTransactions } from './data'
 import { loadCategoryNames } from '../../budget/api'
 import { useTransactionStore } from './useTransactionStore'
 import { EditingTransaction } from './types'
@@ -257,15 +257,25 @@ export function useTransactionLogic() {
     async function handleDelete() {
         if (selected.size === 0) return
         setDeleting(true)
-        const { error } = await supabase
-            .from('transactions')
-            .delete()
-            .in('id', Array.from(selected))
-        if (!error) {
+        const n = selected.size
+        const label = `${n} transaction${n > 1 ? 's' : ''}`
+        try {
+            const deleted = await deleteTransactions(Array.from(selected))
             await fetchTransactions()
             exitSelectMode()
-            showToast(`${selected.size} transaction${selected.size > 1 ? 's' : ''} deleted`)
-        } else {
+            showToast(`${label} deleted`, 'success', {
+                label: 'Undo',
+                onPress: async () => {
+                    try {
+                        await restoreTransactions(deleted)
+                        showToast(n > 1 ? `${label} are back` : 'The transaction is back')
+                    } catch (e: any) {
+                        showToast(e?.message ?? "Couldn't bring them back", 'error')
+                    }
+                    await fetchTransactions()
+                },
+            })
+        } catch {
             showToast('Failed to delete transactions', 'error')
         }
         setDeleting(false)

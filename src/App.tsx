@@ -265,7 +265,7 @@ function AppContent() {
     <ErrorBoundary>
       <ToastContext.Provider value={{ showToast }}>
         <MainApp userEmail={session.user.email} />
-        <Toast message={toast.message} type={toast.type} visible={toast.visible} onHide={hideToast} />
+        <Toast message={toast.message} type={toast.type} visible={toast.visible} onHide={hideToast} action={toast.action} />
       </ToastContext.Provider>
     </ErrorBoundary>
   )
