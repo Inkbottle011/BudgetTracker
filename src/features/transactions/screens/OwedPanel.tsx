@@ -9,6 +9,7 @@ import { supabase } from '../../../shared/supabase'
 import { todayString } from '../../../shared/money/entry'
 import { owedToYou, matchingPayments, SplitShare } from '../logic/splits'
 import { useToastContext } from '../../../shared/ui/ToastContext'
+import { Private } from '../../../shared/ui/Private'
 
 interface Props {
     transactions: any[]
@@ -110,9 +111,9 @@ export function OwedPanel({ transactions, onChanged }: Props) {
                 onPress={() => setOpen(o => !o)}
             >
                 <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={styles.barText}>Owed to you: {money(owed.total)}</Text>
+                    <Text style={styles.barText}>Owed to you: <Private>{money(owed.total)}</Private></Text>
                     <Text style={styles.barHint} numberOfLines={open ? undefined : 1}>
-                        {owed.byPerson.map(p => `${p.person} ${money(p.amount)}`).join(' · ')}
+                        <Private>{owed.byPerson.map(p => `${p.person} ${money(p.amount)}`).join(' · ')}</Private>
                     </Text>
                 </View>
                 <Text style={styles.toggle}>{open ? 'Hide' : 'Show'}</Text>
@@ -123,16 +124,16 @@ export function OwedPanel({ transactions, onChanged }: Props) {
                     {owed.expenses.map(({ expense, unpaid, outstanding }) => (
                         <View key={expense.id} style={styles.expense}>
                             <Text style={styles.expenseTitle}>
-                                {expense.name || 'Expense'} · {displayDate(expense.date, today)} · {money(expense.amount)}
+                                {expense.name || 'Expense'} · {displayDate(expense.date, today)} · <Private>{money(expense.amount)}</Private>
                             </Text>
-                            <Text style={styles.muted}>{money(outstanding)} still owed</Text>
+                            <Text style={styles.muted}><Private>{money(outstanding)}</Private> still owed</Text>
                             {unpaid.map(share => {
                                 const matches = matchingPayments(share, expense, transactions, shares).slice(0, 2)
                                 return (
                                     <View key={share.id} style={styles.share}>
                                         <View style={styles.shareRow}>
                                             <Text style={styles.person}>{share.person}</Text>
-                                            <Text style={[styles.amount, tabular]}>{money(share.amount)}</Text>
+                                            <Text style={[styles.amount, tabular]}><Private>{money(share.amount)}</Private></Text>
                                             <Button
                                                 small
                                                 variant="secondary"

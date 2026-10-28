@@ -365,3 +365,12 @@ describe('pending charges', () => {
         expect(screen.queryByText(/Pending at your bank/)).toBeNull()
     })
 })
+
+it('privacy mode hides every amount in the list', async () => {
+    const { usePrivacy } = require('../../../shared/ui/Private')
+    usePrivacy.setState({ hidden: true, loaded: true })
+    try {
+        await renderScreen()
+        expect(screen.queryAllByText(/\$\d/).map(t => [].concat(t.props.children).join(''))).toEqual([])
+    } finally { usePrivacy.setState({ hidden: false }) }
+})

@@ -125,3 +125,16 @@ it('tapping a budget bar opens its transactions for the period shown', async () 
     const f = useTransactionFilters.getState()
     expect([f.category, f.preset, f.from, f.to]).toEqual(['Food', 'custom', '2026-10-01', '2026-10-31'])
 })
+
+it('privacy mode hides every amount', async () => {
+    const { usePrivacy } = require('../../../shared/ui/Private')
+    usePrivacy.setState({ hidden: true, loaded: true })
+    try {
+        await render(<Dashboard />)
+        expect(await screen.findByText('October 2026')).toBeTruthy()
+        expect(screen.queryAllByText(/\$\d/).map(t => [].concat(t.props.children).join(''))).toEqual([])
+        expect(screen.getAllByText(/•••••/).length).toBeGreaterThan(3)
+    } finally {
+        usePrivacy.setState({ hidden: false })
+    }
+})

@@ -146,3 +146,16 @@ it('remembers Simple or By month for next time', async () => {
     await render(<ToastContext.Provider value={{ showToast }}><BudgetScreen /></ToastContext.Provider>)
     expect(await screen.findByLabelText('Rent, Jan')).toBeTruthy()
 })
+
+it('privacy mode hides every amount, in both views', async () => {
+    const { usePrivacy } = require('../../../shared/ui/Private')
+    usePrivacy.setState({ hidden: true, loaded: true })
+    try {
+        setWidth(1200)
+        await renderScreen()
+        const shown = () => screen.queryAllByText(/\$\d/).map(t => [].concat(t.props.children).join(''))
+        expect(shown()).toEqual([])
+        await fireEvent.press(screen.getByRole('button', { name: 'By month' }))
+        expect(shown()).toEqual([])
+    } finally { usePrivacy.setState({ hidden: false }) }
+})

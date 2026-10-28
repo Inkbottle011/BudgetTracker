@@ -10,6 +10,7 @@ import { useTransactionStore, loadAllTransactions, groupForSplit, recategorize }
 import { moveSubscriptionsOutOf, moveSubscriptionsBack } from '../../subscriptions/api'
 import { splitBudgetItem, undoSplit } from '../logic/data'
 import { BudgetItem } from '../logic/types'
+import { Private } from '../../../shared/ui/Private'
 
 const dollars = (n: number) => formatMoney(n, { cents: false })
 
@@ -117,7 +118,7 @@ export function SplitCategory({ item, items, monthly, onClose, onDone }: {
                                 <View key={g.key} style={s.place}>
                                     <View style={{ flex: 1 }}>
                                         <Text style={s.placeName} numberOfLines={1}>{g.name}</Text>
-                                        <Text style={[s.placeMeta, tabular]}>{g.count} {g.count === 1 ? 'purchase' : 'purchases'} · {formatMoney(g.spent)}</Text>
+                                        <Text style={[s.placeMeta, tabular]}>{g.count} {g.count === 1 ? 'purchase' : 'purchases'} · <Private>{formatMoney(g.spent)}</Private></Text>
                                         {!g.suggestion && picked[g.key] === undefined && <Text style={[s.unsure, { color: C.warn }]}>Not sure, check this one</Text>}
                                     </View>
                                     <View style={s.sides}>
@@ -135,13 +136,13 @@ export function SplitCategory({ item, items, monthly, onClose, onDone }: {
                         {monthly > 0 && (
                             <>
                                 <Text style={s.heading}>Your budget</Text>
-                                <Text style={s.help}>{item.name} is {dollars(monthly)} a month. We've shared it by what you spend in each; change it if you like.</Text>
+                                <Text style={s.help}>{item.name} is <Private>{dollars(monthly)}</Private> a month. We've shared it by what you spend in each; change it if you like.</Text>
                                 <Field
                                     label={`${label(0)} per month`} keyboardType="decimal-pad"
                                     value={firstText ?? String(firstAmount)} onChangeText={setFirstText}
                                     hint={`${label(1)} gets the other ${dollars(rest)} a month`}
                                 />
-                                {firstAmount > monthly && <Text style={[s.warn, { color: C.bad }]}>That's more than {item.name}'s {dollars(monthly)}; {label(0)} will get all of it.</Text>}
+                                {firstAmount > monthly && <Text style={[s.warn, { color: C.bad }]}>That's more than {item.name}'s <Private>{dollars(monthly)}</Private>; {label(0)} will get all of it.</Text>}
                             </>
                         )}
                         <Text style={s.help}>From now on, new purchases go to {label(0)} or {label(1)} based on the place.</Text>

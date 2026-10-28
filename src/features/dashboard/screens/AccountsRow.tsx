@@ -4,6 +4,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { HIGH_CARD_USAGE, updatedAgo } from '../../bank/api'
 import { AccountGroup } from '../logic/summary'
 import { tabular, money } from '../logic/display'
+import { Private } from '../../../shared/ui/Private'
 
 interface Props {
     cash: AccountGroup
@@ -37,7 +38,7 @@ export function AccountsRow({ cash, savings, cards, updatedAt, wide }: Props) {
                             <View style={[styles.dot, { backgroundColor: DOT[key](C) }]} />
                             <Text style={styles.tileLabel}>{LABELS[key]}</Text>
                         </View>
-                        <Text style={[styles.tileValue, tabular, key === 'savings' && { color: C.saved }, key === 'cards' && g.total > 0 && { color: C.bad }]}>{money(g.total)}</Text>
+                        <Text style={[styles.tileValue, tabular, key === 'savings' && { color: C.saved }, key === 'cards' && g.total > 0 && { color: C.bad }]}><Private>{money(g.total)}</Private></Text>
                         <Text style={styles.tileMeta}>{g.accounts.length} account{g.accounts.length === 1 ? '' : 's'} {open === key ? '▴' : '▾'}</Text>
                     </TouchableOpacity>
                 ))}
@@ -58,7 +59,7 @@ export function AccountsRow({ cash, savings, cards, updatedAt, wide }: Props) {
                                         </Text>
                                     )}
                                 </View>
-                                <Text style={[styles.itemValue, tabular]}>{a.balance === null ? 'After the next sync' : money(a.balance)}</Text>
+                                <Text style={[styles.itemValue, tabular]}>{a.balance === null ? 'After the next sync' : <Private>{money(a.balance)}</Private>}</Text>
                             </View>
                         )
                     })}

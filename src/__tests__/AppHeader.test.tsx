@@ -3,6 +3,7 @@ import { AppHeader } from '../App'
 import { ThemeProvider } from '../shared/theme/theme'
 import { ToastContext } from '../shared/ui/ToastContext'
 import { fake, auth } from '../../test/fakeSupabase'
+import { usePrivacy } from '../shared/ui/Private'
 
 jest.mock('../shared/supabase', () => require('../../test/fakeSupabase').module)
 
@@ -43,5 +44,18 @@ describe('app header', () => {
         await fireEvent.press(screen.getByText('Sign out'))
         await waitFor(() => expect(showToast).toHaveBeenCalledWith(
             "Couldn't sign out: Network request failed. Check your connection and try again.", 'error'))
+    })
+})
+
+describe('privacy mode', () => {
+    beforeEach(() => usePrivacy.setState({ hidden: false, loaded: true }))
+
+    it('the eye button hides amounts, and shows them again', async () => {
+        await renderHeader()
+        await fireEvent.press(screen.getByRole('button', { name: 'Hide amounts' }))
+        expect(usePrivacy.getState().hidden).toBe(true)
+        expect(showToast).toHaveBeenLastCalledWith('Amounts hidden. Tap the eye to show them.', 'info')   // the phone app's wording
+        await fireEvent.press(screen.getByRole('button', { name: 'Show amounts' }))
+        expect(usePrivacy.getState().hidden).toBe(false)
     })
 })

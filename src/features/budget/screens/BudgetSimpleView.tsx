@@ -6,6 +6,7 @@ import { useTheme, useStyles, Palette, tabular } from '../../../shared/theme/the
 import { Button, Section, EmptyState, useIsWide } from '../../../shared/ui/ui'
 import { BudgetType, MONTHS, MONTH_NAMES, SECTIONS, SECTION_LABELS } from '../logic/types'
 import { BudgetViewProps, SectionHeading, AddItemRow, DeleteButton, dollars } from './BudgetTable'
+import { Private } from '../../../shared/ui/Private'
 
 interface Props extends BudgetViewProps {
     /** The month the amounts are shown for: this month in the current year, otherwise January */
@@ -54,7 +55,7 @@ export function BudgetSimpleView(p: Props) {
                     <Stat label="Saving and investing" value={saving} color={C.saved} s={s} />
                     <Stat label="Left over" value={left} color={left < 0 ? C.bad : C.ink} s={s} strong />
                 </View>
-                {left < 0 && <Text style={[s.note, { color: C.bad }]}>You've planned {dollars(-left)} more than comes in this month.</Text>}
+                {left < 0 && <Text style={[s.note, { color: C.bad }]}>You've planned <Private>{dollars(-left)}</Private> more than comes in this month.</Text>}
             </Section>
 
             {SECTIONS.map(type => <SimpleSection key={type} type={type} {...p} />)}
@@ -67,7 +68,7 @@ function Stat({ label, value, color, s, strong }: { label: string; value: number
     return (
         <View style={s.stat}>
             <Text style={s.statLabel}>{label}</Text>
-            <Text style={[s.statValue, strong && s.statStrong, tabular, { color }]}>{dollars(value)}</Text>
+            <Text style={[s.statValue, strong && s.statStrong, tabular, { color }]}><Private>{dollars(value)}</Private></Text>
         </View>
     )
 }
@@ -81,7 +82,7 @@ function SimpleSection({ type, ...p }: Props & { type: BudgetType }) {
         <Section>
             <SectionHeading type={type} right={
                 <View style={s.headRight}>
-                    <Text style={[s.sectionTotal, tabular]}>{dollars(p.getMonthTotal(type, p.month))} a month</Text>
+                    <Text style={[s.sectionTotal, tabular]}><Private>{dollars(p.getMonthTotal(type, p.month))}</Private> a month</Text>
                     {items.length > 1 && (
                         <Button small variant="ghost" label={reordering ? 'Done' : 'Reorder'} accessibilityLabel={reordering ? 'Done reordering' : `Reorder ${title}`}
                             onPress={() => setReordering(!reordering)} />
@@ -130,7 +131,7 @@ function SimpleRow({ item, first, reorder, ...p }: Props & { item: BudgetViewPro
                         onPress={() => { setValue(amount > 0 ? String(amount) : ''); setEditing(true) }}
                         style={s.amountBtn}
                     >
-                        <Text style={[s.amount, tabular, amount === 0 && { color: C.faint, fontWeight: '400' }]}>{dollars(amount)}</Text>
+                        <Text style={[s.amount, tabular, amount === 0 && { color: C.faint, fontWeight: '400' }]}><Private>{dollars(amount)}</Private></Text>
                         <Text style={s.per}>{varies ? MONTHS[p.month - 1].toLowerCase() : '/mo'}</Text>
                     </TouchableOpacity>
                 )}
@@ -171,7 +172,7 @@ function SimpleRow({ item, first, reorder, ...p }: Props & { item: BudgetViewPro
             {varies && open && (
                 <View style={s.months}>
                     {MONTHS.map((name, i) => (
-                        <Text key={name} style={[s.monthCell, tabular, i + 1 === p.month && s.monthNow]}>{`${name} ${dollars(p.getAmount(item.id, i + 1))}`}</Text>
+                        <Text key={name} style={[s.monthCell, tabular, i + 1 === p.month && s.monthNow]}>{name} <Private>{dollars(p.getAmount(item.id, i + 1))}</Private></Text>
                     ))}
                     <Button small variant="ghost" label="Edit single months" onPress={p.onEditMonths} />
                 </View>
