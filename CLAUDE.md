@@ -2,6 +2,10 @@
 
 - **One branch per piece of work.** Keep adding commits to it; open a single PR and only suggest
   merging once the whole piece is done and tested, along with any one-time steps.
+- **Small changes don't get their own branch.** Put them on the current small-changes branch (or start
+  one) and keep collecting; open one PR when there's enough to be worth merging, or when one is urgent.
+  For small changes, skip building website copies for screenshots and don't wait for GitHub's checks;
+  still run every test locally first.
 - The main branch is `master`.
 - Layout: a modular monolith. Each part of the app is a folder in `src/features/<name>/` (screens/, logic/,
   __tests__/) with two front doors: `index.ts` (screens too) and `api.ts` (data and logic only). Other
