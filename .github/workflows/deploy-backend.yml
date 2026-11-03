@@ -67,4 +67,5 @@ jobs:
             echo "Missing SUPABASE_ACCESS_TOKEN secret. See the setup note at the top of this file."
             exit 1
           fi
-          supabase functions deploy bank --project-ref "$PROJECT_REF"
+          # --yes: newer Supabase CLIs ask to confirm, and a scheduled run cannot answer
+          supabase functions deploy bank --project-ref "$PROJECT_REF" --yes
