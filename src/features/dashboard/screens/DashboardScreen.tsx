@@ -10,6 +10,7 @@ import { BudgetList } from './BudgetList'
 import { MonthlyTrend } from './MonthlyTrend'
 import { ActivityList } from './ActivityList'
 import { useStyles, useTheme, Palette } from '../../../shared/theme/theme'
+import { GettingStarted } from '../../onboarding'
 
 const WIDE = 900
 
@@ -67,6 +68,7 @@ export default function Dashboard() {
     return (
         <ScrollView style={[styles.page, { backgroundColor: backdrop }]} contentContainerStyle={[styles.content, !wide && styles.contentNarrow]}>
             <View style={styles.inner}>
+                <GettingStarted onGo={tab => navigation?.navigate?.(tab)} />
                 <PeriodHeader
                     title={logic.title}
                     view={logic.view}

@@ -132,3 +132,20 @@ describe('top bar', () => {
         expect(node).toBeTruthy()
     })
 })
+
+describe('getting started', () => {
+    it('welcomes someone brand new the first time they sign in', async () => {
+        auth.getSession.mockResolvedValue({ data: { session } } as any)
+        await render(<App />)
+        expect(await screen.findByText('Welcome to Budget Tracker')).toBeTruthy()
+    })
+
+    it("doesn't welcome someone who already uses the app", async () => {
+        auth.getSession.mockResolvedValue({ data: { session } } as any)
+        fake.table('budget_items', { data: [{ id: 'food', name: 'Food', type: 'expense' }] })
+        await render(<App />)
+        await screen.findByLabelText('Account menu')
+        await waitFor(() => expect(fake.calls('subscriptions').length).toBeGreaterThan(0))
+        expect(screen.queryByText('Welcome to Budget Tracker')).toBeNull()
+    })
+})

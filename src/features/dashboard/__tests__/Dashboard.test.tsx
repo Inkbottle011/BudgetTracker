@@ -176,3 +176,13 @@ describe('the transactions behind what is shown', () => {
         expect(await screen.findByText('Nothing in October yet.')).toBeTruthy()
     })
 })
+
+describe('getting started', () => {
+    it("shows what's left to set up at the top, and its buttons go to that page", async () => {
+        await render(<Dashboard />)
+        expect(await screen.findByText('Getting started')).toBeTruthy()
+        expect(screen.getByText('2 of 4 done')).toBeTruthy()   // has transactions and a budget
+        await fireEvent.press(screen.getByText('Add subscriptions'))
+        expect(mockNavigate).toHaveBeenCalledWith('Subscriptions')
+    })
+})
