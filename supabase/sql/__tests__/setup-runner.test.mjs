@@ -19,15 +19,24 @@ const runs = () => h.rows(`select name from public.app_setup_runs order by name`
 
 describe('applying the database setup', () => {
     it('includes every setup file, in order, and never the one-off or secret ones', () => {
-        assert.deepEqual(SETUP_FILES, ['subscriptions/01_setup.sql', 'reimbursements/01_setup.sql', 'bank/01_setup.sql', 'merchants/01_setup.sql', 'budget/01_setup.sql'])
+        assert.deepEqual(SETUP_FILES, ['core/00_tables.sql', 'subscriptions/01_setup.sql', 'reimbursements/01_setup.sql', 'bank/01_setup.sql', 'merchants/01_setup.sql', 'budget/01_setup.sql'])
     })
 
     it('applies every setup file the first time, in order', async () => {
         const result = await applySetup(db, readSetupFiles(), log)
         assert.deepEqual(result.applied, SETUP_FILES)
-        assert.equal((await runs()).length, 5)
+        assert.equal((await runs()).length, 6)
         // Tables from each file exist
         for (const t of ['subscriptions', 'split_shares', 'bank_connections', 'merchant_renames']) {
+            assert.ok(await h.one(`select to_regclass('public.${t}') as t`).then(r => r.t), t)
+        }
+    })
+
+    it('sets up a brand-new project from nothing', async () => {
+        await h.db.exec(`drop table public.transactions`)
+        const result = await applySetup(db, readSetupFiles(), log)
+        assert.deepEqual(result.applied, SETUP_FILES)
+        for (const t of ['transactions', 'budget_items', 'budget_amounts', 'subscriptions', 'bank_connections']) {
             assert.ok(await h.one(`select to_regclass('public.${t}') as t`).then(r => r.t), t)
         }
     })
