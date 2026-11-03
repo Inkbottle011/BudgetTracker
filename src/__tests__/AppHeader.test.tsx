@@ -59,3 +59,15 @@ describe('privacy mode', () => {
         expect(usePrivacy.getState().hidden).toBe(false)
     })
 })
+
+describe('account menu', () => {
+    it('opens the suggestions forum', async () => {
+        const { navigationRef } = require('../App')
+        jest.spyOn(navigationRef, 'isReady').mockReturnValue(true)
+        const navigate = jest.spyOn(navigationRef, 'navigate').mockImplementation(() => {})
+        await renderHeader()
+        await fireEvent.press(screen.getByLabelText('Account menu'))
+        await fireEvent.press(screen.getByRole('button', { name: 'Suggestions forum' }))
+        expect(navigate).toHaveBeenCalledWith('Forum')
+    })
+})

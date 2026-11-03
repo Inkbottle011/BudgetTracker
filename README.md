@@ -54,6 +54,12 @@ A personal finance app for planning a budget, tracking every transaction (typed 
 - Add a **backup authenticator** so losing your phone doesn't lock you out
 - Row-level security: each person only ever sees their own data
 
+**Suggestions forum**
+- Everyone using the app can post ideas and problems, upvote and reply; people appear anonymously ("Member 4F3A", "You")
+- Open it from the account menu (your initial, top right) or Settings
+- Edit or delete your own posts and replies (with Undo); moderators mark posts Planned / Done / Not planned, hide posts or replies, and their replies are marked **Developer**
+- To become a moderator: Supabase → Authentication → Users, copy your user ID; Table Editor → `forum_moderators` → Insert row → paste it into `user_id` → Save
+
 **Updates**
 - Settings shows the version you're running and can check for a newer one; a banner offers a reload when a new version is published
 
@@ -154,6 +160,7 @@ src/features/<feature>/      One part of the app:
   appearance/                the moving space background
   bank/                      linking banks, balances, possible duplicates, pending charges
   budget/                    the yearly plan
+  forum/                     the suggestions forum: posts, replies, upvotes, moderation
   dashboard/                 the summary of a day, week, month or year
   settings/                  the Settings page (built from other features' sections)
   subscriptions/             regular charges, spotting them, price changes

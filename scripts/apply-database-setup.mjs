@@ -23,6 +23,7 @@ export const SETUP_FILES = [
     'bank/01_setup.sql',
     'merchants/01_setup.sql',
     'budget/01_setup.sql',
+    'forum/01_setup.sql',
 ]
 
 export function readSetupFiles() {

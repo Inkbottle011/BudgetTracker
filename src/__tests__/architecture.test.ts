@@ -12,6 +12,7 @@ const SHARED = path.join(SRC, 'shared')
 const OWNERS: Record<string, string> = {
     transactions: 'transactions', split_shares: 'transactions', merchant_renames: 'transactions', rename_transactions: 'transactions',
     budget_items: 'budget', budget_amounts: 'budget',
+    forum_posts: 'forum', forum_replies: 'forum', forum_votes: 'forum', forum_moderators: 'forum', is_forum_moderator: 'forum', moderate_post: 'forum', moderate_reply: 'forum',
     subscriptions: 'subscriptions', generate_subscription_transactions: 'subscriptions', dismissed_subscription_suggestions: 'subscriptions',
     bank_connections: 'bank', bank_accounts: 'bank', bank_possible_duplicates: 'bank', bank_pending_transactions: 'bank', resolve_possible_duplicate: 'bank', bank: 'bank',
 }
