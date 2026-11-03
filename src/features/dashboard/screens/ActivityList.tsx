@@ -1,5 +1,5 @@
 import { useTheme, useStyles, Palette } from '../../../shared/theme/theme'
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native'
 import { shortDate } from '../../bank/api'
 import { activityDirection } from '../logic/summary'
 import { tabular, money } from '../logic/display'
@@ -7,19 +7,32 @@ import { Private } from '../../../shared/ui/Private'
 
 interface Item { id: string; name?: string | null; category_label?: string | null; date: string; type: string; amount: number | string; sub?: string }
 
-/** A short list of transactions: upcoming bills or recent activity. */
-export function ActivityList({ title, items, empty, notice }: {
+/** The height of one row when a list shows a fixed number at a time. */
+export const PERIOD_ROW_HEIGHT = 56
+
+/** A list of transactions: upcoming bills, recent activity, or everything in the period shown. */
+export function ActivityList({ title, items, empty, notice, count, visibleRows, footer, testID }: {
     title: string
     items: Item[]
     empty: string
     /** A short note with a link, shown above the list */
     notice?: { text: string; action: string; a11y: string; onPress: () => void } | null
+    /** Shown next to the title, e.g. "12 transactions" */
+    count?: string
+    /** Show this many rows at a time and scroll for the rest */
+    visibleRows?: number
+    /** A link under the list */
+    footer?: { label: string; a11y?: string; onPress: () => void } | null
+    testID?: string
 }) {
     const { c: C } = useTheme()
     const styles = useStyles(makeStyles)
     return (
-        <View style={styles.section}>
-            <Text style={styles.title}>{title}</Text>
+        <View style={styles.section} testID={testID}>
+            <View style={styles.head}>
+                <Text style={styles.title}>{title}</Text>
+                {count && <Text style={styles.count}>{count}</Text>}
+            </View>
             {notice && (
                 <View style={styles.notice}>
                     <Text style={styles.noticeText}>{notice.text}</Text>
@@ -29,11 +42,12 @@ export function ActivityList({ title, items, empty, notice }: {
                 </View>
             )}
             {items.length === 0 && <Text style={styles.empty}>{empty}</Text>}
-            {items.map((t, i) => {
+            {(() => {
+            const rows = items.map((t, i) => {
                 const dir = activityDirection(t.type)
                 const amount = Math.abs(Number(t.amount))
                 return (
-                    <View key={`${t.id}-${t.date}-${i}`} style={[styles.row, i > 0 && styles.rowLine]}>
+                    <View key={`${t.id}-${t.date}-${i}`} style={[styles.row, i > 0 && styles.rowLine, visibleRows ? { height: PERIOD_ROW_HEIGHT } : null]}>
                         <Text style={[styles.date, tabular]}>{shortDate(t.date)}</Text>
                         <View style={{ flex: 1, minWidth: 0 }}>
                             <Text style={styles.name} numberOfLines={1}>{t.name || t.category_label || 'Transaction'}</Text>
@@ -44,14 +58,29 @@ export function ActivityList({ title, items, empty, notice }: {
                         </Text>
                     </View>
                 )
-            })}
+            })
+            if (!visibleRows || items.length <= visibleRows) return <View testID={visibleRows ? 'period-transactions' : undefined}>{rows}</View>
+            return (
+                <ScrollView testID="period-transactions" style={{ maxHeight: visibleRows * PERIOD_ROW_HEIGHT }} nestedScrollEnabled showsVerticalScrollIndicator>
+                    {rows}
+                </ScrollView>
+            )
+            })()}
+            {footer && items.length > 0 && (
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel={footer.a11y ?? footer.label} onPress={footer.onPress} hitSlop={6} style={styles.footer}>
+                    <Text style={styles.noticeAction}>{footer.label}</Text>
+                </TouchableOpacity>
+            )}
         </View>
     )
 }
 
 const makeStyles = (C: Palette) => StyleSheet.create({
     section: { backgroundColor: C.surface, borderRadius: 14, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: C.line },
-    title: { fontSize: 18, fontWeight: '700', color: C.ink, marginBottom: 6 },
+    head: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 6 },
+    title: { fontSize: 18, fontWeight: '700', color: C.ink, flexShrink: 1 },
+    count: { fontSize: 13, color: C.muted },
+    footer: { marginTop: 10, alignSelf: 'flex-start' },
     empty: { fontSize: 14, color: C.muted, marginTop: 4 },
     notice: { backgroundColor: C.primarySoft, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginTop: 4, marginBottom: 6, gap: 4 },
     noticeText: { fontSize: 13, color: C.text, lineHeight: 18 },
