@@ -86,33 +86,21 @@ Supabase ───────┘
 
 ## Getting started
 
-**Prerequisites:** Node.js 18+ and a free [Supabase](https://supabase.com) project.
+**Setting up your own copy from scratch** (Supabase, the database, GitHub, Netlify, banks): follow **[SETUP.md](SETUP.md)**.
+
+Already set up? Run it on your computer:
 
 ```bash
 git clone https://github.com/Inkbottle011/BudgetTracker.git
 cd BudgetTracker
 npm install
-```
-
-Create a `.env` file in the project root with your Supabase project values (Project Settings → API):
-
-```
-EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-```
-
-Then start the app:
-
-```bash
-npm start         # then press w for the browser, or scan the QR code with Expo Go
-npm run web       # straight to the browser
+cp .env.example .env   # then fill in your Supabase URL and publishable/anon key
+npm run web            # or npm start, then press w (browser) or scan the QR code with Expo Go
 ```
 
 ### Backend setup (automatic)
 
-Database setup and the bank function deploy themselves: merging to `master` runs `.github/workflows/deploy-backend.yml`, which applies every new or changed file listed in `scripts/apply-database-setup.mjs` (each is safe to run more than once) and deploys the `bank` function. It needs two GitHub Actions secrets: `SUPABASE_DB_URL` (the Session pooler connection string) and `SUPABASE_ACCESS_TOKEN`.
-
-For a brand-new Supabase project, the app also expects the tables `transactions`, `budget_items` and `budget_amounts` with row-level security limited to `user_id = auth.uid()`. Linking banks needs a Plaid account and a few function secrets: see [docs/linking-banks.md](docs/linking-banks.md).
+Database setup and the bank function deploy themselves: merging to `master` runs `.github/workflows/deploy-backend.yml`, which applies every new or changed file listed in `scripts/apply-database-setup.mjs` (each is safe to run more than once, starting with the core tables for a brand-new project) and deploys the `bank` function. It needs two GitHub Actions secrets: `SUPABASE_DB_URL` (the Session pooler connection string) and `SUPABASE_ACCESS_TOKEN`. Linking banks needs a Plaid account and a few function secrets: see [docs/linking-banks.md](docs/linking-banks.md).
 
 Never put the service-role key or the database connection string in the app or in an `EXPO_PUBLIC_` variable.
 
@@ -132,7 +120,7 @@ Tests also run on every pull request (type-check, then `npm test`).
 | `src/shared/**/__tests__/` | Money rules (amounts, dates, merchant matching), themes, loading every row past Supabase's 1,000-row limit, shared UI |
 | `src/__tests__/architecture.test.ts` | The app's structure: features use each other only through their front doors, and only the owner of a table uses it |
 | `supabase/functions/_shared/bank/__tests__/` | The bank function: Plaid and Teller against fake banks, conversion, duplicate and transfer matching, pending charges, subscription charges |
-| `supabase/sql/__tests__/` | The real SQL run against an in-memory Postgres: row-level security, subscription catch-up, setup that can run twice |
+| `supabase/sql/__tests__/` | The real SQL run against an in-memory Postgres: row-level security, subscription catch-up, setup that can run twice, setting up a brand-new project from nothing |
 
 Tests run in US Eastern time on purpose, so date bugs that only appear west of UTC get caught. Screen tests use a fake Supabase client (`test/fakeSupabase.ts`).
 
@@ -164,9 +152,10 @@ src/shared/                  used by everything, depends on no feature
   theme/                     colors, themes, light/dark, background settings
   money/                     money rules (entry.ts is copied to the bank function), formatting
   dates.ts, fetchAllRows.ts, supabase.ts
-supabase/sql/<feature>/      database setup, applied automatically on merge
+supabase/sql/<feature>/      database setup, applied automatically on merge (core/ first: the main tables)
 supabase/functions/          the bank function and generate-recurring
 docs/                        design notes and bank-linking setup
+SETUP.md                     setting up your own copy from scratch
 ```
 
 The rules (checked by `src/__tests__/architecture.test.ts`):

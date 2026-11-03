@@ -1,8 +1,9 @@
-import { render, screen, fireEvent } from '@testing-library/react-native'
+import { render, screen, fireEvent, within } from '@testing-library/react-native'
 import Dashboard from '../screens/DashboardScreen'
 import { useTransactionStore } from '../../transactions/logic/useTransactionStore'
 import { fake } from '../../../../test/fakeSupabase'
 import { useTransactionFilters } from '../../transactions/api'
+import { PERIOD_ROW_HEIGHT } from '../screens/ActivityList'
 
 jest.mock('../../../shared/supabase', () => require('../../../../test/fakeSupabase').module)
 const mockNavigate = jest.fn()
@@ -137,4 +138,41 @@ it('privacy mode can hide every amount', async () => {
     } finally {
         usePrivacy.setState({ hidden: false })
     }
+})
+
+describe('the transactions behind what is shown', () => {
+    it('lists the period\'s transactions, newest first, and follows the day, week or month', async () => {
+        await render(<Dashboard />)
+        const panel = () => within(screen.getByTestId('period-panel'))
+        expect(await screen.findByText('Transactions in October')).toBeTruthy()
+        expect(panel().getByText('4 transactions')).toBeTruthy()
+        expect(panel().getAllByText(/^(Tacos|Groceries|Paycheck|Rent)$/).map(t => t.props.children)).toEqual(['Tacos', 'Groceries', 'Paycheck', 'Rent', 'Rent'])   // Rent's category is Rent too
+        expect(panel().queryByText('Last month')).toBeNull()
+        await fireEvent.press(screen.getByText('Week'))
+        expect(screen.getByText("This week's transactions")).toBeTruthy()
+        expect(panel().getByText('1 transaction')).toBeTruthy()
+        expect(panel().getByText('Tacos')).toBeTruthy()
+    })
+
+    it('shows five at a time and scrolls for the rest, with a link to all of them', async () => {
+        const many = Array.from({ length: 8 }, (_, i) => ({ id: `m${i}`, date: `2026-10-0${i + 1}`, type: 'expense', amount: 3, name: `Coffee ${i + 1}`, category_label: 'Food' }))
+        useTransactionStore.setState({ transactions: many as any })
+        fake.table('transactions', { data: many })
+        await render(<Dashboard />)
+        const list = await screen.findByTestId('period-transactions')
+        const { StyleSheet } = require('react-native')
+        expect(StyleSheet.flatten(list.props.style).maxHeight).toBe(5 * PERIOD_ROW_HEIGHT)
+        expect(within(list).getAllByText(/^Coffee \d$/)).toHaveLength(8)
+        await fireEvent.press(screen.getByRole('button', { name: 'See all 8 in Transactions' }))
+        expect(mockNavigate).toHaveBeenCalledWith('Transactions')
+        const f = useTransactionFilters.getState()
+        expect([f.category, f.from, f.to]).toEqual([null, '2026-10-01', '2026-10-31'])
+    })
+
+    it('says when there are none', async () => {
+        useTransactionStore.setState({ transactions: [] })
+        fake.table('transactions', { data: [] })
+        await render(<Dashboard />)
+        expect(await screen.findByText('Nothing in October yet.')).toBeTruthy()
+    })
 })

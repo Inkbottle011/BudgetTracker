@@ -18,6 +18,7 @@ const SQL_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '
  * conversion (02-04), and bank/02_daily_sync.sql, which holds your cron secret.
  */
 export const SETUP_FILES = [
+    'core/00_tables.sql',
     'subscriptions/01_setup.sql',
     'reimbursements/01_setup.sql',
     'bank/01_setup.sql',

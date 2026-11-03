@@ -38,6 +38,21 @@ export default function Dashboard() {
     const side = (
         <>
             <MonthlyTrend transactions={logic.forTotals} selectedYear={logic.selectedYear} />
+            <ActivityList
+                testID="period-panel"
+                title={logic.periodListTitle}
+                count={`${logic.periodTransactions.length} transaction${logic.periodTransactions.length === 1 ? '' : 's'}`}
+                items={logic.periodTransactions}
+                empty={logic.periodEmpty}
+                visibleRows={5}
+                footer={{
+                    label: `See all ${logic.periodTransactions.length} in Transactions`,
+                    onPress: () => {
+                        showTransactionsFor({ category: null, from: logic.range.start, to: addDays(logic.range.end, -1) })
+                        navigation?.navigate?.('Transactions')
+                    },
+                }}
+            />
             <ActivityList title="Coming up" items={logic.upcoming} empty="No subscriptions due in the next 30 days."
                 notice={logic.possibleSubscriptions > 0 ? {
                     text: logic.possibleSubscriptions === 1 ? '1 charge looks like a subscription you haven\'t added.'
