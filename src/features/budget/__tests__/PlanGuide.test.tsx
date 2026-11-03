@@ -124,3 +124,10 @@ it('counts what is already in your budget and not in the plan, so left over is r
     expect(screen.getByText('+$2,000.00/mo')).toBeTruthy()
     expect(screen.getByText('$1,100.00')).toBeTruthy()   // 2,000 pay - 900 rent
 })
+
+it('opens straight away when another page asked for it (getting started)', async () => {
+    const { openPlanGuideOnArrival } = require('../api')
+    openPlanGuideOnArrival()
+    await render(<ToastContext.Provider value={{ showToast }}><BudgetScreen /></ToastContext.Provider>)
+    expect(await screen.findByText('Your income')).toBeTruthy()
+})

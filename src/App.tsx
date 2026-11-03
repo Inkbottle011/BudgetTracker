@@ -11,6 +11,7 @@ import { TransactionsScreen } from './features/transactions'
 import { BudgetScreen } from './features/budget'
 import { SettingsScreen } from './features/settings'
 import { ForumScreen } from './features/forum'
+import { WelcomeTour } from './features/onboarding'
 
 /** Lets the top bar (outside the pages) open a page, such as the forum from the account menu. */
 export const navigationRef = createNavigationContainerRef<any>()
@@ -183,6 +184,8 @@ function MainApp({ userEmail }: { userEmail: string }) {
           {/* Opened from the account menu and Settings, not the tab bar */}
           <Tab.Screen name="Forum" component={ForumScreen} options={{ tabBarButton: () => null, tabBarItemStyle: { display: 'none' } }} />
         </Tab.Navigator>
+        {/* The first time someone brand new signs in */}
+        <WelcomeTour onGo={tab => { if (navigationRef.isReady()) navigationRef.navigate(tab) }} />
       </NavigationContainer>
     </View>
   )

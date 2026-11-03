@@ -9,6 +9,7 @@ import { useBudgetLogic } from '../logic/useBudgetLogic'
 import { BudgetTable, BudgetViewProps } from './BudgetTable'
 import { BudgetMonthView } from './BudgetMonthView'
 import { PlanGuide } from './PlanGuide'
+import { usePlanGuideOnArrival } from '../logic/arrival'
 import { BudgetSimpleView } from './BudgetSimpleView'
 import { SplitCategory } from './SplitCategory'
 import { RenameCategory } from './RenameCategory'
@@ -26,6 +27,7 @@ export default function BudgetScreen() {
     const styles = useStyles(makeStyles)
     const [month, setMonth] = useState(new Date().getMonth() + 1)
     const [guideOpen, setGuideOpen] = useState(false)
+    usePlanGuideOnArrival(() => setGuideOpen(true))
     const [splitting, setSplitting] = useState<BudgetItem | null>(null)
     const [renaming, setRenaming] = useState<BudgetItem | null>(null)
     const stored = useTransactionStore(st => st.transactions)

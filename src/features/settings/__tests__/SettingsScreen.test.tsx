@@ -501,3 +501,12 @@ describe('Suggestions forum', () => {
         expect(mockNavigate).toHaveBeenCalledWith('Forum')
     })
 })
+
+describe('getting started', () => {
+    it('offers to bring back the getting-started list after it was hidden', async () => {
+        const { setChecklistHidden } = require('../../onboarding/logic/remember')
+        await setChecklistHidden(true)
+        await renderSettings()
+        expect(await screen.findByText('Show the getting-started list')).toBeTruthy()
+    })
+})

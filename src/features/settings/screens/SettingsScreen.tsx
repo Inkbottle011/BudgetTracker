@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { TwoFactorSection } from '../../account'
 import { LinkedBanksSection } from '../../bank'
+import { ShowGettingStartedAgain } from '../../onboarding'
 import { useNavigation } from '@react-navigation/native'
 import { Page, PageTitle, Section, Segmented } from '../../../shared/ui/ui'
 import { useTheme, useStyles, Palette, Preference } from '../../../shared/theme/theme'
@@ -40,6 +41,7 @@ export default function SettingsScreen() {
             <PrivacySection />
             <TwoFactorSection onChange={setTwoFactorOn} />
             <LinkedBanksSection twoFactorOn={twoFactorOn} />
+            <ShowGettingStartedAgain />
             <ForumLink />
             <AboutSection />
         </Page>

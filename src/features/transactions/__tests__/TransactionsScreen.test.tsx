@@ -374,3 +374,13 @@ it('privacy mode can hide every amount in the list', async () => {
         expect(screen.queryAllByText(/\$\d/).map(t => [].concat(t.props.children).join(''))).toEqual([])
     } finally { usePrivacy.setState({ hidden: false }) }
 })
+
+describe('opened from getting started', () => {
+    it('opens the import window when another page asked for it', async () => {
+        const { openImportOnArrival } = require('../api')
+        fake.table('transactions', { data: saved })
+        openImportOnArrival()
+        await renderScreen()
+        expect(await screen.findByText('Pick a CSV file from your bank to bring in its transactions.')).toBeTruthy()
+    })
+})

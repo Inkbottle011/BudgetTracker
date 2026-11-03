@@ -3,6 +3,7 @@ import { View, ScrollView, Modal, StyleSheet } from 'react-native'
 import { Page, PageTitle, Button, useIsWide } from '../../../shared/ui/ui'
 import { useStyles, useTheme, Palette } from '../../../shared/theme/theme'
 import { useTransactionLogic } from '../logic/useTransactionLogic'
+import { useOpenImportOnArrival } from '../logic/arrival'
 import { TransactionList } from './TransactionList'
 import { TransactionForm } from './TransactionForm'
 import { OwedPanel } from './OwedPanel'
@@ -15,6 +16,7 @@ import { PendingPanel } from './PendingPanel'
  */
 export default function TransactionsScreen() {
     const logic = useTransactionLogic()
+    useOpenImportOnArrival(() => logic.setShowImport(true))
     const wide = useIsWide()
     const styles = useStyles(makeStyles)
     const { backdrop } = useTheme()
