@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { TwoFactorSection } from '../../account'
 import { LinkedBanksSection } from '../../bank'
+import { useNavigation } from '@react-navigation/native'
 import { Page, PageTitle, Section, Segmented } from '../../../shared/ui/ui'
 import { useTheme, useStyles, Palette, Preference } from '../../../shared/theme/theme'
 import { SCENES, SPEEDS, AMOUNTS, TINTS, tintSwatch, Scene, Speed, Amount } from '../../../shared/theme/background'
@@ -39,6 +40,7 @@ export default function SettingsScreen() {
             <PrivacySection />
             <TwoFactorSection onChange={setTwoFactorOn} />
             <LinkedBanksSection twoFactorOn={twoFactorOn} />
+            <ForumLink />
             <AboutSection />
         </Page>
     )
@@ -221,6 +223,18 @@ function PrivacySection() {
                 )
             })}
             <Button small variant="secondary" label={hidden ? 'Turn privacy mode off' : 'Turn privacy mode on'} onPress={toggle} style={{ alignSelf: 'flex-start', marginTop: 10 }} />
+        </Section>
+    )
+}
+
+/** The suggestions forum: share ideas and problems, and see everyone else's. */
+function ForumLink() {
+    const styles = useStyles(makeStyles)
+    const navigation = useNavigation<any>()
+    return (
+        <Section title="Suggestions forum">
+            <Text style={[styles.help, { marginTop: 0 }]}>Suggest a change or report a problem, and upvote other people's ideas. Everyone appears anonymously.</Text>
+            <Button small label="Open the forum" onPress={() => navigation?.navigate?.('Forum')} style={{ alignSelf: 'flex-start', marginTop: 10 }} />
         </Section>
     )
 }
