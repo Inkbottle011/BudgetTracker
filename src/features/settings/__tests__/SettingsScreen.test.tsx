@@ -19,6 +19,16 @@ jest.mock('@react-navigation/native', () => ({
 }))
 
 const showToast = jest.fn()
+
+/** The bank server's answers: which ways you can link (asked when the page opens), and the reply to the next other action. */
+function answerBank(reply: any, providers = ['plaid', 'simplefin']) {
+    let used = false
+    invoke.mockImplementation(async (_name: string, { body }: any) => {
+        if (body.action === 'providers') return { data: { providers }, error: null }
+        if (reply && !used) { used = true; return reply }
+        return { data: {}, error: null }
+    })
+}
 const mfa = auth.mfa as unknown as Record<string, jest.Mock>
 const invoke = functions.invoke as jest.Mock
 
@@ -37,7 +47,7 @@ beforeEach(() => {
     fake.reset()
     showToast.mockClear()
     invoke.mockReset()
-    invoke.mockResolvedValue({ data: {}, error: null })
+    answerBank(null, ['plaid', 'simplefin'])
     ;(openBankConnect as jest.Mock).mockReset()
     ;(bankLinkingAvailable as jest.Mock).mockReturnValue(true)
     twoFactor(false)
@@ -253,7 +263,7 @@ describe('linked banks', () => {
     it('links a bank: pick a start date, sign in with Plaid, then the server stores and syncs it', async () => {
         twoFactor(true)
         ;(openBankConnect as jest.Mock).mockResolvedValue({ publicToken: 'public-abc', institutionName: 'Chase' })
-        invoke.mockResolvedValueOnce({ data: { connectionId: 'conn-1', added: 12, status: 'active' }, error: null })
+        answerBank({ data: { connectionId: 'conn-1', added: 12, status: 'active' }, error: null })
         await renderSettings()
         await fireEvent.press(await screen.findByText('Link a bank'))
         // Suggests the day after your latest transaction (Oct 3)
@@ -279,7 +289,7 @@ describe('linked banks', () => {
     it('says how many transactions need a look after linking', async () => {
         twoFactor(true)
         ;(openBankConnect as jest.Mock).mockResolvedValue({ publicToken: 'public-abc', institutionName: 'Chase' })
-        invoke.mockResolvedValueOnce({ data: { connectionId: 'conn-1', added: 40, toReview: 3, status: 'active' }, error: null })
+        answerBank({ data: { connectionId: 'conn-1', added: 40, toReview: 3, status: 'active' }, error: null })
         await renderSettings()
         await fireEvent.press(await screen.findByText('Link a bank'))
         await fireEvent.press(screen.getByText('Continue to your bank'))
@@ -290,7 +300,7 @@ describe('linked banks', () => {
     it('says when the bank is still loading its transactions', async () => {
         twoFactor(true)
         ;(openBankConnect as jest.Mock).mockResolvedValue({ publicToken: 'public-abc', institutionName: 'Chase' })
-        invoke.mockResolvedValueOnce({ data: { connectionId: 'conn-1', added: 0, status: 'pending' }, error: null })
+        answerBank({ data: { connectionId: 'conn-1', added: 0, status: 'pending' }, error: null })
         await renderSettings()
         await fireEvent.press(await screen.findByText('Link a bank'))
         await fireEvent.press(screen.getByText('Continue to your bank'))
@@ -304,13 +314,13 @@ describe('linked banks', () => {
         await renderSettings()
         await fireEvent.press(await screen.findByText('Link a bank'))
         await fireEvent.press(screen.getByText('Continue to your bank'))
-        expect(invoke).not.toHaveBeenCalled()
+        expect(invoke).not.toHaveBeenCalledWith('bank', { body: expect.objectContaining({ action: 'link' }) })
     })
 
     it('shows why linking failed', async () => {
         twoFactor(true)
         ;(openBankConnect as jest.Mock).mockResolvedValue({ publicToken: 'p', institutionName: 'Chase' })
-        invoke.mockResolvedValueOnce({ data: null, error: { message: 'x', context: { json: async () => ({ error: 'PLAID_SECRET missing' }) } } })
+        answerBank({ data: null, error: { message: 'x', context: { json: async () => ({ error: 'PLAID_SECRET missing' }) } } })
         await renderSettings()
         await fireEvent.press(await screen.findByText('Link a bank'))
         await fireEvent.press(screen.getByText('Continue to your bank'))
@@ -320,7 +330,7 @@ describe('linked banks', () => {
     it('syncs now', async () => {
         twoFactor(true)
         fake.table('bank_connections', { data: [connection] })
-        invoke.mockResolvedValueOnce({ data: { added: 4, connections: 1 }, error: null })
+        answerBank({ data: { added: 4, connections: 1 }, error: null })
         await renderSettings()
         await fireEvent.press(await screen.findByText('Sync now'))
         expect(invoke).toHaveBeenCalledWith('bank', { body: { action: 'sync' } })
@@ -390,7 +400,7 @@ describe('linked banks', () => {
         it('mentions them after syncing', async () => {
             twoFactor(true)
             fake.table('bank_connections', { data: [connection] })
-            invoke.mockResolvedValueOnce({ data: { added: 4, toReview: 1, connections: 1 }, error: null })
+            answerBank({ data: { added: 4, toReview: 1, connections: 1 }, error: null })
             await renderSettings()
             await fireEvent.press(await screen.findByText('Sync now'))
             await waitFor(() => expect(showToast).toHaveBeenCalledWith(
@@ -398,11 +408,12 @@ describe('linked banks', () => {
         })
     })
 
-    it('says when linking is only available on the website', async () => {
+    it('in the phone app, links with SimpleFIN (Plaid\'s sign-in window is website-only)', async () => {
         twoFactor(true)
         ;(bankLinkingAvailable as jest.Mock).mockReturnValue(false)
         await renderSettings()
-        expect(await screen.findByText('Link banks from the website version of the app.')).toBeTruthy()
+        expect(await screen.findByText('Link a bank')).toBeTruthy()
+        expect(screen.queryByText('Link banks from the website version of the app.')).toBeNull()
     })
 })
 
@@ -434,6 +445,52 @@ describe('Privacy mode settings', () => {
         expect(usePrivacy.getState().kinds).toContain('transactions')
         await fireEvent.press(screen.getByRole('checkbox', { name: 'Bank balances' }))
         expect(usePrivacy.getState().kinds).not.toContain('balances')
+    })
+})
+
+describe('linking with SimpleFIN', () => {
+    it('everyone else links with a SimpleFIN setup token, with steps to get one', async () => {
+        twoFactor(true)
+        answerBank({ data: { connectionId: 'conn-2', added: 25, status: 'active' }, error: null }, ['simplefin'])
+        await renderSettings()
+        await fireEvent.press(await screen.findByText('Link a bank'))
+        expect(screen.queryByText('Continue to your bank')).toBeNull()   // no Plaid for this person
+        expect(screen.getByText(/bridge\.simplefin\.org/)).toBeTruthy()
+        expect(screen.getByRole('button', { name: 'Link with SimpleFIN' }).props.accessibilityState.disabled).toBe(true)
+        await fireEvent.changeText(screen.getByLabelText('SimpleFIN setup token'), '  aHR0cHM6Ly9icmlkZ2Uuc2ltcGxlZmluLm9yZy9jbGFpbS94  ')
+        await fireEvent.press(screen.getByRole('button', { name: 'Link with SimpleFIN' }))
+        expect(invoke).toHaveBeenCalledWith('bank', { body: {
+            action: 'link', setupToken: 'aHR0cHM6Ly9icmlkZ2Uuc2ltcGxlZmluLm9yZy9jbGFpbS94', syncFrom: '2026-10-04',
+        } })
+        await waitFor(() => expect(showToast).toHaveBeenCalledWith('Your banks are linked through SimpleFIN. Added 25 transactions.'))
+    })
+
+    it('someone allowed Plaid chooses between the two', async () => {
+        twoFactor(true)
+        await renderSettings()
+        await fireEvent.press(await screen.findByText('Link a bank'))
+        expect(screen.getByText('Continue to your bank')).toBeTruthy()   // Plaid first
+        await fireEvent.press(screen.getByRole('button', { name: 'SimpleFIN' }))
+        expect(screen.getByLabelText('SimpleFIN setup token')).toBeTruthy()
+        expect(screen.queryByText('Continue to your bank')).toBeNull()
+    })
+
+    it('works in the phone app too, where Plaid\'s sign-in window isn\'t available', async () => {
+        twoFactor(true)
+        ;(bankLinkingAvailable as jest.Mock).mockReturnValue(false)
+        answerBank(null, ['plaid', 'simplefin'])
+        await renderSettings()
+        await fireEvent.press(await screen.findByText('Link a bank'))
+        expect(screen.getByLabelText('SimpleFIN setup token')).toBeTruthy()
+        expect(screen.queryByRole('button', { name: 'Plaid' })).toBeNull()
+    })
+
+    it('unlinking a SimpleFIN bank says to remove the app in SimpleFIN too', async () => {
+        twoFactor(true)
+        fake.table('bank_connections', { data: [{ id: 'conn-2', institution_name: 'Chase', status: 'active', last_error: null, provider: 'simplefin', last_synced_at: null, sync_from: '2026-09-01' }] })
+        await renderSettings()
+        await fireEvent.press(await screen.findByText('Unlink'))
+        expect(screen.getByText(/also remove this app in SimpleFIN Bridge/)).toBeTruthy()
     })
 })
 

@@ -629,3 +629,19 @@ describe('unlinkBank', () => {
         expect(ops('bank_connections', 'delete')).toHaveLength(1)
     })
 })
+
+describe('more than one bank provider', () => {
+    it('links with the provider asked for, and syncs each bank through the provider it was linked with', async () => {
+        await databaseWithConnection()
+        const plaid = fakeProvider({ name: 'plaid' })
+        const simplefin = fakeProvider({ name: 'simplefin', exchangeLinkResult: jest.fn(async () => ({ accessToken: 'token_good', enrollmentId: 'sf_1' })) } as any)
+        const both = { ...deps(plaid), providers: { plaid, simplefin } }
+        await linkBank(both, { userId: 'user-1', provider: 'simplefin', publicToken: 'setup-token', institutionName: null, syncFrom: '2026-09-01' })
+        expect(simplefin.exchangeLinkResult).toHaveBeenCalledWith({ publicToken: 'setup-token' })
+        expect(ops('bank_connections', 'upsert')[0].args[0]).toMatchObject({ provider: 'simplefin', provider_enrollment_id: 'sf_1' })
+        expect(plaid.listAccounts).not.toHaveBeenCalled()
+        // The fake connection in the database is a 'teller' one: with no such provider set up, the default is used
+        expect(simplefin.listTransactions).not.toHaveBeenCalled()
+        expect(plaid.listTransactions).toHaveBeenCalled()
+    })
+})
