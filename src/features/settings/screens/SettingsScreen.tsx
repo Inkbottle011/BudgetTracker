@@ -25,6 +25,10 @@ export default function SettingsScreen() {
     return (
         <Page maxWidth={720}>
             <PageTitle title="Settings" />
+            {/* Most important first: securing your account, then your banks (which need two-factor on), privacy, then looks */}
+            <TwoFactorSection onChange={setTwoFactorOn} />
+            <LinkedBanksSection twoFactorOn={twoFactorOn} />
+            <PrivacySection />
             <Section title="Appearance">
                 <Text style={styles.groupLabel}>Theme</Text>
                 <View style={styles.themes}>
@@ -37,9 +41,6 @@ export default function SettingsScreen() {
                 <Text style={styles.help}>Match device follows your phone or computer's light or dark setting. Picking a theme also sets the moving background's color.</Text>
             </Section>
             <BackgroundSection />
-            <PrivacySection />
-            <TwoFactorSection onChange={setTwoFactorOn} />
-            <LinkedBanksSection twoFactorOn={twoFactorOn} />
             <ForumLink />
             <AboutSection />
         </Page>

@@ -501,3 +501,27 @@ describe('Suggestions forum', () => {
         expect(mockNavigate).toHaveBeenCalledWith('Forum')
     })
 })
+
+describe('order', () => {
+    /** Every piece of text on the page, top to bottom. */
+    function textsInOrder(): string[] {
+        const out: string[] = []
+        const walk = (n: any) => {
+            if (n == null) return
+            if (typeof n === 'string') { out.push(n); return }
+            if (Array.isArray(n)) { n.forEach(walk); return }
+            walk(n.children)
+        }
+        walk(screen.toJSON())
+        return out
+    }
+
+    it('puts what matters most first: security and banks, then privacy, then looks, then the rest', async () => {
+        await renderSettings()
+        const titles = ['Two-factor sign-in', 'Linked banks', 'Privacy mode', 'Appearance', 'Moving background', 'Suggestions forum', 'About this app']
+        const texts = textsInOrder()
+        const positions = titles.map(t => texts.indexOf(t))
+        expect(positions).not.toContain(-1)
+        expect([...positions].sort((a, b) => a - b)).toEqual(positions)
+    })
+})
