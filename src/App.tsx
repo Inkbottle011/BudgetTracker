@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native'
+import { NavigationContainer, DefaultTheme, DarkTheme, createNavigationContainerRef } from '@react-navigation/native'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { View, Text, TouchableOpacity, Pressable, ActivityIndicator, StyleSheet, Modal, Platform } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
@@ -10,6 +10,10 @@ import { AuthScreen, BrandMark, ResetPasswordScreen, TwoFactorPrompt, needsTwoFa
 import { TransactionsScreen } from './features/transactions'
 import { BudgetScreen } from './features/budget'
 import { SettingsScreen } from './features/settings'
+import { ForumScreen } from './features/forum'
+
+/** Lets the top bar (outside the pages) open a page, such as the forum from the account menu. */
+export const navigationRef = createNavigationContainerRef<any>()
 import { SubscriptionsScreen, syncSubscriptionCharges } from './features/subscriptions'
 import { SpaceBackground } from './features/appearance'
 import { ErrorBoundary } from './shared/ui/ErrorBoundary'
@@ -93,6 +97,10 @@ export function AppHeader({ userEmail }: { userEmail: string }) {
                 <Text style={styles.menuEmail} numberOfLines={1}>{userEmail}</Text>
               </View>
             </View>
+            <Button variant="secondary" label="Suggestions forum" onPress={() => {
+              setShowProfile(false)
+              if (navigationRef.isReady()) navigationRef.navigate('Forum')
+            }} />
             <Button variant="danger" label="Sign out" onPress={handleSignOut} loading={signingOut} />
           </Pressable>
         </Pressable>
@@ -151,7 +159,7 @@ function MainApp({ userEmail }: { userEmail: string }) {
     <View style={{ flex: 1, backgroundColor: backdrop }}>
       <AppHeader userEmail={userEmail} />
       <UpdateBanner />
-      <NavigationContainer theme={navTheme}>
+      <NavigationContainer theme={navTheme} ref={navigationRef}>
         <Tab.Navigator
           screenLayout={tabScreenLayout}
           screenOptions={({ route }) => ({
@@ -172,6 +180,8 @@ function MainApp({ userEmail }: { userEmail: string }) {
           <Tab.Screen name="Subscriptions" component={SubscriptionsScreen} />
           <Tab.Screen name="Budget" component={BudgetScreen} />
           <Tab.Screen name="Settings" component={SettingsScreen} />
+          {/* Opened from the account menu and Settings, not the tab bar */}
+          <Tab.Screen name="Forum" component={ForumScreen} options={{ tabBarButton: () => null, tabBarItemStyle: { display: 'none' } }} />
         </Tab.Navigator>
       </NavigationContainer>
     </View>

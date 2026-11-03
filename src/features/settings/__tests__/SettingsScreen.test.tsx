@@ -12,8 +12,10 @@ jest.mock('../../bank/logic/bankConnect', () => ({
     openBankConnect: jest.fn(),
 }))
 // Like the real one: runs when the screen is shown and again whenever the callback changes
+const mockNavigate = jest.fn()
 jest.mock('@react-navigation/native', () => ({
     useFocusEffect: (effect: () => void) => require('react').useEffect(effect, [effect]),
+    useNavigation: () => ({ navigate: mockNavigate }),
 }))
 
 const showToast = jest.fn()
@@ -489,5 +491,13 @@ describe('linking with SimpleFIN', () => {
         await renderSettings()
         await fireEvent.press(await screen.findByText('Unlink'))
         expect(screen.getByText(/also remove this app in SimpleFIN Bridge/)).toBeTruthy()
+    })
+})
+
+describe('Suggestions forum', () => {
+    it('opens the forum', async () => {
+        await renderSettings()
+        await fireEvent.press(screen.getByRole('button', { name: 'Open the forum' }))
+        expect(mockNavigate).toHaveBeenCalledWith('Forum')
     })
 })
