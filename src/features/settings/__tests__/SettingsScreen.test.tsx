@@ -419,3 +419,18 @@ describe('About this app', () => {
         expect(await screen.findByText('A newer version is online. Reload the page to get it.')).toBeTruthy()
     })
 })
+
+describe('Privacy mode settings', () => {
+    it('lets you choose what privacy mode hides', async () => {
+        const { usePrivacy, DEFAULT_HIDDEN_KINDS } = require('../../../shared/ui/Private')
+        usePrivacy.setState({ hidden: false, kinds: DEFAULT_HIDDEN_KINDS, loaded: true })
+        await renderSettings()
+        expect(screen.getByText('Privacy mode')).toBeTruthy()
+        expect(screen.getByRole('checkbox', { name: 'Bank balances' }).props.accessibilityState.checked).toBe(true)
+        expect(screen.getByRole('checkbox', { name: 'Transaction amounts' }).props.accessibilityState.checked).toBe(false)
+        await fireEvent.press(screen.getByRole('checkbox', { name: 'Transaction amounts' }))
+        expect(usePrivacy.getState().kinds).toContain('transactions')
+        await fireEvent.press(screen.getByRole('checkbox', { name: 'Bank balances' }))
+        expect(usePrivacy.getState().kinds).not.toContain('balances')
+    })
+})

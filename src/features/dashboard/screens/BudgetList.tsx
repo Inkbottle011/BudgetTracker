@@ -42,13 +42,13 @@ export function BudgetList({ title, rows, uncategorized, goals, onCategorize, on
                         <View style={styles.rowTop}>
                             <Text style={styles.name} numberOfLines={1}>{r.name}</Text>
                             <Text style={[styles.status, tabular, { color: statusColor }]}>
-                                {r.planned === 0 ? 'No budget' : <Private>{over ? `${money(r.spent - r.planned)} over` : `${money(r.left)} left`}</Private>}
+                                {r.planned === 0 ? 'No budget' : <Private kind="budget">{over ? `${money(r.spent - r.planned)} over` : `${money(r.left)} left`}</Private>}
                             </Text>
                         </View>
                         <View style={styles.track}>
                             <View style={[styles.fill, { width: `${share * 100}%`, backgroundColor: barColor }]} />
                         </View>
-                        <Text style={[styles.detail, tabular]}><Private>{r.planned > 0 ? `${money(r.spent)} of ${money(r.planned)}` : `${money(r.spent)} spent`}</Private></Text>
+                        <Text style={[styles.detail, tabular]}><Private kind="budget">{r.planned > 0 ? `${money(r.spent)} of ${money(r.planned)}` : `${money(r.spent)} spent`}</Private></Text>
                     </TouchableOpacity>
                 )
             })}
@@ -57,7 +57,7 @@ export function BudgetList({ title, rows, uncategorized, goals, onCategorize, on
                 <View style={[styles.row, styles.uncat]}>
                     <View style={styles.rowTop}>
                         <Text style={styles.name}>Uncategorized</Text>
-                        <Text style={[styles.status, tabular, { color: C.ink }]}><Private>{money(uncategorized)}</Private></Text>
+                        <Text style={[styles.status, tabular, { color: C.ink }]}><Private kind="totals">{money(uncategorized)}</Private></Text>
                     </View>
                     <TouchableOpacity onPress={onCategorize}>
                         <Text style={styles.link}>Give these a category</Text>
@@ -76,7 +76,7 @@ export function BudgetList({ title, rows, uncategorized, goals, onCategorize, on
                                 <View style={styles.rowTop}>
                                     <Text style={styles.name} numberOfLines={1}>{g.name}</Text>
                                     <Text style={[styles.status, tabular, reached && { color: g.type === 'savings' ? C.saved : C.good }]}>
-                                        {reached && g.planned !== 0 ? 'Reached' : <Private>{g.planned === 0 ? money(g.actual) : `${money(g.planned - g.actual)} to go`}</Private>}
+                                        {reached && g.planned !== 0 ? 'Reached' : <Private kind="budget">{g.planned === 0 ? money(g.actual) : `${money(g.planned - g.actual)} to go`}</Private>}
                                     </Text>
                                 </View>
                                 {g.planned > 0 && (
@@ -84,7 +84,7 @@ export function BudgetList({ title, rows, uncategorized, goals, onCategorize, on
                                         <View style={[styles.fill, { width: `${share * 100}%`, backgroundColor: g.type === 'savings' ? C.savedMark : C.incomeMark }]} />
                                     </View>
                                 )}
-                                {g.planned > 0 && <Text style={[styles.detail, tabular]}><Private>{money(g.actual)} of {money(g.planned)}</Private></Text>}
+                                {g.planned > 0 && <Text style={[styles.detail, tabular]}><Private kind="budget">{money(g.actual)} of {money(g.planned)}</Private></Text>}
                             </View>
                         )
                     })}

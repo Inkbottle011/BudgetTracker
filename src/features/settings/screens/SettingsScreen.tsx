@@ -8,6 +8,7 @@ import { SCENES, SPEEDS, AMOUNTS, TINTS, tintSwatch, Scene, Speed, Amount } from
 import { THEME_LIST, Theme } from '../../../shared/theme/themes'
 import * as version from '../../../shared/version'
 import { UpdateBanner } from '../../../shared/ui/UpdateBanner'
+import { usePrivacy, PRIVATE_KINDS } from '../../../shared/ui/Private'
 import { Button } from '../../../shared/ui/ui'
 
 const APPEARANCE: { value: Preference; label: string }[] = [
@@ -35,6 +36,7 @@ export default function SettingsScreen() {
                 <Text style={styles.help}>Match device follows your phone or computer's light or dark setting. Picking a theme also sets the moving background's color.</Text>
             </Section>
             <BackgroundSection />
+            <PrivacySection />
             <TwoFactorSection onChange={setTwoFactorOn} />
             <LinkedBanksSection twoFactorOn={twoFactorOn} />
             <AboutSection />
@@ -132,6 +134,11 @@ function Toggle({ label, on, onChange }: { label: string; on: boolean; onChange:
 }
 
 const makeStyles = (C: Palette) => StyleSheet.create({
+    checkRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
+    checkBox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: C.line, alignItems: 'center', justifyContent: 'center' },
+    checkMark: { fontSize: 14, fontWeight: '800', lineHeight: 16 },
+    checkLabel: { fontSize: 15, color: C.ink, fontWeight: '500' },
+    checkHelp: { fontSize: 12, color: C.muted, marginTop: 1 },
     help: { fontSize: 13, color: C.muted, marginTop: 10, lineHeight: 18 },
     groupLabel: { fontSize: 13, fontWeight: '600', color: C.text, marginBottom: 8 },
     groupGap: { marginTop: 18 },
@@ -183,6 +190,37 @@ function AboutSection() {
             <Text style={styles.help}>{current ? `Version ${current}` : 'Version: the app installed on this device'}</Text>
             {current && <Button small variant="secondary" label="Check for updates" onPress={check} loading={checking} style={{ alignSelf: 'flex-start', marginTop: 8 }} />}
             {result && <Text style={[styles.help, { marginTop: 8 }]}>{result}</Text>}
+        </Section>
+    )
+}
+
+/** What privacy mode (the eye in the top bar) hides. */
+function PrivacySection() {
+    const styles = useStyles(makeStyles)
+    const { c: C } = useTheme()
+    const { hidden, kinds, toggle, setKind } = usePrivacy()
+    return (
+        <Section title="Privacy mode">
+            <Text style={[styles.help, { marginTop: 0 }]}>
+                For using the app in public. The eye in the top bar turns it on and off{hidden ? ' (it\'s on now)' : ''}. Point at or tap a hidden amount to see it.
+            </Text>
+            <Text style={[styles.groupLabel, styles.groupGap]}>What to hide</Text>
+            {PRIVATE_KINDS.map(k => {
+                const on = kinds.includes(k.value)
+                return (
+                    <TouchableOpacity key={k.value} accessibilityRole="checkbox" accessibilityLabel={k.label} accessibilityState={{ checked: on }}
+                        onPress={() => setKind(k.value, !on)} style={styles.checkRow}>
+                        <View style={[styles.checkBox, on && { backgroundColor: C.primary, borderColor: C.primary }]}>
+                            {on && <Text style={[styles.checkMark, { color: C.onPrimary }]}>✓</Text>}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.checkLabel}>{k.label}</Text>
+                            <Text style={styles.checkHelp}>{k.help}</Text>
+                        </View>
+                    </TouchableOpacity>
+                )
+            })}
+            <Button small variant="secondary" label={hidden ? 'Turn privacy mode off' : 'Turn privacy mode on'} onPress={toggle} style={{ alignSelf: 'flex-start', marginTop: 10 }} />
         </Section>
     )
 }

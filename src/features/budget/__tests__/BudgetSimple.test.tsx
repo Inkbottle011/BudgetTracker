@@ -147,9 +147,9 @@ it('remembers Simple or By month for next time', async () => {
     expect(await screen.findByLabelText('Rent, Jan')).toBeTruthy()
 })
 
-it('privacy mode hides every amount, in both views', async () => {
+it('privacy mode can hide every amount, in both views', async () => {
     const { usePrivacy } = require('../../../shared/ui/Private')
-    usePrivacy.setState({ hidden: true, loaded: true })
+    usePrivacy.setState({ hidden: true, kinds: ['balances', 'totals', 'budget', 'transactions'], loaded: true })
     try {
         setWidth(1200)
         await renderScreen()
@@ -157,5 +157,16 @@ it('privacy mode hides every amount, in both views', async () => {
         expect(shown()).toEqual([])
         await fireEvent.press(screen.getByRole('button', { name: 'By month' }))
         expect(shown()).toEqual([])
+    } finally { usePrivacy.setState({ hidden: false }) }
+})
+
+it('privacy mode with its starting choices hides totals but keeps budget amounts readable', async () => {
+    const { usePrivacy, DEFAULT_HIDDEN_KINDS } = require('../../../shared/ui/Private')
+    usePrivacy.setState({ hidden: true, kinds: DEFAULT_HIDDEN_KINDS, loaded: true })
+    try {
+        await renderScreen()
+        expect(screen.getByRole('button', { name: 'Change Rent, $900 a month' })).toBeTruthy()
+        expect(screen.getAllByText('$900').length).toBeGreaterThan(0)          // Rent's amount
+        expect(screen.queryByText('$2,500')).toBeNull()                         // October's left over
     } finally { usePrivacy.setState({ hidden: false }) }
 })

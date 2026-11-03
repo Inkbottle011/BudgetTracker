@@ -81,7 +81,7 @@ export function SplitSection({ open, rows, total, error, onOpen, onClose, onChan
             </View>
             {owed > 0 && (
                 <Text style={styles.summary}>
-                    Others owe you <Private>{formatMoney(owed)}</Private> · your share <Private>{formatMoney(Math.max(0, amount - owed))}</Private>
+                    Others owe you <Private kind="transactions">{formatMoney(owed)}</Private> · your share <Private kind="transactions">{formatMoney(Math.max(0, amount - owed))}</Private>
                 </Text>
             )}
             {error && <Text style={styles.error}>{error}</Text>}

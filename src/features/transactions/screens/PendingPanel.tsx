@@ -22,7 +22,7 @@ export function PendingPanel({ refreshWhen }: { refreshWhen: unknown }) {
                 <View key={p.id} style={[styles.row, i > 0 && styles.rowLine]}>
                     <Text style={[styles.date, tabular]}>{shortDate(p.date)}</Text>
                     <Text style={styles.name} numberOfLines={1}>{p.name || 'Pending charge'}</Text>
-                    <Text style={[styles.amount, tabular, p.money_in && { color: C.good }]}><Private>{p.money_in ? '+' : '-'}{formatMoney(p.amount)}</Private></Text>
+                    <Text style={[styles.amount, tabular, p.money_in && { color: C.good }]}><Private kind="transactions">{p.money_in ? '+' : '-'}{formatMoney(p.amount)}</Private></Text>
                 </View>
             ))}
         </Section>

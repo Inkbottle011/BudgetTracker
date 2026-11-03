@@ -58,7 +58,7 @@ A personal finance app for planning a budget, tracking every transaction (typed 
 - Settings shows the version you're running and can check for a newer one; a banner offers a reload when a new version is published
 
 **Look and feel**
-- **Privacy mode** for using the app in public: the eye in the top bar blurs every amount (point at or tap one to see it; dots in the phone app), remembered on this device
+- **Privacy mode** for using the app in public: the eye in the top bar blurs amounts (point at or tap one to see it; dots in the phone app). In Settings, choose what it hides: bank balances, totals and summaries, budget amounts, transaction amounts (balances and totals to start). Remembered on this device
 - Five color themes (Night sky, Ocean, Forest, Sunset, Classic) in light or dark; money colors mean the same in all of them
 - An optional moving space background (stars, warp or nebula) that holds still if your device asks for reduced motion
 

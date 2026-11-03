@@ -43,8 +43,8 @@ export function SpendingSummary({ heading, spent, planned, elapsed, income, save
             <View style={styles.main}>
                 <Text style={styles.label}>{heading}</Text>
                 <View style={styles.amountRow}>
-                    <Text style={[styles.amount, tabular]}><Private>{money(spent)}</Private></Text>
-                    {hasPlan && <Text style={[styles.of, tabular]}>of <Private>{money(planned)}</Private> planned</Text>}
+                    <Text style={[styles.amount, tabular]}><Private kind="totals">{money(spent)}</Private></Text>
+                    {hasPlan && <Text style={[styles.of, tabular]}>of <Private kind="totals">{money(planned)}</Private> planned</Text>}
                 </View>
                 {hasPlan && (
                     <View style={styles.meter} accessibilityLabel={`${Math.round(share * 100)}% of your plan spent`}>
@@ -52,8 +52,8 @@ export function SpendingSummary({ heading, spent, planned, elapsed, income, save
                         {elapsed > 0 && elapsed < 1 && <View style={[styles.today, { left: `${elapsed * 100}%` }]} accessibilityLabel="Today" />}
                     </View>
                 )}
-                <Text style={styles.note}><Private>{note}</Private></Text>
-                {pending > 0 && <Text style={styles.pending}>Plus <Private>{money(pending)}</Private> pending at your bank, not counted until it posts.</Text>}
+                <Text style={styles.note}><Private kind="totals">{note}</Private></Text>
+                {pending > 0 && <Text style={styles.pending}>Plus <Private kind="totals">{money(pending)}</Private> pending at your bank, not counted until it posts.</Text>}
             </View>
             <View style={[styles.side, wide && styles.sideWide]}>
                 <Figure label="Earned" value={income} tone="income" />
@@ -73,7 +73,7 @@ function Figure({ label, value, signed, tone }: { label: string; value: number; 
     return (
         <View style={styles.figure}>
             <Text style={styles.figLabel}>{label}</Text>
-            <Text style={[styles.figValue, tabular, { color }]}><Private>{signed && value > 0 ? '+' : ''}{money(value)}</Private></Text>
+            <Text style={[styles.figValue, tabular, { color }]}><Private kind="totals">{signed && value > 0 ? '+' : ''}{money(value)}</Private></Text>
         </View>
     )
 }

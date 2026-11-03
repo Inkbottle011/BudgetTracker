@@ -119,7 +119,7 @@ export function UncategorizedPanel({ transactions, budgetCategories, onChanged }
                                     <View style={{ flex: 1, minWidth: 0 }}>
                                         <Text style={styles.name} numberOfLines={2}>{g.name}</Text>
                                         <Text style={[styles.meta, tabular]}>
-                                            {g.count} transaction{g.count === 1 ? '' : 's'} · <Private>{money(g.total)}</Private>
+                                            {g.count} transaction{g.count === 1 ? '' : 's'} · <Private kind="transactions">{money(g.total)}</Private>
                                         </Text>
                                     </View>
                                     {busy === g.key ? <ActivityIndicator size="small" color={C.primary} /> : (
