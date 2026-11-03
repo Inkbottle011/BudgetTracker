@@ -71,6 +71,18 @@ export function useDashboardLogic() {
         : view === 'week' ? (isCurrent ? 'Budget this week' : `Budget for ${title}`)
         : view === 'month' ? `Budget for ${monthName}` : `Budget for ${range.start.slice(0, 4)}`
 
+    // Every transaction in the day, week, month or year shown, newest first
+    const periodTransactions = transactions.filter(t => inRange(t.date, range))
+        .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+        .map(t => ({ ...t, sub: String(t.type) === 'transfer' ? undefined : t.category_label || 'No category' }))
+    const periodListTitle = view === 'day' ? (title === 'Today' ? "Today's transactions" : `Transactions on ${title}`)
+        : view === 'week' ? (isCurrent ? "This week's transactions" : `Transactions ${title}`)
+        : view === 'month' ? `Transactions in ${monthName}` : `Transactions in ${range.start.slice(0, 4)}`
+    const where = view === 'day' ? (title === 'Today' ? 'today' : `on ${title}`)
+        : view === 'week' ? (isCurrent ? 'this week' : title)
+        : view === 'month' ? `in ${monthName}` : `in ${range.start.slice(0, 4)}`
+    const periodEmpty = `Nothing ${where}${isCurrent ? ' yet' : ''}.`
+
     const upcoming = upcomingCharges(subscriptions, 30).slice(0, 6).map(c => ({
         id: c.id, name: c.name, date: c.nextDate, type: c.type, amount: c.amount, sub: c.recurring,
     }))
@@ -96,5 +108,6 @@ export function useDashboardLogic() {
         summary, plannedTotal: budget.totalPlanned,
         elapsed: periodElapsed(range, today), daysLeft: daysLeftAfterToday(range, today),
         budget, goals, upcoming, recent, bank, updatedAt, possibleSubscriptions, pendingSpent,
+        periodTransactions, periodListTitle, periodEmpty,
     }
 }
