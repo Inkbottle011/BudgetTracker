@@ -1,9 +1,18 @@
-# Linking banks (Plaid)
+# Linking banks (Plaid and SimpleFIN)
 
 New transactions from linked banks are added automatically every morning, and balances are
 refreshed at the same time (credit cards show what's owed and credit left on the dashboard).
 Access is read-only: the app can see transactions but can't move money. Bank passwords are typed
 into Plaid's sign-in window (or the bank's own site) and never reach the app.
+
+There are two ways to link a bank:
+
+| | Who pays | Who can use it |
+|---|---|---|
+| **Plaid** | You (the app's owner), per linked bank | Only the people listed in the `PLAID_USERS` secret |
+| **SimpleFIN** | Each person, directly to SimpleFIN ($1.50 a month or $15 a year) | Everyone |
+
+Banks keep syncing through whichever one they were linked with.
 
 ## How it fits together
 
@@ -51,6 +60,7 @@ Supabase dashboard -> **Edge Functions -> Secrets**, add:
 | `PLAID_CLIENT_ID` | Your client_id |
 | `PLAID_SECRET` | Your Sandbox secret (later: Production secret) |
 | `PLAID_ENV` | `sandbox` (later: `production`) |
+| `PLAID_USERS` | Who may link with Plaid: email addresses (or user IDs), separated by commas, e.g. `you@example.com`. Everyone else links with SimpleFIN. If it's empty, nobody can link a *new* bank with Plaid (banks already linked keep syncing). |
 
 No `openssl`? Any password manager's generator works: 32+ random characters for `CRON_SECRET`;
 for `BANK_TOKEN_KEY` it must be exactly 32 random bytes in base64 (44 characters ending in `=`),
@@ -122,3 +132,27 @@ Change the function secrets `PLAID_SECRET` to your **Production** secret and `PL
 - **No balance shown**: balances are fetched on each sync; "Balance appears after the next sync"
   means none has been fetched yet.
 - **Function logs**: Supabase dashboard -> Edge Functions -> bank -> Logs. Tokens are never logged.
+
+## SimpleFIN (for everyone else)
+
+Nothing to set up on the server: SimpleFIN works as soon as the `bank` function is deployed, with
+the same `BANK_TOKEN_KEY` and `CRON_SECRET` as above (no Plaid keys needed).
+
+What each person does (the app walks them through it in **Settings -> Linked banks -> Link a bank**):
+1. Sign up at [bridge.simplefin.org](https://bridge.simplefin.org) and pay SimpleFIN ($1.50 a month
+   or $15 a year). Connect their banks there: bank passwords go to SimpleFIN, never to this app.
+2. In SimpleFIN Bridge: **Apps -> New connection -> Create setup token**, and copy it.
+3. Paste it into the app and tap **Link with SimpleFIN**.
+
+How it works and what to know:
+- The server swaps the one-time setup token for a read-only access link, which is stored encrypted
+  like Plaid tokens. A token can only be used once; if it says it was already used and that wasn't
+  them, they should disable it in SimpleFIN Bridge and make a new one.
+- The server only ever contacts SimpleFIN's own servers (`bridge.simplefin.org`,
+  `beta-bridge.simplefin.org`), whatever a pasted token contains.
+- SimpleFIN doesn't say which accounts are credit cards, so the app guesses from the account name
+  (and money owed). It doesn't suggest categories either: the app's own guesses are used.
+- SimpleFIN usually refreshes about once a day, so new purchases can take a day to appear.
+- Unlinking in the app stops syncing; to stop sharing completely, remove the app in SimpleFIN
+  Bridge (Apps) too. If someone's SimpleFIN subscription lapses, their bank shows as needing to be
+  linked again.

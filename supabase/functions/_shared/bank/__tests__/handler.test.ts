@@ -128,3 +128,40 @@ describe('bank server function', () => {
         expect(JSON.stringify(res.body)).not.toContain('token_abc')
     })
 })
+
+describe('who can use which bank provider', () => {
+    const notOnPlaid = () => env({ canUseMain: () => false, mainProvider: 'plaid' })
+
+    it('tells the app which ways to link a bank this person can use', async () => {
+        expect((await json(await handleBankRequest(request({ action: 'providers' }, ALICE_2FA), env({ mainProvider: 'plaid' }).e))).body)
+            .toEqual({ providers: ['plaid', 'simplefin'] })
+        expect((await json(await handleBankRequest(request({ action: 'providers' }, ALICE_2FA), notOnPlaid().e))).body)
+            .toEqual({ providers: ['simplefin'] })
+    })
+
+    it('refuses Plaid to anyone it isn\'t turned on for, so nobody else adds to your Plaid bill', async () => {
+        const { e, service } = notOnPlaid()
+        const session = await json(await handleBankRequest(request({ action: 'link-session' }, ALICE_2FA), e))
+        expect(session).toEqual({ status: 403, body: { error: 'Linking with Plaid isn\'t available for your account. Use SimpleFIN instead.', code: 'provider_not_allowed' } })
+        const link = await handleBankRequest(request({ action: 'link', publicToken: 'public-abc', syncFrom: '2026-09-01' }, ALICE_2FA), e)
+        expect(link.status).toBe(403)
+        expect(service.startLink).not.toHaveBeenCalled()
+        expect(service.linkBank).not.toHaveBeenCalled()
+    })
+
+    it('links with a SimpleFIN setup token for anyone', async () => {
+        const { e, service } = notOnPlaid()
+        const res = await handleBankRequest(request({ action: 'link', setupToken: 'aHR0cHM6Ly9leGFtcGxl', syncFrom: '2026-09-01' }, ALICE_2FA), e)
+        expect(res.status).toBe(200)
+        expect(service.linkBank).toHaveBeenCalledWith(expect.anything(), {
+            userId: 'alice', provider: 'simplefin', publicToken: 'aHR0cHM6Ly9leGFtcGxl', institutionName: null, syncFrom: '2026-09-01',
+        })
+    })
+
+    it('never repeats a setup token in an error', async () => {
+        const { e, service } = env()
+        service.linkBank.mockRejectedValueOnce(new Error('Could not claim aHR0cHM6Ly9leGFtcGxl'))
+        const res = await json(await handleBankRequest(request({ action: 'link', setupToken: 'aHR0cHM6Ly9leGFtcGxl', syncFrom: '2026-09-01' }, ALICE_2FA), e))
+        expect(JSON.stringify(res.body)).not.toContain('aHR0cHM6Ly9leGFtcGxl')
+    })
+})

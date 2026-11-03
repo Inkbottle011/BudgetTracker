@@ -4,18 +4,18 @@ import { useFocusEffect } from '@react-navigation/native'
 import { supabase } from '../../../shared/supabase'
 import {
     fetchLinkedBanks, callBank, describeStatus, suggestedStartDate, earliestStartDate, accountLabel, LinkedBank,
-    fetchPossibleDuplicates, resolvePossibleDuplicate, reviewNote, PossibleDuplicate, DuplicateChoice,
+    fetchPossibleDuplicates, resolvePossibleDuplicate, reviewNote, PossibleDuplicate, DuplicateChoice, linkMethods,
 } from '../logic/bank'
 import { PossibleDuplicates } from './PossibleDuplicates'
 import { bankLinkingAvailable, openBankConnect } from '../logic/bankConnect'
 import { parseDate, todayString } from '../../../shared/money/entry'
 import { useToastContext } from '../../../shared/ui/ToastContext'
 import { useTheme, useStyles, Palette, tabular } from '../../../shared/theme/theme'
-import { Section, Button, Field } from '../../../shared/ui/ui'
+import { Section, Button, Field, Segmented } from '../../../shared/ui/ui'
 import { makeSettingsStyles } from '../../../shared/ui/settingsStyles'
 import { latestTransactionDate } from '../../transactions/api'
 
-/** Settings: link banks (Plaid by default), see their status, sync now, unlink. */
+/** Settings: link banks (Plaid for people it's turned on for, SimpleFIN for everyone), see their status, sync now, unlink. */
 export function LinkedBanksSection({ twoFactorOn }: { twoFactorOn: boolean }) {
     const { c: C } = useTheme()
     const styles = useStyles(makeStyles)
@@ -27,10 +27,17 @@ export function LinkedBanksSection({ twoFactorOn }: { twoFactorOn: boolean }) {
     const [startDate, setStartDate] = useState('')
     const [confirmUnlink, setConfirmUnlink] = useState<string | null>(null)
     const [duplicates, setDuplicates] = useState<PossibleDuplicate[]>([])
+    const [methods, setMethods] = useState<string[]>([])
+    const [method, setMethod] = useState<'main' | 'simplefin'>('main')
+    const [setupToken, setSetupToken] = useState('')
+    // Plaid (or Teller) needs its sign-in window, on the website, and only for people it's turned on for
+    const canMain = methods.some(m => m !== 'simplefin') && bankLinkingAvailable()
+    const useSimplefin = !canMain || method === 'simplefin'
 
     async function load() {
         if (!twoFactorOn) { setBanks([]); setDuplicates([]); return }
         setLoading(true)
+        linkMethods().then(setMethods)
         try { setBanks(await fetchLinkedBanks()) } catch (e: any) { showToast(e?.message ?? "Couldn't load linked banks", 'error') }
         // Possible duplicates are a nice-to-have here: never block the bank list on them
         try { setDuplicates(await fetchPossibleDuplicates()) } catch { setDuplicates([]) }
@@ -54,11 +61,36 @@ export function LinkedBanksSection({ twoFactorOn }: { twoFactorOn: boolean }) {
         setLinking(true)
     }
 
-    async function continueToBank() {
+    /** The start date, checked; null (with a message) if it can't be used. */
+    function checkedStart(): string | null {
         const syncFrom = parseDate(startDate)
-        if (!syncFrom) { showToast('Pick a start date like 2026-10-01', 'error'); return }
+        if (!syncFrom) { showToast('Pick a start date like 2026-10-01', 'error'); return null }
         const earliest = earliestStartDate(todayString())
-        if (syncFrom < earliest) { showToast(`Banks share history back to ${earliest}. Pick that date or later.`, 'error'); return }
+        if (syncFrom < earliest) { showToast(`Banks share history back to ${earliest}. Pick that date or later.`, 'error'); return null }
+        return syncFrom
+    }
+
+    async function linkWithSimplefin() {
+        const syncFrom = checkedStart()
+        if (!syncFrom) return
+        setBusy('link')
+        try {
+            const result = await callBank('link', { setupToken: setupToken.trim(), syncFrom })
+            showToast(result?.status === 'pending'
+                ? "Your banks are linked through SimpleFIN. Their transactions are still loading; tap Sync now in a few minutes."
+                : `Your banks are linked through SimpleFIN. Added ${result?.added ?? 0} transactions.${reviewNote(result?.toReview)}`)
+            setSetupToken('')
+            setLinking(false)
+            await load()
+        } catch (e: any) {
+            showToast(e?.message ?? "Couldn't link with SimpleFIN", 'error')
+        }
+        setBusy(null)
+    }
+
+    async function continueToBank() {
+        const syncFrom = checkedStart()
+        if (!syncFrom) return
         setBusy('link')
         try {
             const signIn = await openBankConnect()
@@ -135,7 +167,10 @@ export function LinkedBanksSection({ twoFactorOn }: { twoFactorOn: boolean }) {
                             <Text style={[styles.status, bank.status !== 'active' && styles.statusBad]}>{describeStatus(bank)}</Text>
                             {confirmUnlink === bank.id && (
                                 <View style={[styles.confirm, { marginTop: 10 }]}>
-                                    <Text style={styles.confirmText}>Unlink {bank.institution_name ?? 'this bank'}? Transactions already imported stay. This can't be undone: to sync it again you'd link it again.</Text>
+                                    <Text style={styles.confirmText}>
+                                        Unlink {bank.institution_name ?? 'this bank'}? Transactions already imported stay. This can't be undone: to sync it again you'd link it again.
+                                        {bank.provider === 'simplefin' ? ' To stop sharing completely, also remove this app in SimpleFIN Bridge (Apps).' : ''}
+                                    </Text>
                                     <View style={styles.row}>
                                         <Button variant="danger" small label="Yes, unlink" onPress={() => unlink(bank)} loading={busy === bank.id} disabled={!!busy} />
                                         <Button variant="ghost" small label="Cancel" onPress={() => setConfirmUnlink(null)} />
@@ -147,10 +182,14 @@ export function LinkedBanksSection({ twoFactorOn }: { twoFactorOn: boolean }) {
 
                     <PossibleDuplicates items={duplicates} busyId={busy} onResolve={resolve} />
 
-                    {!bankLinkingAvailable() ? (
+                    {!canMain && !methods.includes('simplefin') ? (
                         <Text style={styles.notice}>Link banks from the website version of the app.</Text>
                     ) : linking ? (
                         <View style={styles.linkBox}>
+                            {canMain && (
+                                <Segmented<'main' | 'simplefin'> value={method} onChange={setMethod} style={{ marginBottom: 14 }}
+                                    options={[{ value: 'main', label: 'Plaid' }, { value: 'simplefin', label: 'SimpleFIN' }]} />
+                            )}
                             <View style={styles.dateField}>
                                 <Field
                                     label="Import transactions from"
@@ -165,10 +204,25 @@ export function LinkedBanksSection({ twoFactorOn }: { twoFactorOn: boolean }) {
                                 your latest transaction, ones you already have are matched and skipped, and any we're unsure about are shown
                                 here for you to check.
                             </Text>
-                            <View style={styles.row}>
-                                <Button label="Continue to your bank" onPress={continueToBank} loading={busy === 'link'} disabled={!!busy} />
-                                <Button variant="ghost" label="Cancel" onPress={() => setLinking(false)} />
-                            </View>
+                            {useSimplefin ? (
+                                <>
+                                    <Text style={styles.stepTitle}>Link through SimpleFIN</Text>
+                                    <Text style={styles.step}>1. Sign up at bridge.simplefin.org ($1.50 a month or $15 a year, paid to SimpleFIN) and connect your banks there.</Text>
+                                    <Text style={styles.step}>2. In SimpleFIN Bridge, open Apps, then New connection, and tap Create setup token. Copy it.</Text>
+                                    <Text style={styles.step}>3. Paste it here. Each token works once; the app keeps a read-only key, encrypted.</Text>
+                                    <Field label="SimpleFIN setup token" value={setupToken} onChangeText={setSetupToken} placeholder="Paste your setup token"
+                                        autoCapitalize="none" autoCorrect={false} />
+                                    <View style={styles.row}>
+                                        <Button label="Link with SimpleFIN" onPress={linkWithSimplefin} loading={busy === 'link'} disabled={!!busy || !setupToken.trim()} />
+                                        <Button variant="ghost" label="Cancel" onPress={() => setLinking(false)} />
+                                    </View>
+                                </>
+                            ) : (
+                                <View style={styles.row}>
+                                    <Button label="Continue to your bank" onPress={continueToBank} loading={busy === 'link'} disabled={!!busy} />
+                                    <Button variant="ghost" label="Cancel" onPress={() => setLinking(false)} />
+                                </View>
+                            )}
                         </View>
                     ) : (
                         <Button label="Link a bank" onPress={startLinking} disabled={!!busy} style={styles.start} />
@@ -190,4 +244,6 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     linkBox: { marginTop: 8, borderTopWidth: 1, borderColor: C.line, paddingTop: 14 },
     dateField: { maxWidth: 220 },
     small: { fontSize: 13, color: C.muted, lineHeight: 18, marginTop: -4, marginBottom: 14 },
+    stepTitle: { fontSize: 15, fontWeight: '700', color: C.ink, marginBottom: 6 },
+    step: { fontSize: 13, color: C.text, lineHeight: 19, marginBottom: 6 },
 })

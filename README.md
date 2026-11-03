@@ -22,7 +22,8 @@ A personal finance app for planning a budget, tracking every transaction (typed 
 - Pending charges from your bank appear in their own section until they post
 
 **Linked banks** ([setup](docs/linking-banks.md))
-- Plaid (Teller also supported); syncs every morning and on demand, read-only, tokens encrypted and never readable by the app
+- **Plaid** for you (the people in the `PLAID_USERS` secret), **SimpleFIN** for everyone else: each person pays SimpleFIN themselves ($15 a year) and pastes a one-time setup token
+- Plaid, SimpleFIN (and Teller); syncs every morning and on demand, read-only, tokens encrypted and never readable by the app
 - Imports history from January 1; purchases are dated on the day you made them, not the day they posted
 - Finds money moving between your own accounts: transfers aren't counted twice, money put into savings counts as saved and money taken out counts as a withdrawal
 - Likely duplicates of transactions you entered yourself are held for you to review

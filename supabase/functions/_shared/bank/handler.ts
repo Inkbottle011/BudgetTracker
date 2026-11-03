@@ -7,7 +7,11 @@ export interface HandlerEnv {
     /** Shared secret the daily schedule sends; the sync-all action is refused without it. */
     cronSecret: string | undefined
     /** Checks a session token with Supabase Auth; null if it isn't valid. */
-    getUser: (jwt: string) => Promise<{ id: string; hasTwoFactor: boolean } | null>
+    getUser: (jwt: string) => Promise<{ id: string; hasTwoFactor: boolean; email?: string | null } | null>
+    /** The main provider's name (plaid or teller); default plaid */
+    mainProvider?: string
+    /** Whether this person may link banks with the main provider. Plaid costs money per bank, so it's limited. Default: yes */
+    canUseMain?: (user: { id: string; email?: string | null }) => boolean
     makeDeps: () => BankDeps
     service?: Pick<typeof realService, 'linkBank' | 'syncUser' | 'syncAll' | 'unlinkBank' | 'startLink'>
 }
@@ -43,7 +47,7 @@ export async function handleBankRequest(req: Request, env: HandlerEnv): Promise<
     let body: any
     try { body = await req.json() } catch { return reply(400, { error: 'Send a JSON body.' }) }
     const action = body?.action
-    const secretsToHide: string[] = [body?.accessToken, body?.publicToken].filter((s: unknown) => typeof s === 'string' && s) as string[]
+    const secretsToHide: string[] = [body?.accessToken, body?.publicToken, body?.setupToken].filter((s: unknown) => typeof s === 'string' && s) as string[]
 
     const fail = (e: unknown) => {
         let msg = e instanceof Error ? e.message : String(e)
@@ -67,16 +71,33 @@ export async function handleBankRequest(req: Request, env: HandlerEnv): Promise<
     }
     if (aalOf(jwt) !== 'aal2') return reply(403, { error: 'Enter your two-factor code to continue.', code: 'two_factor_needed' })
 
+    const main = env.mainProvider ?? 'plaid'
+    const mainAllowed = env.canUseMain ? env.canUseMain(user) : true
+    const notAllowed = () => reply(403, {
+        error: `Linking with ${main === 'plaid' ? 'Plaid' : main} isn't available for your account. Use SimpleFIN instead.`, code: 'provider_not_allowed',
+    })
+
     try {
         switch (action) {
+            case 'providers':
+                return reply(200, { providers: [...(mainAllowed ? [main] : []), 'simplefin'] })
             case 'link-session':
+                if (!mainAllowed) return notAllowed()
                 return reply(200, await service.startLink(env.makeDeps(), user.id))
             case 'link': {
+                const viaSetupToken = isText(body.setupToken)                                 // SimpleFIN
                 const viaPublicToken = isText(body.publicToken)                               // Plaid
                 const viaAccessToken = isText(body.accessToken) && isText(body.enrollmentId)  // Teller
-                if ((!viaPublicToken && !viaAccessToken) || !isDate(body.syncFrom)) {
+                if ((!viaSetupToken && !viaPublicToken && !viaAccessToken) || !isDate(body.syncFrom)) {
                     return reply(400, { error: 'Missing bank details. Please try linking again.' })
                 }
+                if (viaSetupToken) {
+                    return reply(200, await service.linkBank(env.makeDeps(), {
+                        userId: user.id, provider: 'simplefin', publicToken: body.setupToken.trim(),
+                        institutionName: isText(body.institutionName) ? body.institutionName : null, syncFrom: body.syncFrom,
+                    }))
+                }
+                if (!mainAllowed) return notAllowed()
                 return reply(200, await service.linkBank(env.makeDeps(), {
                     userId: user.id,   // always the signed-in user, never what the request claims
                     publicToken: viaPublicToken ? body.publicToken : undefined,

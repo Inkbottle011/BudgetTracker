@@ -7,12 +7,20 @@ import { BankProvider, ProviderError } from './types.ts'
 
 export interface BankDeps {
     db: any                    // Supabase client with the service role
+    /** The main provider (Plaid or Teller): used to start a link, and for any bank whose provider isn't listed below */
     provider: BankProvider
+    /** Every provider available, by name, so each linked bank syncs through the one it was linked with */
+    providers?: Record<string, BankProvider>
     key: string                // BANK_TOKEN_KEY
     today?: () => string       // YYYY-MM-DD, for tests
 }
 
 const RECHECK_DAYS = 7         // transactions can post a few days late, so look back this far each sync
+
+/** The provider a bank was linked with (or the main one). */
+export function providerOf(deps: BankDeps, name?: string | null): BankProvider {
+    return (name && deps.providers?.[name]) || deps.provider
+}
 
 function todayOf(deps: BankDeps) {
     return deps.today?.() ?? new Date().toISOString().slice(0, 10)
@@ -49,30 +57,34 @@ export async function linkBank(deps: BankDeps, input: {
     userId: string
     institutionName: string | null
     syncFrom: string
-    /** Plaid: the one-time token from its sign-in window, exchanged here for a lasting one */
+    /** Which provider (by name); the main one when left out */
+    provider?: string
+    /** Plaid: the one-time token from its sign-in window. SimpleFIN: the setup token. Exchanged here for a lasting one */
     publicToken?: string
     /** Teller: the sign-in window gives the lasting token and enrollment id directly */
     accessToken?: string
     enrollmentId?: string
 }) {
+    const provider = providerOf(deps, input.provider)
+    if (input.provider && provider.name !== input.provider) throw new Error(`Linking with ${input.provider} isn't set up on this server`)
     let accessToken = input.accessToken ?? ''
     let enrollmentId = input.enrollmentId ?? ''
     if (input.publicToken) {
-        if (!deps.provider.exchangeLinkResult) throw new Error('This bank provider does not use a one-time token')
-        ;({ accessToken, enrollmentId } = await deps.provider.exchangeLinkResult({ publicToken: input.publicToken }))
+        if (!provider.exchangeLinkResult) throw new Error('This bank provider does not use a one-time token')
+        ;({ accessToken, enrollmentId } = await provider.exchangeLinkResult({ publicToken: input.publicToken }))
     }
     if (!accessToken || !enrollmentId) throw new Error('Missing bank details. Please try linking again.')
 
     // Proves the token works before anything is stored
-    const accounts = await deps.provider.listAccounts(accessToken)
+    const accounts = await provider.listAccounts(accessToken)
 
     const { data: existing } = await deps.db.from('bank_connections').select('id, user_id')
-        .eq('provider', deps.provider.name).eq('provider_enrollment_id', enrollmentId)
+        .eq('provider', provider.name).eq('provider_enrollment_id', enrollmentId)
     if ((existing ?? []).some((c: any) => c.user_id !== input.userId)) throw new Error('This bank login is linked to another account')
 
     const { data: conn, error } = await deps.db.from('bank_connections').upsert({
         user_id: input.userId,
-        provider: deps.provider.name,
+        provider: provider.name,
         provider_enrollment_id: enrollmentId,
         institution_name: input.institutionName ?? accounts[0]?.institutionName ?? null,
         encrypted_token: await encryptToken(accessToken, deps.key),
@@ -142,14 +154,14 @@ export async function syncConnection(deps: BankDeps, connectionId: string) {
         const pending: PendingRow[] = []
         const skipped = { pending: 0, beforeStart: 0, duplicate: 0, cardPayment: 0, alreadyImported: 0, subscriptionCharge: 0 }
         for (const acc of (accounts ?? []).filter((a: any) => a.connection_id === conn.id)) {
-            const txs = await deps.provider.listTransactions(token, acc.provider_account_id, since)
+            const txs = await providerOf(deps, conn.provider).listTransactions(token, acc.provider_account_id, since)
             if (acc.type !== 'credit') for (const t of txs) fetchedMoneyIn.set(t.externalId, t.amount > 0)
             for (const t of txs) if (t.pending) pending.push({
                 user_id: conn.user_id, connection_id: conn.id, bank_account_id: acc.id, external_id: t.externalId, date: t.date,
                 amount: Math.round(Math.abs(t.amount) * 100) / 100, money_in: t.amount > 0, name: t.description,
             })
             for (const t of txs) if (t.postedDate && t.postedDate !== t.date) purchaseDates.set(t.externalId, { date: t.date, posted: t.postedDate })
-            await saveBalance(deps, token, acc)
+            await saveBalance(deps, token, acc, conn.provider)
             const r = convertBankTransactions(txs, { id: acc.id, type: acc.type, providerAccountId: acc.provider_account_id }, {
                 userId: conn.user_id, provider: conn.provider, syncFrom: conn.sync_from,
                 history: history ?? [], existing: existing ?? [], hasLinkedCreditCard, alreadyImported, renames,
@@ -359,10 +371,11 @@ async function markTransfers(deps: BankDeps, conn: any, rows: TransactionRow[], 
 }
 
 /** Saves an account's current balance. A balance problem never stops transactions from syncing. */
-async function saveBalance(deps: BankDeps, token: string, acc: any) {
-    if (!deps.provider.getBalance) return
+async function saveBalance(deps: BankDeps, token: string, acc: any, providerName?: string) {
+    const provider = providerOf(deps, providerName)
+    if (!provider.getBalance) return
     try {
-        const b = await deps.provider.getBalance(token, acc.provider_account_id, acc.type)
+        const b = await provider.getBalance(token, acc.provider_account_id, acc.type)
         await deps.db.from('bank_accounts').update({
             balance_current: b.current, balance_available: b.available, balance_updated_at: new Date().toISOString(),
         }).eq('id', acc.id)
@@ -397,7 +410,7 @@ export async function unlinkBank(deps: BankDeps, input: { userId: string; connec
     const conn = await loadConnection(deps, input.connectionId, input.userId)
     const token = await decryptToken(conn.encrypted_token, deps.key)
     try {
-        await deps.provider.disconnect(token)
+        await providerOf(deps, conn.provider).disconnect(token)
     } catch (e) {
         // Already revoked at the provider: fine, just remove our copy
         if (!(e instanceof ProviderError && e.kind === 'needs_relink')) throw new Error(safeMessage(e, token))

@@ -6,6 +6,8 @@ import { transactionsByIds } from '../../transactions/api'
 
 export interface LinkedBank {
     id: string
+    /** plaid, teller or simplefin */
+    provider?: string
     institution_name: string | null
     status: 'active' | 'error' | 'needs_relink'
     last_error: string | null
@@ -98,7 +100,7 @@ export class BankError extends Error {
 }
 
 /** Calls the bank server function, turning its errors into readable messages. */
-export async function callBank(action: 'link' | 'link-session' | 'sync' | 'unlink', extra: Record<string, unknown> = {}): Promise<any> {
+export async function callBank(action: 'link' | 'link-session' | 'sync' | 'unlink' | 'providers', extra: Record<string, unknown> = {}): Promise<any> {
     const { data, error } = await supabase.functions.invoke('bank', { body: { action, ...extra } })
     if (!error) return data
     let body: any = null
@@ -109,7 +111,7 @@ export async function callBank(action: 'link' | 'link-session' | 'sync' | 'unlin
 
 export async function fetchLinkedBanks(): Promise<LinkedBank[]> {
     const { data: banks, error } = await supabase.from('bank_connections')
-        .select('id, institution_name, status, last_error, last_synced_at, sync_from')
+        .select('id, provider, institution_name, status, last_error, last_synced_at, sync_from')
         .order('created_at')
     if (error) throw new Error(error.message)
     const { data: accounts } = await supabase.from('bank_accounts')
@@ -195,4 +197,14 @@ export async function loadPendingCharges(): Promise<PendingCharge[]> {
         .select('id, date, amount, money_in, name').order('date', { ascending: false })
     if (error) return []
     return (data ?? []).map((r: any) => ({ ...r, amount: Number(r.amount) }))
+}
+
+/** Ways this person can link a bank: plaid (only for people it's turned on for) and simplefin (everyone). */
+export async function linkMethods(): Promise<string[]> {
+    try {
+        const r = await callBank('providers')
+        return Array.isArray(r?.providers) ? r.providers : ['simplefin']
+    } catch {
+        return ['simplefin']
+    }
 }
