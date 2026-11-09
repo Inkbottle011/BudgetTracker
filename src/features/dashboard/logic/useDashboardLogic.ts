@@ -95,7 +95,7 @@ export function useDashboardLogic() {
     // Repeating charges you haven't added as subscriptions yet (reviewed on the Subscriptions tab)
     const possibleSubscriptions = findRecurringCharges(transactions as any[], subscriptions, dismissed, today).length
 
-    const bank = accountsSummary(accounts)
+    const bank = accountsSummary(accounts, pending)
     const updatedAt = accounts.map(a => a.balance_updated_at).filter(Boolean).sort().at(-1) ?? null
 
     return {

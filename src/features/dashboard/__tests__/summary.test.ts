@@ -184,3 +184,38 @@ describe('budgetTone', () => {
         expect(budgetTone(100.01, 100)).toBe('over')
     })
 })
+
+describe('card payments still processing', () => {
+    const card = { id: 'c1', name: 'Quicksilver', last_four: '4412', type: 'credit', subtype: 'credit card', balance_current: 500, balance_available: 1500 }
+    const pay = (amount: number, bank_account_id = 'c1', money_in = true) => ({ id: `p${amount}`, date: '2026-11-08', amount, money_in, name: 'Payment', bank_account_id })
+
+    it("counts a payment that hasn't posted yet against what's owed", () => {
+        const s = accountsSummary([card] as any, [pay(500)])
+        expect(s.cards.total).toBe(0)
+        expect(s.cards.processing).toBe(500)
+        expect(s.cards.accounts[0]).toMatchObject({ balance: 0, processing: 500, reported: 500 })
+    })
+
+    it('part payments leave the rest owed', () => {
+        const s = accountsSummary([card] as any, [pay(200)])
+        expect(s.cards.total).toBe(300)
+        expect(s.cards.accounts[0].balance).toBe(300)
+    })
+
+    it('never goes below nothing owed (the bank may already have taken it off)', () => {
+        const s = accountsSummary([{ ...card, balance_current: 100 }] as any, [pay(500)])
+        expect(s.cards.total).toBe(0)
+    })
+
+    it('ignores new charges, other cards and checking accounts', () => {
+        const checking = { id: 'k1', name: 'Checking', type: 'depository', subtype: 'checking', balance_current: 900 }
+        const s = accountsSummary([card, checking] as any, [pay(40, 'c1', false), pay(70, 'other'), pay(60, 'k1')])
+        expect(s.cards.total).toBe(500)
+        expect(s.cards.processing).toBe(0)
+        expect(s.cash.total).toBe(900)
+    })
+
+    it("works the same as before when there's nothing pending", () => {
+        expect(accountsSummary([card] as any).cards.total).toBe(500)
+    })
+})

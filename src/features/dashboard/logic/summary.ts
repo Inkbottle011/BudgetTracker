@@ -1,5 +1,5 @@
 // Numbers for the dashboard, all for one period (a month or a year).
-import { isSavingsAccount, BankAccountRow } from '../../bank/api'
+import { isSavingsAccount, BankAccountRow, PendingCharge } from '../../bank/api'
 import { sumByType, netSpent, netSaved, actualAmount } from './calculations'
 
 export type Period = 'day' | 'week' | 'month' | 'year'
@@ -143,18 +143,43 @@ export function goalRows(items: { id: string; name: string; type: string }[], am
     }))
 }
 
-export interface AccountGroup { total: number; accounts: (BankAccountRow & { balance: number | null })[] }
+export interface AccountGroup {
+    total: number
+    /** Card payments your bank hasn't posted yet, already taken off `total` */
+    processing: number
+    accounts: (BankAccountRow & {
+        balance: number | null
+        /** Cards: payments still processing (taken off `balance`), and the balance the bank reports */
+        processing: number
+        reported: number | null
+    })[]
+}
 
-/** Linked accounts in three groups: checking (spending money), savings and vaults, and cards (owed). */
-export function accountsSummary(accounts: BankAccountRow[]) {
-    const group = (list: BankAccountRow[]): AccountGroup => {
-        const withBalance = list.map(a => ({ ...a, balance: a.balance_current === null || a.balance_current === undefined ? null : Number(a.balance_current) }))
-        return { total: round(withBalance.reduce((s, a) => s + (a.balance ?? 0), 0)), accounts: withBalance }
+/**
+ * Linked accounts in three groups: checking (spending money), savings and vaults, and cards (owed).
+ * A card payment your bank hasn't posted yet already counts against what that card owes (never below
+ * nothing), since the card company's balance only drops once the payment posts, a few days later.
+ */
+export function accountsSummary(accounts: BankAccountRow[], pending: PendingCharge[] = []) {
+    const group = (list: BankAccountRow[], isCard = false): AccountGroup => {
+        const rows = list.map(a => {
+            const reported = a.balance_current === null || a.balance_current === undefined ? null : Number(a.balance_current)
+            const processing = !isCard ? 0 : round(pending
+                .filter(p => p.money_in && p.bank_account_id === a.id)
+                .reduce((s, p) => s + Number(p.amount), 0))
+            const balance = reported === null ? null : processing > 0 ? Math.max(0, round(reported - processing)) : reported
+            return { ...a, balance, processing, reported }
+        })
+        return {
+            total: round(rows.reduce((s, a) => s + (a.balance ?? 0), 0)),
+            processing: round(rows.reduce((s, a) => s + a.processing, 0)),
+            accounts: rows,
+        }
     }
     const cards = accounts.filter(a => a.type === 'credit')
     const savings = accounts.filter(a => isSavingsAccount(a))
     const cash = accounts.filter(a => a.type === 'depository' && !isSavingsAccount(a))
-    return { cash: group(cash), savings: group(savings), cards: group(cards), any: accounts.length > 0 }
+    return { cash: group(cash), savings: group(savings), cards: group(cards, true), any: accounts.length > 0 }
 }
 
 export { activityDirection } from '../../../shared/money/direction'

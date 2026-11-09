@@ -31,6 +31,17 @@ describe('AccountsRow', () => {
         expect(screen.getByText('40% of the limit used, which can lower your credit score')).toBeTruthy()
     })
 
+    it('says when a card payment is still processing, on the tile and next to the card', async () => {
+        const paying = accountsSummary([
+            { id: '4', name: 'Quicksilver', last_four: '4412', type: 'credit', subtype: 'credit card', balance_current: 800, balance_available: 1200 },
+        ] as any, [{ id: 'p', date: '2026-11-08', amount: 800, money_in: true, name: 'Payment', bank_account_id: '4' }])
+        await render(<AccountsRow {...paying} updatedAt={null} wide />)
+        expect(screen.getAllByText('$0.00').length).toBeGreaterThan(0)
+        expect(screen.getByText('$800.00 payment processing')).toBeTruthy()
+        await fireEvent.press(screen.getByLabelText('Owed on cards, show accounts'))
+        expect(screen.getByText('Paid off once your $800.00 payment posts. Your bank still shows $800.00.')).toBeTruthy()
+    })
+
     it('shows nothing without linked banks', async () => {
         const empty = accountsSummary([])
         await render(<AccountsRow {...empty} updatedAt={null} wide />)
