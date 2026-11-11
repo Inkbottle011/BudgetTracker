@@ -39,6 +39,9 @@ export function AccountsRow({ cash, savings, cards, updatedAt, wide }: Props) {
                             <Text style={styles.tileLabel}>{LABELS[key]}</Text>
                         </View>
                         <Text style={[styles.tileValue, tabular, key === 'savings' && { color: C.saved }, key === 'cards' && g.total > 0 && { color: C.bad }]}><Private kind="balances">{money(g.total)}</Private></Text>
+                        {key === 'cards' && g.processing > 0 && (
+                            <Text style={styles.processing}><Private kind="balances">{money(g.processing)}</Private> payment processing</Text>
+                        )}
                         <Text style={styles.tileMeta}>{g.accounts.length} account{g.accounts.length === 1 ? '' : 's'} {open === key ? '▴' : '▾'}</Text>
                     </TouchableOpacity>
                 ))}
@@ -47,12 +50,19 @@ export function AccountsRow({ cash, savings, cards, updatedAt, wide }: Props) {
                 <View style={styles.list}>
                     {shown.accounts.map(a => {
                         const available = a.balance_available === null || a.balance_available === undefined ? null : Number(a.balance_available)
-                        const used = open === 'cards' && a.balance !== null && available !== null && a.balance + available > 0
+                        // While a payment is processing, the bank's numbers are out of date: leave out the limit used
+                        const used = open === 'cards' && a.processing === 0 && a.balance !== null && available !== null && a.balance + available > 0
                             ? Math.round((a.balance / (a.balance + available)) * 100) : null
                         return (
                             <View key={a.id} style={styles.item}>
                                 <View style={{ flex: 1 }}>
                                     <Text style={styles.itemName}>{`${a.name ?? 'Account'}${a.last_four ? ` ••${a.last_four}` : ''}`}</Text>
+                                    {a.processing > 0 && a.reported !== null && (
+                                        <Text style={styles.itemMeta}>
+                                            {a.balance === 0 ? 'Paid off once your ' : ''}<Private kind="balances">{money(a.processing)}</Private>
+                                            {a.balance === 0 ? ' payment posts.' : ' payment still processing.'} Your bank still shows <Private kind="balances">{money(a.reported)}</Private>.
+                                        </Text>
+                                    )}
                                     {used !== null && (
                                         <Text style={[styles.itemMeta, used >= HIGH_CARD_USAGE && { color: C.bad }]}>
                                             {used}% of the limit used{used >= HIGH_CARD_USAGE ? ', which can lower your credit score' : ''}
@@ -82,6 +92,7 @@ const makeStyles = (C: Palette) => StyleSheet.create({
     dot: { width: 8, height: 8, borderRadius: 4 },
     tileLabel: { fontSize: 13, color: C.muted, fontWeight: '600' },
     tileValue: { fontSize: 22, fontWeight: '700', color: C.ink, marginTop: 2 },
+    processing: { fontSize: 12, color: C.good, fontWeight: '600', marginTop: 2 },
     tileMeta: { fontSize: 12, color: C.faint, marginTop: 2 },
     list: { borderTopWidth: 1, borderColor: C.line, paddingHorizontal: 18, paddingVertical: 6 },
     item: { flexDirection: 'row', alignItems: 'center', paddingVertical: 9, gap: 12 },
