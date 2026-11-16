@@ -1,0 +1,70 @@
+/* Colors from the app's default theme, Night sky (src/shared/theme/themes.ts) */
+:root {
+    --ifm-color-primary: #3654d1;
+    --ifm-color-primary-dark: #2d49be;
+    --ifm-color-primary-darker: #2b45b3;
+    --ifm-color-primary-darkest: #233994;
+    --ifm-color-primary-light: #4a65d6;
+    --ifm-color-primary-lighter: #556ed8;
+    --ifm-color-primary-lightest: #7389df;
+    --ifm-background-color: #f1f3fa;
+    --ifm-background-surface-color: #ffffff;
+    --ifm-font-color-base: #2d3854;
+    --ifm-heading-color: #18213d;
+    --ifm-color-emphasis-600: #5f6b88;
+    --ifm-navbar-background-color: #1b2360;
+    --ifm-navbar-link-color: #dfe3f8;
+    --ifm-navbar-link-hover-color: #ffffff;
+    --ifm-footer-background-color: #1b2360;
+    --ifm-code-font-size: 92%;
+    --ifm-global-radius: 10px;
+    --docusaurus-highlighted-code-line-bg: rgba(54, 84, 209, 0.1);
+    /* Money colors, the same as in the app */
+    --bt-good: #12804c;
+    --bt-bad: #c2382c;
+    --bt-saved: #6340d6;
+}
+
+[data-theme='dark']:root {
+    --ifm-color-primary: #8ea6ff;
+    --ifm-color-primary-dark: #6c8bff;
+    --ifm-color-primary-darker: #5b7eff;
+    --ifm-color-primary-darkest: #2a56ff;
+    --ifm-color-primary-light: #b0c1ff;
+    --ifm-color-primary-lighter: #c1ceff;
+    --ifm-color-primary-lightest: #f3f5ff;
+    --ifm-background-color: #0b0f1f;
+    --ifm-background-surface-color: #141a30;
+    --ifm-font-color-base: #cdd4ea;
+    --ifm-heading-color: #edf0fa;
+    --ifm-color-emphasis-600: #9aa4c3;
+    --ifm-navbar-background-color: #10152e;
+    --ifm-footer-background-color: #10152e;
+    --docusaurus-highlighted-code-line-bg: rgba(142, 166, 255, 0.15);
+    --bt-good: #62dc9f;
+    --bt-bad: #ff8f82;
+    --bt-saved: #bba8ff;
+}
+
+/* The navbar is always the app's dark bar, so its text and menu button stay light in both modes */
+.navbar { border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+.navbar__title, .navbar__toggle { color: #ffffff; }
+.navbar__logo img { border-radius: 7px; }
+.navbar-sidebar, .navbar-sidebar .menu__link { color: var(--ifm-font-color-base); }
+
+.footer { border-top: 1px solid rgba(255, 255, 255, 0.08); }
+.footer--dark { --ifm-footer-background-color: #1b2360; }
+[data-theme='dark'] .footer--dark { --ifm-footer-background-color: #10152e; }
+
+/* The light/dark switch sits on the dark bar */
+.navbar .clean-btn { color: #dfe3f8; }
+.navbar .clean-btn:hover { background: rgba(255, 255, 255, 0.1); }
+
+/* Sections and tables look like the app's cards */
+@media (min-width: 997px) { .markdown table { display: table; width: 100%; } }
+.markdown table thead tr { background: var(--ifm-background-surface-color); }
+.markdown > h2 { margin-top: 2.25rem; }
+
+/* Long text in tables (secret names, file paths) wraps instead of pushing the page sideways */
+.markdown td, .markdown th { overflow-wrap: break-word; }
+.markdown td code, .markdown td a { overflow-wrap: anywhere; }

@@ -1,3 +1,9 @@
+---
+sidebar_position: 6
+title: "Design"
+description: "Colors, themes, type, spacing and building blocks: one look across every screen."
+---
+
 # How the app looks
 
 One look across every screen, in light and dark, in five color themes you pick in Settings

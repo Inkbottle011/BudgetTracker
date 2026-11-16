@@ -1,3 +1,9 @@
+---
+sidebar_position: 3
+title: "Linking banks (server setup)"
+description: "Setting up Plaid and SimpleFIN on the server, and exactly what gets imported."
+---
+
 # Linking banks (Plaid and SimpleFIN)
 
 New transactions from linked banks are added automatically every morning, and balances are
