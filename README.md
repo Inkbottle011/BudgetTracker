@@ -2,6 +2,8 @@
 
 A personal finance app for planning a budget, tracking every transaction (typed in, imported from a CSV, or synced from your bank), and seeing how the day, week, month or year is going against the plan. It runs on the web (live on Netlify), iOS and Android from one TypeScript codebase.
 
+**Docs:** [inkbottle011.github.io/BudgetTracker](https://inkbottle011.github.io/BudgetTracker/), a user guide and developer docs (the pages are in [`docs/`](docs/)).
+
 **Stack:** TypeScript · React Native (Expo) · Supabase (Auth, PostgreSQL, Edge Functions) · Plaid · Zustand
 
 ## Features
@@ -21,7 +23,7 @@ A personal finance app for planning a budget, tracking every transaction (typed 
 - **Rename** a place once ("SQ *BLUE BOTTLE #12" → "Blue Bottle") and future transactions use your name
 - Pending charges from your bank appear in their own section until they post
 
-**Linked banks** ([setup](docs/linking-banks.md))
+**Linked banks** ([setup](docs/developers/linking-banks.md))
 - **Plaid** for you (the people in the `PLAID_USERS` secret), **SimpleFIN** for everyone else: each person pays SimpleFIN themselves ($15 a year) and pastes a one-time setup token
 - Plaid, SimpleFIN (and Teller); syncs every morning and on demand, read-only, tokens encrypted and never readable by the app
 - Imports history from January 1; purchases are dated on the day you made them, not the day they posted
@@ -92,7 +94,7 @@ Supabase ───────┘
 
 ## Getting started
 
-**Setting up your own copy from scratch** (Supabase, the database, GitHub, Netlify, banks): follow **[SETUP.md](SETUP.md)**.
+**Setting up your own copy from scratch** (Supabase, the database, GitHub, Netlify, banks): follow **[Set up your own copy](docs/developers/setup.md)**.
 
 Already set up? Run it on your computer:
 
@@ -106,7 +108,7 @@ npm run web            # or npm start, then press w (browser) or scan the QR cod
 
 ### Backend setup (automatic)
 
-Database setup and the bank function deploy themselves: merging to `master` runs `.github/workflows/deploy-backend.yml`, which applies every new or changed file listed in `scripts/apply-database-setup.mjs` (each is safe to run more than once, starting with the core tables for a brand-new project) and deploys the `bank` function. It needs two GitHub Actions secrets: `SUPABASE_DB_URL` (the Session pooler connection string) and `SUPABASE_ACCESS_TOKEN`. Linking banks needs a Plaid account and a few function secrets: see [docs/linking-banks.md](docs/linking-banks.md).
+Database setup and the bank function deploy themselves: merging to `master` runs `.github/workflows/deploy-backend.yml`, which applies every new or changed file listed in `scripts/apply-database-setup.mjs` (each is safe to run more than once, starting with the core tables for a brand-new project) and deploys the `bank` function. It needs two GitHub Actions secrets: `SUPABASE_DB_URL` (the Session pooler connection string) and `SUPABASE_ACCESS_TOKEN`. Linking banks needs a Plaid account and a few function secrets: see [Linking banks (server setup)](docs/developers/linking-banks.md).
 
 Never put the service-role key or the database connection string in the app or in an `EXPO_PUBLIC_` variable.
 
@@ -161,8 +163,8 @@ src/shared/                  used by everything, depends on no feature
   dates.ts, fetchAllRows.ts, supabase.ts
 supabase/sql/<feature>/      database setup, applied automatically on merge (core/ first: the main tables)
 supabase/functions/          the bank function and generate-recurring
-docs/                        design notes and bank-linking setup
-SETUP.md                     setting up your own copy from scratch
+docs/                        the docs site's pages: guide/ (using the app) and developers/
+website/                     the docs site's setup (Docusaurus), published to GitHub Pages
 ```
 
 The rules (checked by `src/__tests__/architecture.test.ts`):

@@ -11,4 +11,7 @@
 - Database changes go in the idempotent setup files under `supabase/sql/` and are listed in
   `scripts/apply-database-setup.mjs`; merging to master applies them and deploys the bank function
   automatically (`.github/workflows/deploy-backend.yml`). Never ask the user to paste SQL for setup.
+- Docs: the pages are Markdown in `docs/` (`guide/` for people using the app, `developers/`); the
+  Docusaurus site is in `website/` (`npm run build` there fails on broken links). Update them when
+  what people see or do changes; merging publishes them to GitHub Pages.
 - The user is on Windows (VS Code terminal); explain steps in plain language.
